@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/Api.Tests/CEOAgent.Tests.csproj" />
+  </Folder>
+  <Project Path="CEOAgent.ApiService/CEOAgent.ApiService.csproj" />
+  <Project Path="CEOAgent.AppHost/CEOAgent.AppHost.csproj" />
+  <Project Path="CEOAgent.ServiceDefaults/CEOAgent.ServiceDefaults.csproj" />
+  <Project Path="CEOAgent.Web/CEOAgent.Web.csproj" />
+  <Project Path="CEOAgent.Worker/CEOAgent.Worker.csproj" />
+</Solution>
