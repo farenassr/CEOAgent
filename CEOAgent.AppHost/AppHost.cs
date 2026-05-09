@@ -1,14 +1,5 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-<<<<<<< HEAD
-var apiService = builder.AddProject<Projects.CEOAgent_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health");
-
-builder.AddProject<Projects.CEOAgent_Web>("webfrontend")
-    .WithExternalHttpEndpoints()
-    .WithHttpHealthCheck("/health")
-    .WithReference(apiService)
-=======
 var postgres = builder.AddPostgres("postgres")
     .WithDataVolume()
     .WithPgAdmin()
@@ -42,7 +33,6 @@ builder.AddProject<Projects.CEOAgent_Worker>("worker")
     .WithEnvironment("LANGFUSE_HOST", langfuseHost)
     .WithEnvironment("LANGFUSE_PUBLIC_KEY", langfusePublicKey)
     .WithEnvironment("LANGFUSE_SECRET_KEY", langfuseSecretKey)
->>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
     .WaitFor(apiService);
 
 builder.Build().Run();
