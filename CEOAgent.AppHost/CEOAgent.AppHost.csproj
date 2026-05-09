@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 <Project Sdk="Aspire.AppHost.Sdk/13.1.0">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+=======
+<Project Sdk="Aspire.AppHost.Sdk/13.3.0">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>4a2c522c-f505-4a6d-8de9-9d96f6557195</UserSecretsId>
@@ -11,6 +19,15 @@
   <ItemGroup>
     <ProjectReference Include="..\CEOAgent.ApiService\CEOAgent.ApiService.csproj" />
     <ProjectReference Include="..\CEOAgent.Web\CEOAgent.Web.csproj" />
+<<<<<<< HEAD
+=======
+    <ProjectReference Include="..\CEOAgent.Worker\CEOAgent.Worker.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Azure.Storage" Version="13.3.0" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.3.0" />
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
   </ItemGroup>
 
 </Project>

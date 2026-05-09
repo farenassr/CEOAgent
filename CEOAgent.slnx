@@ -1,6 +1,16 @@
 <Solution>
+<<<<<<< HEAD
+=======
+  <Folder Name="/tests/">
+    <Project Path="tests/Api.Tests/CEOAgent.Tests.csproj" />
+  </Folder>
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
   <Project Path="CEOAgent.ApiService/CEOAgent.ApiService.csproj" />
   <Project Path="CEOAgent.AppHost/CEOAgent.AppHost.csproj" />
   <Project Path="CEOAgent.ServiceDefaults/CEOAgent.ServiceDefaults.csproj" />
   <Project Path="CEOAgent.Web/CEOAgent.Web.csproj" />
+<<<<<<< HEAD
+=======
+  <Project Path="CEOAgent.Worker/CEOAgent.Worker.csproj" />
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
 </Solution>

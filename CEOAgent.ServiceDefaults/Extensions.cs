@@ -5,8 +5,15 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
+<<<<<<< HEAD
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+=======
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using System.Text;
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -62,6 +69,12 @@ public static class Extensions
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+<<<<<<< HEAD
+=======
+                    .AddSource("Microsoft.SemanticKernel*")
+                    .AddSource("OpenAI.*")
+                    .AddSource("CeoAgent.*")
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>
@@ -74,6 +87,37 @@ public static class Extensions
             });
 
         builder.AddOpenTelemetryExporters();
+<<<<<<< HEAD
+=======
+        builder.AddLangfuseExporter();
+
+        return builder;
+    }
+
+    private static TBuilder AddLangfuseExporter<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        var langfuseHost = builder.Configuration["LANGFUSE_HOST"];
+        var langfusePublicKey = builder.Configuration["LANGFUSE_PUBLIC_KEY"];
+        var langfuseSecretKey = builder.Configuration["LANGFUSE_SECRET_KEY"];
+
+        if (string.IsNullOrWhiteSpace(langfuseHost)
+            || string.IsNullOrWhiteSpace(langfusePublicKey)
+            || string.IsNullOrWhiteSpace(langfuseSecretKey))
+        {
+            return builder;
+        }
+
+        var langfuseAuth = "Basic " + Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{langfusePublicKey}:{langfuseSecretKey}"));
+
+        builder.Services.AddOpenTelemetry()
+            .WithTracing(tracing => tracing.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri($"{langfuseHost.TrimEnd('/')}/api/public/otel/v1/traces");
+                options.Protocol = OtlpExportProtocol.HttpProtobuf;
+                options.Headers = $"Authorization={langfuseAuth}";
+            }));
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
 
         return builder;
     }
@@ -84,7 +128,13 @@ public static class Extensions
 
         if (useOtlpExporter)
         {
+<<<<<<< HEAD
             builder.Services.AddOpenTelemetry().UseOtlpExporter();
+=======
+            builder.Services.AddOpenTelemetry()
+                .WithMetrics(metrics => metrics.AddOtlpExporter())
+                .WithTracing(tracing => tracing.AddOtlpExporter());
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
         }
 
         // Uncomment the following lines to enable the Azure Monitor exporter (requires the Azure.Monitor.OpenTelemetry.AspNetCore package)
@@ -110,11 +160,19 @@ public static class Extensions
     {
         // Adding health checks endpoints to applications in non-development environments has security implications.
         // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
+<<<<<<< HEAD
         if (app.Environment.IsDevelopment())
         {
             // All health checks must pass for app to be considered ready to accept traffic after starting
             app.MapHealthChecks(HealthEndpointPath);
 
+=======
+        // All health checks must pass for app to be considered ready to accept traffic after starting.
+        app.MapHealthChecks(HealthEndpointPath);
+
+        if (app.Environment.IsDevelopment())
+        {
+>>>>>>> 6e4100a (chore: add pgadmin to postgres apphost, fix: avoid mixed otlp exporter registration, chore: organize api runtime classes, chore: add runtime shell and observability. Add project files.)
             // Only health checks tagged with the "live" tag must pass for app to be considered alive
             app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
             {
