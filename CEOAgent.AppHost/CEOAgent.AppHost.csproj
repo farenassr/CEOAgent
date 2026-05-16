@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.3.0">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.3.0">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -10,7 +10,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CEOAgent.ApiService\CEOAgent.ApiService.csproj" />
-    <ProjectReference Include="..\CEOAgent.Web\CEOAgent.Web.csproj" />
     <ProjectReference Include="..\CEOAgent.Worker\CEOAgent.Worker.csproj" />
   </ItemGroup>
 

@@ -53,8 +53,6 @@ The first phase must therefore convert the starter shape into the target backend
 
 **Deliverables:**
 
-- Rename or replace `CEOAgent.ApiService` with `CEOAgent.Api`.
-- Remove `CEOAgent.Web` from the solution unless it is deliberately kept outside MVP scope.
 - Add class library projects:
   - `CEOAgent.Application`
   - `CEOAgent.Infrastructure`
@@ -82,16 +80,16 @@ The first phase must therefore convert the starter shape into the target backend
 
 **Tasks:**
 
-- [ ] Create the target project structure.
-- [ ] Wire project references according to dependency direction:
+- [X] Create the target project structure.
+- [X] Wire project references according to dependency direction:
   - API references Application, Infrastructure, Integrations, Adapters, Tools, ServiceDefaults.
   - Worker references Application, Infrastructure, Integrations, Adapters, Tools, ServiceDefaults.
   - Application references Integrations.
   - Infrastructure references Application as needed for persistence abstractions and entity access.
   - Adapters references Integrations.
   - Tools references Application and Integrations.
-- [ ] Add nullable, warnings-as-errors, latest language version, code style enforcement.
-- [ ] Add a minimal build test for the solution.
+- [X] Add nullable, warnings-as-errors, latest language version, code style enforcement.
+- [X] Add a minimal build test for the solution.
 - [ ] Commit as `chore: establish mvp solution structure`.
 
 **Verification:**
