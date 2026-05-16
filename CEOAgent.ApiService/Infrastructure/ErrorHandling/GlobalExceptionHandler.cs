@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using CEOAgent.Application.Errors;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
