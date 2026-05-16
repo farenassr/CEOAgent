@@ -8,11 +8,27 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CEOAgent.ServiceDefaults\CEOAgent.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CEOAgent.Application\CEOAgent.Application.csproj" />
+    <ProjectReference Include="..\CEOAgent.Infrastructure\CEOAgent.Infrastructure.csproj" />
+    <ProjectReference Include="..\CEOAgent.Integrations\CEOAgent.Integrations.csproj" />
+    <ProjectReference Include="..\CEOAgent.Adapters\CEOAgent.Adapters.csproj" />
+    <ProjectReference Include="..\CEOAgent.Tools\CEOAgent.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Azure.Storage.Blobs" Version="13.3.3" />
+    <PackageReference Include="Aspire.Azure.Storage.Queues" Version="13.3.3" />
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.3.3" />
+    <PackageReference Include="Aspire.OpenAI" Version="13.3.3-preview.1.26264.13" />
+    <PackageReference Include="FastEndpoints" Version="8.1.0" />
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="Mediator.Abstractions" Version="3.0.2" />
+    <PackageReference Include="Mediator.SourceGenerator" Version="3.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageReference Include="ZLogger" Version="2.5.10" />
   </ItemGroup>
 

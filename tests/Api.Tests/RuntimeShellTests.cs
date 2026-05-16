@@ -3,12 +3,13 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Shouldly;
 
 namespace CEOAgent.Tests;
 
 public sealed class RuntimeShellTests
 {
-    [Fact]
+    [Test]
     public async Task Health_ReturnsCorrelationIdHeader()
     {
         await using var factory = new ApiFactory();
@@ -19,12 +20,12 @@ public sealed class RuntimeShellTests
 
         using var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(response.Headers.TryGetValues("X-Correlation-Id", out var values));
-        Assert.Equal("test-correlation-id", Assert.Single(values));
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Headers.TryGetValues("X-Correlation-Id", out var values).ShouldBeTrue();
+        values.Single().ShouldBe("test-correlation-id");
     }
 
-    [Fact]
+    [Test]
     public async Task BusinessRuleException_ReturnsProblemDetailsWithCorrelationExtension()
     {
         await using var factory = new ApiFactory();
@@ -36,20 +37,20 @@ public sealed class RuntimeShellTests
         using var response = await client.SendAsync(request);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
 
-        Assert.Equal((HttpStatusCode)422, response.StatusCode);
-        Assert.NotNull(problem);
-        Assert.Equal("Business rule violation", problem.Title);
-        Assert.Equal("reservation_closed", problem.Extensions["code"]?.ToString());
-        Assert.Equal("rule-correlation-id", problem.Extensions["correlationId"]?.ToString());
-        Assert.NotNull(problem.Extensions["traceId"]);
+        response.StatusCode.ShouldBe((HttpStatusCode)422);
+        problem.ShouldNotBeNull();
+        problem.Title.ShouldBe("Business rule violation");
+        problem.Extensions["code"]?.ToString().ShouldBe("reservation_closed");
+        problem.Extensions["correlationId"]?.ToString().ShouldBe("rule-correlation-id");
+        problem.Extensions["traceId"].ShouldNotBeNull();
     }
 
-    [Theory]
-    [InlineData("/__test/not-found", 404)]
-    [InlineData("/__test/concurrency", 409)]
-    [InlineData("/__test/cancelled", 499)]
-    [InlineData("/__test/integration", 503)]
-    [InlineData("/__test/unexpected", 500)]
+    [Test]
+    [Arguments("/__test/not-found", 404)]
+    [Arguments("/__test/concurrency", 409)]
+    [Arguments("/__test/cancelled", 499)]
+    [Arguments("/__test/integration", 503)]
+    [Arguments("/__test/unexpected", 500)]
     public async Task Exceptions_MapToExpectedProblemDetailsStatus(string path, int expectedStatus)
     {
         await using var factory = new ApiFactory();
@@ -58,11 +59,11 @@ public sealed class RuntimeShellTests
         using var response = await client.GetAsync(path);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
 
-        Assert.Equal(expectedStatus, (int)response.StatusCode);
-        Assert.NotNull(problem);
-        Assert.Equal(expectedStatus, problem.Status);
-        Assert.NotNull(problem.Extensions["correlationId"]);
-        Assert.NotNull(problem.Extensions["traceId"]);
+        ((int)response.StatusCode).ShouldBe(expectedStatus);
+        problem.ShouldNotBeNull();
+        problem.Status.ShouldBe(expectedStatus);
+        problem.Extensions["correlationId"].ShouldNotBeNull();
+        problem.Extensions["traceId"].ShouldNotBeNull();
     }
 
     private sealed class ApiFactory : WebApplicationFactory<Program>

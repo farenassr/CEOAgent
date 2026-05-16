@@ -1,10 +1,18 @@
 <Solution>
   <Folder Name="/tests/">
+    <Project Path="tests/Application.Tests/Application.Tests.csproj" />
     <Project Path="tests/Api.Tests/CEOAgent.Tests.csproj" />
+    <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
+    <Project Path="tests/Worker.Tests/Worker.Tests.csproj" />
   </Folder>
+  <Project Path="CEOAgent.Adapters/CEOAgent.Adapters.csproj" />
   <Project Path="CEOAgent.ApiService/CEOAgent.ApiService.csproj" />
+  <Project Path="CEOAgent.Application/CEOAgent.Application.csproj" />
   <Project Path="CEOAgent.AppHost/CEOAgent.AppHost.csproj" />
+  <Project Path="CEOAgent.Infrastructure/CEOAgent.Infrastructure.csproj" />
+  <Project Path="CEOAgent.Integrations/CEOAgent.Integrations.csproj" />
   <Project Path="CEOAgent.ServiceDefaults/CEOAgent.ServiceDefaults.csproj" />
+  <Project Path="CEOAgent.Tools/CEOAgent.Tools.csproj" />
   <Project Path="CEOAgent.Web/CEOAgent.Web.csproj" />
   <Project Path="CEOAgent.Worker/CEOAgent.Worker.csproj" />
 </Solution>
