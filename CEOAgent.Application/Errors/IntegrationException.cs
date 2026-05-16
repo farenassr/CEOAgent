@@ -1,4 +1,4 @@
-namespace CEOAgent.ApiService;
+namespace CEOAgent.Application.Errors;
 
 public sealed class IntegrationException(string provider, string message, Exception? inner = null)
     : Exception(message, inner)

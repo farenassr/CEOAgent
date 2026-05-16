@@ -1,4 +1,4 @@
-namespace CEOAgent.ApiService;
+namespace CEOAgent.Application.Errors;
 
 public sealed class NotFoundException(string resource, object key)
     : Exception($"{resource} {key} not found");

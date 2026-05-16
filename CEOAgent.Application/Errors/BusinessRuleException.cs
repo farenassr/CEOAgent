@@ -1,4 +1,4 @@
-namespace CEOAgent.ApiService;
+namespace CEOAgent.Application.Errors;
 
 public sealed class BusinessRuleException(string code, string message) : Exception(message)
 {

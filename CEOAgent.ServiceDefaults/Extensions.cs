@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -146,7 +147,22 @@ public static class Extensions
         // Adding health checks endpoints to applications in non-development environments has security implications.
         // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
         // All health checks must pass for app to be considered ready to accept traffic after starting.
-        app.MapHealthChecks(HealthEndpointPath);
+        app.MapGet(HealthEndpointPath, async (
+                HealthCheckService healthCheckService,
+                CancellationToken cancellationToken) =>
+            {
+                var report = await healthCheckService.CheckHealthAsync(cancellationToken);
+                var statusCode = report.Status == HealthStatus.Healthy
+                    ? StatusCodes.Status200OK
+                    : StatusCodes.Status503ServiceUnavailable;
+
+                return Results.Text(report.Status.ToString(), statusCode: statusCode);
+            })
+            .WithName("Health")
+            .WithSummary("Checks API health.")
+            .WithDescription("Returns 200 when required health checks are healthy, or 503 when one or more required checks are unhealthy.")
+            .Produces(StatusCodes.Status200OK, contentType: "text/plain")
+            .Produces(StatusCodes.Status503ServiceUnavailable, contentType: "text/plain");
 
         if (app.Environment.IsDevelopment())
         {

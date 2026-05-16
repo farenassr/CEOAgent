@@ -80,17 +80,16 @@ The first phase must therefore convert the starter shape into the target backend
 
 **Tasks:**
 
-- [X] Create the target project structure.
-- [X] Wire project references according to dependency direction:
+- [x] Create the target project structure.
+- [x] Wire project references according to dependency direction:
   - API references Application, Infrastructure, Integrations, Adapters, Tools, ServiceDefaults.
   - Worker references Application, Infrastructure, Integrations, Adapters, Tools, ServiceDefaults.
   - Application references Integrations.
   - Infrastructure references Application as needed for persistence abstractions and entity access.
   - Adapters references Integrations.
   - Tools references Application and Integrations.
-- [X] Add nullable, warnings-as-errors, latest language version, code style enforcement.
-- [X] Add a minimal build test for the solution.
-- [ ] Commit as `chore: establish mvp solution structure`.
+- [x] Add nullable, warnings-as-errors, latest language version, code style enforcement.
+- [x] Add a minimal build test for the solution.
 
 **Verification:**
 
@@ -108,7 +107,7 @@ Expected: build succeeds with zero warnings.
 
 **Deliverables:**
 
-- `CEOAgent.AppHost/AppHost.cs` references PostgreSQL, Azurite queues/blobs, OpenAI connection string, API, and Worker.
+- `CEOAgent.AppHost/AppHost.cs` references PostgreSQL, Azurite queues/blobs, OpenAI connection string, API, and Worker (If they are already there ignore).
 - API exposes `/health`.
 - Worker exposes `/health` if hosted with an HTTP surface; otherwise health is verified through Aspire resource status and logs.
 - API has a single global `IExceptionHandler` producing `ProblemDetails`.
@@ -119,19 +118,18 @@ Expected: build succeeds with zero warnings.
   - `LANGFUSE_PUBLIC_KEY`
   - `LANGFUSE_SECRET_KEY`
 
-**Tasks:**
+**Tasks (Check and if they are complete then ignore and continue with the next one):**
 
-- [ ] Implement `ProblemDetails` exception mapping for 404, 409, 422, 499, 500, and 503.
-- [ ] Add `NotFoundException`, `BusinessRuleException`, and `IntegrationException`.
-- [ ] Add correlation ID middleware and logging scope.
-- [ ] Register OpenTelemetry sources:
+- [x] Implement `ProblemDetails` exception mapping for 404, 409, 422, 499, 500, and 503.
+- [x] Add `NotFoundException`, `BusinessRuleException`, and `IntegrationException`.
+- [x] Add correlation ID middleware and logging scope.
+- [x] Register OpenTelemetry sources:
   - `Microsoft.SemanticKernel*`
   - `OpenAI.*`
   - `CeoAgent.*`
-- [ ] Add `/health` with PostgreSQL, Queue, and Blob checks.
-- [ ] Update AppHost resources and environment variable pass-through.
-- [ ] Add tests for exception mapping and correlation response extensions.
-- [ ] Commit as `chore: add runtime shell and observability`.
+- [x] Add `/health` with PostgreSQL, Queue, and Blob checks.
+- [x] Update AppHost resources and environment variable pass-through.
+- [x] Add tests for exception mapping and correlation response extensions.
 
 **Verification:**
 
@@ -190,7 +188,6 @@ Expected: solution builds, tests pass, Aspire starts API and Worker, `/health` r
 - [ ] Implement admin onboarding slices with FastEndpoints, FluentValidation, and Mediator.
 - [ ] Add tenant isolation tests proving cross-tenant access returns 404.
 - [ ] Add migration.
-- [ ] Commit as `feat: add tenancy persistence and onboarding`.
 
 **Verification:**
 
@@ -235,7 +232,6 @@ Expected: tenant-owned queries are filtered by ambient tenant context; admin end
 - [ ] Add Worker hosted services for queue polling.
 - [ ] Add idempotent job handler skeletons.
 - [ ] Add tests for queue message serialization and duplicate job handling.
-- [ ] Commit as `feat: add integration ports and job infrastructure`.
 
 **Verification:**
 
@@ -276,7 +272,6 @@ Expected: queue payloads serialize deterministically and Worker can receive know
 - [ ] Persist inbound audio metadata and enqueue transcription when voice note media is present.
 - [ ] Enqueue `ProcessIncomingMessageJob` for text messages.
 - [ ] Add tests for valid signature, invalid signature, missing channel, duplicate message, and fast response path.
-- [ ] Commit as `feat: ingest whatsapp webhooks`.
 
 **Verification:**
 
@@ -322,7 +317,6 @@ Expected: invalid signatures return 401; duplicate provider messages return 200 
 - [ ] Persist assistant messages, tool calls, tool results, and state patches.
 - [ ] Add Verify snapshot tests for prompts.
 - [ ] Add tests for last-8-turn selection, model-name resolution, malformed output rejection, retry, and loop cap handoff.
-- [ ] Commit as `feat: add agent runtime`.
 
 **Verification:**
 
@@ -369,7 +363,6 @@ Expected: prompt snapshots are stable; no full transcript is sent; malformed mod
 - [ ] Implement gateway authorization, validation, idempotency, execution, and persistence.
 - [ ] Implement failure counting and handoff trigger.
 - [ ] Add tests for all denial reasons, tenant-specific registry behavior, duplicate request handling, and two-failure handoff.
-- [ ] Commit as `feat: add tool execution gateway`.
 
 **Verification:**
 
@@ -415,7 +408,6 @@ Expected: the gateway denies unsafe calls before invoking handlers and triggers 
 - [ ] Implement `check_availability` tool handler.
 - [ ] Implement `cancel_reservation` tool handler.
 - [ ] Add tests for business rules, concurrency conflict mapping, and adapter contract behavior.
-- [ ] Commit as `feat: add reservations and calendar integration`.
 
 **Verification:**
 
@@ -457,7 +449,6 @@ Expected: reservation rules are enforced in handlers; tool handlers reuse Mediat
 - [ ] Implement outbound message job handler.
 - [ ] Store inbound and outbound audio assets in Blob Storage.
 - [ ] Add tests for transcription failure handoff, TTS failure text fallback, and outbound idempotency.
-- [ ] Commit as `feat: add audio and outbound messaging`.
 
 **Verification:**
 
@@ -491,7 +482,6 @@ Expected: inbound audio can become an agent turn; failed transcription hands off
 - [ ] Implement explicit close endpoint.
 - [ ] Ensure handoff pauses autonomous replies.
 - [ ] Add tests for conversation closure, handed-off exclusion, state clearing, and dead-letter behavior.
-- [ ] Commit as `feat: connect worker conversation pipelines`.
 
 **Verification:**
 
@@ -543,7 +533,6 @@ Expected: full text message flow runs through Worker without API doing long-runn
 - [ ] Verify no business logic calls external systems outside ports.
 - [ ] Verify all routes are under `/v1/` except `/health`.
 - [ ] Verify sensitive prompt/completion tracing is disabled by default in production.
-- [ ] Commit as `test: add mvp end-to-end coverage`.
 
 **Verification:**
 

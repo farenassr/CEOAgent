@@ -23,6 +23,11 @@ var apiService = builder.AddProject<Projects.CEOAgent_ApiService>("api")
     .WithEnvironment("LANGFUSE_HOST", langfuseHost)
     .WithEnvironment("LANGFUSE_PUBLIC_KEY", langfusePublicKey)
     .WithEnvironment("LANGFUSE_SECRET_KEY", langfuseSecretKey)
+    .WithUrlForEndpoint("https", url =>
+    {
+        url.DisplayText = "Scalar API Reference";
+        url.Url = "/api";
+    })
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.CEOAgent_Worker>("worker")
