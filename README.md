@@ -1,23 +1,21 @@
 # CEOAgent
 
-CEOAgent is a .NET multi-tenant SaaS backend for AI-assisted business conversations. The MVP targets restaurants that receive reservations through WhatsApp Cloud, use an AI agent to handle the conversation, and synchronize confirmed bookings with Google Calendar.
 
 The long-term direction is broader than restaurants: the core should support more channels, tools, and integrations without rewriting the conversation engine.
 
 ## What We Are Building
 
-The MVP backend receives inbound WhatsApp text or voice messages, resolves the tenant from the WhatsApp phone number ID, stores the conversation, processes the customer request through an AI agent, executes approved business actions through a tool gateway, and sends the reply back through WhatsApp.
+The MVP backend receives inbound WhatsApp text or voice messages, resolves the company from the WhatsApp phone number ID, stores the conversation, processes the customer request through an AI agent, executes approved business actions through a tool gateway, and sends the reply back through WhatsApp.
 
 Core MVP capabilities:
 
 - WhatsApp Cloud inbound and outbound messaging, including voice notes.
-- Tenant resolution by channel, not by customer phone number.
+- Company resolution by channel, not by customer phone number.
 - Conversation history stored as raw turns.
-- AI agent execution with tenant-specific model and prompt settings.
+- AI agent execution with company-specific model and prompt settings.
 - Tool execution through a controlled `ToolExecutionGateway`.
-- Google Calendar reservation creation, availability checks, and cancellation.
 - Background processing through a Worker and Azure Storage Queues.
-- PostgreSQL persistence with tenant isolation.
+- PostgreSQL persistence with company isolation.
 - Azure Blob Storage for inbound and outbound media.
 - Basic observability through OpenTelemetry, ZLogger, and Langfuse for LLM traces.
 
@@ -32,7 +30,7 @@ WhatsApp Cloud
     |
     v
 CEOAgent.ApiService
-    |  verifies webhook, resolves tenant, persists message, enqueues job
+    |  verifies webhook, resolves company, persists message, enqueues job
     v
 Azure Storage Queue
     |
@@ -64,13 +62,12 @@ Target backend projects from `AGENTS.md`:
 - `CEOAgent.Infrastructure` - EF Core persistence, queues, blob storage, and infrastructure glue.
 - `CEOAgent.Integrations` - port contracts only.
 - `CEOAgent.Adapters` - implementations for WhatsApp, Google Calendar, OpenAI, transcription, and TTS.
-- `CEOAgent.Tools` - native tool handlers such as reservation creation and human handoff.
 
 ## Main Message Flow
 
 1. WhatsApp sends a webhook to the API.
 2. The API verifies the raw-body HMAC signature.
-3. The tenant is resolved from `(provider, provider_channel_id)`.
+3. The company is resolved from `(provider, provider_channel_id)`.
 4. The customer and open conversation are found or created.
 5. The inbound message is persisted idempotently.
 6. A processing job is placed on Azure Storage Queue.
@@ -86,10 +83,10 @@ Target backend projects from `AGENTS.md`:
 - Use FluentValidation for request and command validation.
 - Store identifiers as GUID v7.
 - Store timestamps in UTC and use `TimeProvider`; do not use `DateTime.Now`.
-- Every tenant-owned table must include `tenant_id`.
-- Tenant isolation must be enforced through EF Core global query filters.
+- Every company-owned table must include `company_id`.
+- Company isolation must be enforced through EF Core global query filters.
 - Send only the last 8 eligible conversation turns to the model.
-- Do not hardcode model names; resolve them from the tenant agent profile.
+- Do not hardcode model names; resolve them from the company agent profile.
 - Do not add direct external calls inside business logic.
 
 ## Local Development
@@ -125,4 +122,3 @@ The API exposes the operational health endpoint at:
 
 ## Current Status
 
-The repository is in the early runtime-shell stage. AppHost, API, Worker, shared service defaults, error handling, correlation handling, and basic tests exist. The full MVP domain model, persistence layer, ports/adapters, tool gateway, WhatsApp ingestion, agent runtime, and reservation workflows are still to be implemented according to `AGENTS.md` and the phased plan in `docs/superpowers/plans/2026-05-09-mvp-phases.md`.

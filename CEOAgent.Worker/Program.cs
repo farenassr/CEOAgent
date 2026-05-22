@@ -1,3 +1,4 @@
+using CEOAgent.Infrastructure;
 using CEOAgent.Worker;
 using ZLogger;
 
@@ -28,6 +29,7 @@ if (HasAspireOpenAIConnectionString(builder.Configuration.GetConnectionString("o
     builder.AddOpenAIClient("openai");
 }
 
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();

@@ -1,5 +1,8 @@
 using CEOAgent.ApiService;
+using CEOAgent.ApiService.Infrastructure.Company;
 using CEOAgent.Application.Errors;
+using CEOAgent.Infrastructure;
+using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using ZLogger;
@@ -42,6 +45,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddApiService(builder.Configuration);
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -51,6 +56,9 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
+app.UseMiddleware<CompanyContextMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -60,8 +68,8 @@ if (app.Environment.IsDevelopment())
 
 if (app.Environment.IsEnvironment("Testing"))
 {
-    app.MapGet("/__test/not-found", (HttpContext _) => throw new NotFoundException("reservation", "missing"));
-    app.MapGet("/__test/business-rule", (HttpContext _) => throw new BusinessRuleException("reservation_closed", "Reservation is already closed."));
+    app.MapGet("/__test/not-found", (HttpContext _) => throw new NotFoundException("conversation", "missing"));
+    app.MapGet("/__test/business-rule", (HttpContext _) => throw new BusinessRuleException("conversation_closed", "Conversation is already closed."));
     app.MapGet("/__test/concurrency", (HttpContext _) => throw new DbUpdateConcurrencyException("Concurrency conflict."));
     app.MapGet("/__test/cancelled", (HttpContext _) => throw new OperationCanceledException("Request cancelled."));
     app.MapGet("/__test/integration", (HttpContext _) => throw new IntegrationException("google_calendar", "Calendar unavailable."));
@@ -69,6 +77,7 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 
 app.MapDefaultEndpoints();
+app.UseFastEndpoints();
 
 app.Run();
 

@@ -11,7 +11,6 @@
 
 This project is a modern **C# / .NET multi-tenant SaaS backend** for
 AI-assisted business conversations. The MVP focus is **restaurants using
-WhatsApp Cloud and Google Calendar reservations**, but the architecture is
 deliberately built so that other channels (Telegram, Instagram DM, web chat)
 and other integrations (REST APIs, Excel, customer databases, POS) can be
 added later without rewriting the core.
@@ -58,7 +57,6 @@ The solution lives at the repository root with a flat project layout (no
   is `("whatsapp_cloud", phone_number_id)`
 - Audio transcription (single attempt; on failure → human handoff)
 - Audio synthesis (TTS) for outbound voice replies — single provider
-- Google Calendar reservations
 - Per-tenant agent profile with tenant-selectable model
 - Per-tenant **dynamic tool registry** — even though MVP ships with 4 native
   tools, the registry contract is in place from day one
@@ -117,9 +115,11 @@ this list wins.
    pragmatic — split files only when a slice grows enough that splitting
    improves readability.
 3. Use **Mediator** (`martinothamar/Mediator`, source-generated, AOT-friendly)
-   for in-process command and query dispatch in **both API and Worker**.
-   Use Mediator unconditionally for new use cases — there is no
-   "only if necessary" exception.
+   for in-process command and query dispatch in **Worker**, cross-module
+   operations, reusable business workflows, and API use cases whose logic is
+   non-trivial. Do **not** create a command/query just for a thin CRUD-style
+   API endpoint. If the use case is simple and only used by one endpoint, keep
+   the logic in the endpoint.
 4. Use **FastEndpoints** for the HTTP surface.
 5. Use **FluentValidation** for request validation in the API. Validate
    command preconditions inside Worker handlers via the same validators
@@ -195,7 +195,6 @@ this list wins.
 29. All identifiers are `Guid` generated as **GUID v7**
     (`Guid.CreateVersion7()`).
 30. Database tables and columns use **singular `snake_case`**
-    (`reservation`, `tool_execution`, `tenant_channel`, `created_at`).
 31. Entity Framework property names use **PascalCase** in C#. Apply
     `EFCore.NamingConventions` with `UseSnakeCaseNamingConvention()` once at
     `AppDbContext` configuration to map automatically.
@@ -206,6 +205,30 @@ this list wins.
     and `TimeOnly` in entities and Mediator commands. JSON contracts (model
     output, HTTP wire) use ISO 8601 strings — convert at the boundary.
 34. Enable nullable reference types and treat warnings as errors.
+35. Use C# primary constructors wherever they fit cleanly, especially for
+    dependency-injected services, endpoints, middleware, handlers, exceptions,
+    and simple immutable DTO initialization. Do not force them when a
+    parameterless constructor is required by a framework, when object
+    initializer binding is clearer, or when the constructor body contains
+    meaningful setup logic.
+
+### Secrets and configuration
+
+36. Never hardcode connection strings, passwords, API keys, provider secrets,
+    client secrets, refresh tokens, webhook secrets, or signing keys.
+37. Aspire `.WithReference(...)` is the default source for runtime resource
+    connection strings between AppHost-managed resources and projects. Do not
+    move PostgreSQL, queue, or blob runtime connection strings into Key Vault.
+38. Azure Key Vault is the target store for deployed/shared secrets such as
+    admin API keys, provider app secrets, OAuth client secrets, and Langfuse
+    keys.
+39. User-secrets and environment variables are local development inputs only.
+    Do not treat them as the production secret store.
+40. EF design-time factories must read from configuration, environment
+    variables, and user-secrets. They must fail fast with a clear message when
+    a required connection string is missing.
+41. Tenant credential tables store references only, such as `kv://...`.
+    Database rows must never contain raw secret values.
 
 ---
 
@@ -236,6 +259,8 @@ microservices for the MVP.**
 - `Aspire.Hosting.PostgreSQL`
 - `Aspire.Hosting.Azure.Storage` — uses Azurite for local Blob and Queue
   emulation
+- `Aspire.Hosting.Azure.KeyVault` — represents the existing deployed/shared
+  secret store used in publish mode
 - `Aspire.OpenAI` — registers the OpenAI client with logging, metrics, and
   resilience. Currently preview; the underlying `OpenAIClient` is stable.
   If the preview API changes, only the inside of
@@ -259,11 +284,14 @@ var queues  = storage.AddQueues("queues");
 var blobs   = storage.AddBlobs("blobs");
 
 var openai = builder.AddConnectionString("openai");
+var keyVault = builder.AddAzureKeyVault("keyvault")
+    .PublishAsExisting("kv-ceo-agent-dev", "rg-ceo-agent-dev");
 
 // Langfuse credentials are passed through to API and Worker as env vars.
 var langfuseHost      = builder.AddParameter("langfuse-host");
 var langfusePublicKey = builder.AddParameter("langfuse-public-key", secret: true);
 var langfuseSecretKey = builder.AddParameter("langfuse-secret-key", secret: true);
+var adminApiKey       = builder.AddParameter("admin-api-key", secret: true);
 
 builder.AddProject<Projects.Api>("api")
     .WithReference(postgres)
@@ -285,6 +313,27 @@ builder.AddProject<Projects.Worker>("worker")
 
 builder.Build().Run();
 ```
+
+### Secrets and configuration
+
+- Runtime PostgreSQL, queue, blob, and similar resource connection strings
+  flow from Aspire `.WithReference(...)`.
+- Azure Key Vault has no local emulator. For MVP, do not require Azure Key
+  Vault access for local runs.
+- AppHost registers Key Vault with
+  `.PublishAsExisting("kv-ceo-agent-dev", "rg-ceo-agent-dev")`.
+- In `builder.ExecutionContext.IsPublishMode`, read deployed/shared secrets
+  from `keyVault.GetSecret(...)` and pass them to API/Worker.
+- Outside publish mode, use Aspire parameters backed by user-secrets or
+  environment variables. Do not commit local secret values.
+- Do not use `RunAsExisting`/`AsExisting` for MVP unless the explicit goal is
+  to require Azure access during local development.
+- `AppDbContextFactory` is design-time only and reads
+  `ConnectionStrings:CEOAgent` from `appsettings.json`,
+  `appsettings.Development.json`, user-secrets, or environment variables.
+  It must throw a clear `InvalidOperationException` if the value is missing.
+- Tenant integration credential rows store references such as
+  `kv://tenant/provider/credential`, never secret payloads.
 
 ### Client packages (in API and Worker)
 
@@ -416,7 +465,6 @@ external_customer_id)`.
   state.
 - `Agents` — prompt building, tool selection (trivial in MVP), model
   orchestration, tool gateway.
-- `Reservations` — reservation entity and lifecycle.
 - `Integrations` — port contracts and shared DTOs (no implementations).
 
 Modules communicate **only** through Mediator commands and queries within
@@ -430,8 +478,13 @@ Adapters live outside the modules under `Adapters/`.
 
 ### `Application/` vs `Modules/Features/` — the rule
 
-- **`Modules/<X>/Features/<UseCase>/`** holds the **slice**: HTTP endpoint,
-  Mediator command/query + handler, request/response models, validators.
+- **`Modules/<X>/Features/<UseCase>/`** holds the **slice**. Each slice uses
+  explicit subfolders:
+  - `Endpoints/` for FastEndpoints endpoint classes and endpoint validators.
+  - `Commands/` for Mediator commands/queries and handlers, only when the
+    use case actually needs Mediator.
+  - `Models/Request/` for request DTOs.
+  - `Models/Response/` for response DTOs.
   This is "controller-like" code that orchestrates business logic.
 - **`Application/<X>/`** holds **stateful or non-trivial business logic**
   shared across slices and used by the Worker. `AgentRunner`,
@@ -449,12 +502,22 @@ Adapters live outside the modules under `Adapters/`.
 
 Rules:
 
-- Endpoint files use the suffix `Endpoint`.
-- A slice typically contains: an `Endpoint`, a Mediator `Command`/`Query` +
-  `Handler`, and a `Models` file. Split files only when readability requires
-  it — there is no minimum or maximum file count.
-- Shared DTOs live at the feature level when reused across slices in the
-  same module.
+- Endpoint files use the suffix `Endpoint` and live under the slice's
+  `Endpoints/` folder.
+- Request DTO files live under the slice's `Models/Request/` folder.
+- Response DTO files live under the slice's `Models/Response/` folder.
+- Every API request/response DTO is declared in its own independent class
+  file. Do not group multiple DTO classes in one file.
+- DTOs are declared as `class`, not `record` and not `sealed record`. Use
+  `public sealed class` for API request/response DTOs unless inheritance is
+  explicitly required.
+- Mediator command/query files live under the slice's `Commands/` folder,
+  but only when the use case is non-trivial, reused, cross-module, or needed
+  by the Worker. Avoid command sprawl: for simple single-endpoint CRUD-style
+  operations, keep the business logic in the endpoint and inject the needed
+  dependencies directly.
+- Shared non-request/non-response models may live directly under `Models/`
+  at the feature level when reused across slices in the same module.
 - Do **not** register services directly in `Program.cs`. Use
   `<Module>ServiceRegistrations` extension classes per module.
 
@@ -463,19 +526,24 @@ The endpoint:
 1. Receives the request.
 2. Lets FastEndpoints + FluentValidation validate it (status `400` on
    failure).
-3. Maps to a Mediator command (direct construction; Mapperly only when
-   shapes diverge).
-4. Sends the command via Mediator.
+3. For simple single-endpoint operations, runs the logic directly using
+   injected services such as `AppDbContext`, ports, and `TimeProvider`.
+4. For non-trivial or reusable operations, maps to a Mediator command/query
+   (direct construction; Mapperly only when shapes diverge) and sends it.
 5. Maps the response back if needed.
 6. Returns.
 
-Business logic lives in the handler.
+Business logic lives in the endpoint for simple one-off API operations. Move
+it to a Mediator handler when reuse, Worker execution, cross-module dispatch,
+or meaningful complexity justifies the extra type.
 
 ---
 
 ## API Layer
 
-Use **FastEndpoints** for HTTP, **Mediator** for command/query dispatch.
+Use **FastEndpoints** for HTTP. Use **Mediator** for command/query dispatch
+when the use case is non-trivial, reusable, cross-module, or shared with the
+Worker.
 
 - All routes versioned under `/v1/`. Health endpoint at `/health` (not
   versioned).
@@ -483,6 +551,7 @@ Use **FastEndpoints** for HTTP, **Mediator** for command/query dispatch.
   with FastEndpoints.
 - Mapping uses **Mapperly only when needed** (see rule 6 in
   _Non-Negotiable Rules_).
+- API request/response DTOs are `class` types, not records.
 - Errors are translated to `ProblemDetails` by a single global
   `IExceptionHandler`.
 - `CancellationToken` is propagated through every call.
@@ -618,6 +687,10 @@ pipeline. The key is stored as an Aspire/Azure secret. Endpoints under
 `/v1/admin/...` carry an `[Authorize(AuthenticationSchemes = "AdminApiKey")]`
 attribute (or the FastEndpoints equivalent).
 
+This static admin API key remains the MVP admin authentication mechanism.
+Do not introduce Keycloak, JWT, users, roles, or a dashboard identity system
+as part of the Key Vault/configuration foundation.
+
 Admin endpoints handle tenant onboarding, channel configuration, integration
 credentials registration, agent profile management, and tool enablement.
 
@@ -649,8 +722,6 @@ Steps:
    working hours, capacity).
 4. Configure the calendar integration credentials reference.
 5. Enable tools for the tenant: insert `tenant_tool` rows for each native
-   tool the tenant should expose (`create_reservation`, `check_availability`,
-   `cancel_reservation`, `request_human_handoff`).
 6. Smoke-test inbound and outbound flows.
 
 All steps are scripted as admin endpoints under `/v1/admin/...`, available
@@ -743,7 +814,6 @@ PostgreSQL stores:
 - conversation
 - message (text, transcribed audio, system, tool_call, tool_result)
 - conversation_state (current short-lived state for the active interaction)
-- reservation
 - tool_execution
 - audio_asset (blob URL + metadata)
 
@@ -794,7 +864,6 @@ Short-lived state for the current interaction:
 
 ```json
 {
-  "intent": "reservation_request",
   "date": "2026-05-10",
   "time": "20:00",
   "partySize": 4,
@@ -1089,9 +1158,7 @@ public interface IToolHandlerFactory
 Each native handler is registered as a singleton keyed by its `ToolKey`:
 
 ```csharp
-services.AddKeyedSingleton<IToolHandler, CreateReservationToolHandler>("create_reservation");
 services.AddKeyedSingleton<IToolHandler, CheckAvailabilityToolHandler>("check_availability");
-services.AddKeyedSingleton<IToolHandler, CancelReservationToolHandler>("cancel_reservation");
 services.AddKeyedSingleton<IToolHandler, RequestHumanHandoffToolHandler>("request_human_handoff");
 ```
 
@@ -1157,27 +1224,20 @@ confirmation required, etc.).
 
 ### Tool ↔ Mediator command relationship
 
-Native tools that change platform state (e.g., `CreateReservationToolHandler`)
 **must dispatch a Mediator command** internally rather than duplicate
 business rules:
 
 ```csharp
-internal sealed class CreateReservationToolHandler(
-    ISender mediator, ILogger<CreateReservationToolHandler> logger) : IToolHandler
 {
-    public string ToolKey => "create_reservation";
     /* ... schema, description ... */
 
     public async Task<ToolResult> ExecuteAsync(
         ToolExecutionContext ctx, JsonElement parameters, CancellationToken ct)
     {
-        var input = JsonSerializer.Deserialize<CreateReservationInput>(parameters,
-            AgentJsonContext.Default.CreateReservationInput)!;
 
         try
         {
             var result = await mediator.Send(
-                new CreateReservationCommand(/* mapped fields */), ct);
             return new ToolResult.Success(/* serialized result */);
         }
         catch (BusinessRuleException ex)
@@ -1196,10 +1256,8 @@ This is how a tool reuses the slice handler's logic without duplication.
 
 Four tools are mandatory for MVP. Their schemas are normative.
 
-### `create_reservation`
 
 ```csharp
-public sealed record CreateReservationInput(
     Datetime Date,
     int PartySize,
     string CustomerName,
@@ -1207,8 +1265,6 @@ public sealed record CreateReservationInput(
     string? BranchId,
     bool ConfirmedByCustomer);
 
-public sealed record CreateReservationOutput(
-    Guid ReservationId,
     string Status,                    // "confirmed" | "pending"
     string ExternalCalendarEventId);
 ```
@@ -1234,15 +1290,11 @@ public sealed record CheckAvailabilityOutput(
 
 Read-only. Idempotent by definition.
 
-### `cancel_reservation`
 
 ```csharp
-public sealed record CancelReservationInput(
-    Guid ReservationId,
     bool ConfirmedByCustomer,
     string? Reason);
 
-public sealed record CancelReservationOutput(
     string Status);                  // "cancelled" | "already_cancelled"
 ```
 
@@ -1472,7 +1524,6 @@ Worker responsibilities:
 - inactivity-based conversation closure (`CloseInactiveConversationsJob`)
 
 Job handlers must be idempotent. Reprocessing must not double-create
-reservations, double-send messages, double-create calendar events, or
 double-charge customers.
 
 ### Failure handling without an Outbox
@@ -1544,9 +1595,6 @@ operations) are deferred until needed.
 
 ### Mediator commands and queries
 
-- Commands end in `Command`: `CreateReservationCommand`,
-  `CancelReservationCommand`, `EnableTenantChannelCommand`.
-- Queries end in `Query`: `GetReservationByIdQuery`, `ListReservationsQuery`.
 
 ### Job messages
 
@@ -1556,9 +1604,43 @@ operations) are deferred until needed.
 
 ### Folder placement
 
-- Mediator commands and queries live inside their slice folder.
+- Slice folders use `Endpoints/`, `Commands/`, and `Models/` subfolders.
+- Mediator commands and queries live in `Commands/` inside their slice
+  folder, only when a command/query is justified by reuse, Worker execution,
+  cross-module dispatch, or meaningful complexity.
+- FastEndpoints endpoints live in `Endpoints/` inside their slice folder.
+- API request DTO classes live in `Models/Request/` inside their slice
+  folder.
+- API response DTO classes live in `Models/Response/` inside their slice
+  folder.
+- Each API DTO class gets its own file named after the class.
 - Jobs live in `Worker/Pipelines/<Pipeline>/<JobName>.cs`.
 - Tool handlers live in `Tools/<Area>/<ToolKey>ToolHandler.cs`.
+
+### Commit message format
+
+Commit messages use this project-specific format:
+
+```text
+<ProjectOrArea>/<ProjectOrArea>/...: [<GitHubIssueId>] <Changes performed>
+```
+
+Use the project name after `CEOAgent.` only, or the major non-project area.
+Keep touched areas short but explicit. Use `[#0]` when no GitHub issue exists.
+
+Example:
+
+```text
+ApiService/AppHost/Infrastructure/Worker/tests/docs: [#0] Add MVP persistence, admin auth, tenant isolation, Aspire setup, and agent rules
+```
+
+Rules:
+
+- List every touched project or major area before the colon.
+- Use concise area names such as `AGENTS`, `docs`, `tests`, `ApiService`,
+  `Infrastructure`, `AppHost`, `Worker`, `Application`, `Adapters`,
+  `Integrations`, `ServiceDefaults`, or `Tools`.
+- Keep the summary short and concrete, without trailing punctuation.
 
 ---
 
@@ -1583,21 +1665,17 @@ domain events, no `Result<T, Error>`. Encapsulate non-trivial multi-field
 rules in methods on the entity when it improves readability:
 
 ```csharp
-public sealed class Reservation
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
     public DateOnly Date { get; set; }
     public TimeOnly Time { get; set; }
     public int PartySize { get; set; }
-    public ReservationStatus Status { get; set; }
     public DateTime? CancelledAt { get; set; }            // UTC
     public uint RowVersion { get; set; }                  // xmin
 
     public bool TryCancel(string? reason, TimeProvider clock)
     {
-        if (Status == ReservationStatus.Cancelled) return false;
-        Status = ReservationStatus.Cancelled;
         CancelledAt = clock.GetUtcNow().UtcDateTime;
         return true;
     }
@@ -1625,7 +1703,6 @@ public sealed class Reservation
 
 - All identifiers are `Guid` generated as **GUID v7** via
   `Guid.CreateVersion7()`.
-- Use **singular `snake_case`** for tables (`reservation`, `tool_execution`,
   `tenant_channel`).
 - Use **`snake_case`** for columns.
 - Entity Framework property names use **PascalCase** in C#. Map to snake_case
@@ -1681,28 +1758,19 @@ public sealed class Conversation
 
 ---
 
-## Reservation Rules (Non-DDD)
 
-The `Reservation` entity is a normal EF Core entity with public setters and
 methods where rules apply. Rules to enforce in handlers and entity methods:
 
-- Cannot create a reservation outside tenant working hours.
-- Cannot create a reservation in the past.
 - Cannot confirm without all required fields (date, time, partySize,
   customerName, `ConfirmedByCustomer == true`).
 - Cannot double-book the same `external_calendar_event_id` (unique
   constraint in DB).
-- Cannot cancel an already cancelled reservation (handled in `TryCancel`).
 - Party size respects tenant capacity.
-- Rescheduling appends a `reservation_audit` row.
 
-These live in `CreateReservationCommandHandler`,
-`CancelReservationCommandHandler`, and on the entity itself, not in an
 aggregate.
 
 ### Optimistic concurrency
 
-`Reservation` carries a `RowVersion` (`xmin` mapped via `IsRowVersion()`) to
 prevent double-booking races between the AI agent and human staff:
 
 ```csharp
@@ -1729,7 +1797,6 @@ Treat as personal data:
 - names
 - audio files (inbound and outbound)
 - transcripts
-- reservations
 
 Rules:
 
@@ -1739,8 +1806,9 @@ Rules:
 - Verify all public webhook signatures before processing.
 - Apply idempotency and replay protection to webhooks.
 - Tenant data must remain isolated via global query filters.
-- Secrets live in Azure Key Vault. Tenant integration tables store only
-  references to secrets, never raw secrets.
+- Deployed/shared secrets live in Azure Key Vault. Local development uses
+  Aspire parameters, user-secrets, or environment variables. Tenant
+  integration tables store only references to secrets, never raw secrets.
 
 ---
 
@@ -1782,7 +1850,6 @@ libraries. Source-generated, zero-allocation, AOT-friendly.
 ### Conventions
 
 - Log messages use compile-time interpolation:
-  `logger.ZLogInformation($"Reservation {reservationId} confirmed");`
 - Log levels:
   - `Trace` — disabled outside diagnostic sessions
   - `Debug` — local and dev only
@@ -1913,7 +1980,6 @@ stubbed `IChatCompletionFactory`.
 - Webhook signature verification (valid + invalid).
 - Webhook idempotency (duplicate `provider_message_id`).
 - Adapter contract tests (Refit clients against Testcontainers / WireMock).
-- Reservation concurrency conflict (`DbUpdateConcurrencyException` → 409).
 - Conversation state patch application (date/time string → `DateOnly` /
   `TimeOnly` conversion).
 - Schema-validation rejection of malformed model output.
@@ -1931,7 +1997,6 @@ tests/
   Api.Tests/
     Modules/
       Tenancy/Features/CreateTenant/CreateTenantTests.cs
-      Reservations/Features/CancelReservation/CancelReservationTests.cs
   Worker.Tests/
     Pipelines/
       ProcessIncomingMessage/ProcessIncomingMessageTests.cs
@@ -1948,50 +2013,64 @@ tests/
 When proposing or modifying code:
 
 1. Respect the slice layout: place files under
-   `Modules/<Module>/Features/<UseCase>/`.
-2. Use **Mediator** (martinothamar) for command/query dispatch in both
-   API and Worker. Never mix MediatR.
+   `Modules/<Module>/Features/<UseCase>/Endpoints`,
+   `Modules/<Module>/Features/<UseCase>/Commands`, and
+   `Modules/<Module>/Features/<UseCase>/Models/Request` or
+   `Modules/<Module>/Features/<UseCase>/Models/Response` as appropriate.
+2. Use **Mediator** (martinothamar) for command/query dispatch in Worker,
+   cross-module workflows, reusable workflows, and non-trivial API use cases.
+   Never mix MediatR. Do not create commands for simple one-off endpoint
+   logic.
 3. Do not introduce generic repositories or custom Unit of Work.
-4. Use FastEndpoints + Mediator + FluentValidation.
-5. Use **Mapperly** only when shapes diverge; otherwise instantiate
-   commands directly.
-6. Use EF Core directly. Use `AsNoTracking()` and DTO projection for reads.
-7. Consider `ExecuteUpdateAsync()` / `ExecuteDeleteAsync()` for simple
+4. Use FastEndpoints + FluentValidation. Add Mediator only when justified by
+   the use case.
+5. Prefer primary constructors whenever they fit cleanly, especially for DI
+   classes, endpoints, middleware, handlers, exceptions, and simple DTO
+   initialization.
+6. Declare API DTOs as `class` types, not records or sealed records.
+7. Put every API request DTO in its own file under `Models/Request/`, and
+   every API response DTO in its own file under `Models/Response/`.
+8. Use **Mapperly** only when shapes diverge; otherwise instantiate
+   commands directly when a command exists.
+9. Use EF Core directly. Use `AsNoTracking()` and DTO projection for reads.
+10. Consider `ExecuteUpdateAsync()` / `ExecuteDeleteAsync()` for simple
    writes.
-8. Prefer keyset pagination.
-9. Use `ProblemDetails` from a single global `IExceptionHandler`. Throw
+11. Prefer keyset pagination.
+12. Use `ProblemDetails` from a single global `IExceptionHandler`. Throw
    exceptions for unexpected errors.
-10. Health check at `/health` (not under `/v1/`).
-11. Keep `Program.cs` minimal. Use `<Module>ServiceRegistrations`.
-12. Enforce tenant isolation through global query filters.
-13. Use Ports and Adapters for external systems with the four MVP ports
+13. Health check at `/health` (not under `/v1/`).
+14. Keep `Program.cs` minimal. Use `<Module>ServiceRegistrations`.
+15. Enforce tenant isolation through global query filters.
+16. Use Ports and Adapters for external systems with the four MVP ports
     (`IMessageChannelIntegration`, `ICalendarIntegration`,
     `ITranscriptionIntegration`, `ISpeechSynthesisIntegration`) plus the
     internal `IChatCompletionFactory`.
-14. Route every model-requested side effect through `ToolExecutionGateway`.
-15. Implement new tools as `IToolHandler` and register them per tenant via
+17. Route every model-requested side effect through `ToolExecutionGateway`.
+18. Implement new tools as `IToolHandler` and register them per tenant via
     `tenant_tool` rows. Do **not** add new code paths to the agent loop or
     the gateway for new tool kinds.
-16. Native tools that mutate state must dispatch a Mediator command
-    internally to reuse slice handlers.
-17. Keep webhook handlers fast (under ~500ms). Long work belongs in the
+19. Native tools that mutate state should reuse the same business workflow as
+    the API. Dispatch a Mediator command when that command exists; otherwise
+    extract shared non-trivial logic to `Application/` instead of duplicating
+    it.
+20. Keep webhook handlers fast (under ~500ms). Long work belongs in the
     Worker.
-18. Send the model only the system prompt, tenant context, and last 8
+21. Send the model only the system prompt, tenant context, and last 8
     turns (per _Definition of "turn"_).
-19. Validate model output with Structured Outputs + source-gen STJ + a
+22. Validate model output with Structured Outputs + source-gen STJ + a
     small set of inline checks.
-20. Never hardcode model names. Resolve from `agent_profile`.
-21. Pause autonomous replies during human handoff.
-22. Trigger handoff after **two consecutive failures of the same operation
+23. Never hardcode model names. Resolve from `agent_profile`.
+24. Pause autonomous replies during human handoff.
+25. Trigger handoff after **two consecutive failures of the same operation
     type** within the active turn (per _Failure Counting Rules_) or after
     `MAX_AGENT_LOOP` iterations.
-23. Use ZLogger with structured fields and ambient logging scopes.
-24. Use **GUID v7** (`Guid.CreateVersion7()`) for every identifier.
-25. Use `timestamptz` UTC for every timestamp; `DateOnly` / `TimeOnly`
+26. Use ZLogger with structured fields and ambient logging scopes.
+27. Use **GUID v7** (`Guid.CreateVersion7()`) for every identifier.
+28. Use `timestamptz` UTC for every timestamp; `DateOnly` / `TimeOnly`
     where time-of-day matters separately.
-26. Database: **singular** `snake_case`. C# entity properties: PascalCase
+29. Database: **singular** `snake_case`. C# entity properties: PascalCase
     mapped via `EFCore.NamingConventions`.
-27. Enable nullable reference types and treat warnings as errors.
+30. Enable nullable reference types and treat warnings as errors.
 28. All API routes go under `/v1/`, except `/health`.
 29. When the bot sends voice replies, do not block text replies on TTS
     failure.

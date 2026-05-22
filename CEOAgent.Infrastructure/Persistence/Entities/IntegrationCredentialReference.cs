@@ -1,0 +1,34 @@
+namespace CEOAgent.Infrastructure.Persistence.Entities;
+
+public sealed class IntegrationCredentialReference : AuditableCompanyOwnedEntity
+{
+    /// <summary>
+    /// Unique credential reference identifier. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42.
+    /// </summary>
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>
+    /// Integration provider key. Example: google_calendar.
+    /// </summary>
+    public required string Provider { get; set; }
+
+    /// <summary>
+    /// Purpose for the credential reference. Example: whatsapp_cloud.
+    /// </summary>
+    public required string Purpose { get; set; }
+
+    /// <summary>
+    /// External secret or credential reference. Example: kv://google-calendar/contoso.
+    /// </summary>
+    public required string Reference { get; set; }
+
+    /// <summary>
+    /// Optional provider-specific metadata stored as JSON. Example: {"calendarId":"primary"}.
+    /// </summary>
+    public string? MetadataJson { get; set; }
+
+    /// <summary>
+    /// Company that owns this credential reference. Example: Contoso Bistro.
+    /// </summary>
+    public Company Company { get; set; } = null!;
+}
