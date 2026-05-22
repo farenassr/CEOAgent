@@ -8,6 +8,7 @@ using Shouldly;
 
 namespace CEOAgent.Tests;
 
+[NotInParallel]
 public sealed class RuntimeShellTests
 {
     [Test]
@@ -83,7 +84,7 @@ public sealed class RuntimeShellTests
         problem.ShouldNotBeNull();
         problem.Title.ShouldBe("Business rule violation");
         problem.Type.ShouldBe("business_rule_violation");
-        problem.Extensions["code"]?.ToString().ShouldBe("reservation_closed");
+        problem.Extensions["code"]?.ToString().ShouldBe("conversation_closed");
         problem.Extensions["correlationId"]?.ToString().ShouldBe("rule-correlation-id");
         problem.Extensions["traceId"].ShouldNotBeNull();
     }
@@ -118,6 +119,9 @@ public sealed class RuntimeShellTests
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
             builder.UseEnvironment(environmentName);
+            builder.UseSetting("Authentication:AdminApiKey", "test-admin-key");
+            builder.UseSetting("Persistence:UseInMemoryDatabase", "true");
+            builder.UseSetting("Persistence:InMemoryDatabaseName", $"runtime-shell-tests-{Guid.CreateVersion7()}");
         }
     }
 }

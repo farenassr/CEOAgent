@@ -2,7 +2,6 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the MVP backend described in `AGENTS.md`: a multi-tenant, WhatsApp Cloud based, AI-assisted restaurant reservation system with Google Calendar, audio support, background processing, and controlled tool execution.
 
 **Architecture:** The MVP is a modular monolith with a separate API process and Worker process, coordinated locally through Aspire. HTTP use cases are implemented as FastEndpoints vertical slices that dispatch Mediator commands/queries; background work is handled by Worker pipelines; side effects go through ports, adapters, and `ToolExecutionGateway`.
 
@@ -43,7 +42,7 @@ The first phase must therefore convert the starter shape into the target backend
 - Do not call WhatsApp, Google Calendar, OpenAI, queues, blobs, or databases directly from business logic. Use ports/adapters or infrastructure services.
 - Do not hardcode model names. Resolve them from `agent_profile`.
 - Do not send the full conversation transcript to the model. Send the last 8 eligible turns.
-- Every tenant-owned table and query must use tenant isolation from the beginning.
+- Every company-owned table and query must use company isolation from the beginning.
 
 ---
 
@@ -143,60 +142,146 @@ Expected: solution builds, tests pass, Aspire starts API and Worker, `/health` r
 
 ---
 
-## Phase 2: Persistence, Tenancy, and Admin Authentication
+## Phase 1.5: Secrets and Azure Key Vault Foundation
 
-**Purpose:** Build the database foundation, tenant isolation model, and static admin API key authentication for manual onboarding.
+**Purpose:** Establish the MVP secret/configuration boundary without expanding
+into a production identity system. Runtime resource connection strings remain
+Aspire-managed; deployed/shared application secrets are represented through
+Azure Key Vault; local developer inputs use user-secrets or environment
+variables.
+
+**Deliverables:**
+
+- `CEOAgent.AppHost` includes the Aspire Azure Key Vault hosting package.
+- AppHost defines a Key Vault resource for deployed/shared secrets.
+- AppHost passes selected secrets/config values to API and Worker:
+  - API receives `Authentication:AdminApiKey`.
+  - API and Worker receive Langfuse keys.
+- Aspire-managed PostgreSQL, queue, and blob connection strings continue to
+  flow through existing `.WithReference(...)` calls.
+- `AppDbContextFactory` reads `ConnectionStrings:CEOAgent` from configuration
+  instead of hardcoding a local PostgreSQL connection string.
+- Company integration credential tables store references such as `kv://...`
+  only. They never store raw provider secrets.
+- Local setup documentation explains user-secrets for EF design-time usage.
+
+**Rules:**
+
+- Aspire `.WithReference(...)` manages internal runtime resource connection
+  strings for PostgreSQL, Azure Storage Queues, and Azure Blob Storage.
+- Azure Key Vault is the target store for deployed/shared secrets.
+- User-secrets and environment variables are local development inputs only.
+- `AppDbContextFactory` reads `ConnectionStrings:CEOAgent` from
+  `appsettings.json`, `appsettings.Development.json`, user-secrets, or
+  environment variables, and fails fast when the value is missing.
+- Company integration credential rows store references only, for example
+  `kv://company/provider/credential`.
+- This phase does not add Keycloak, JWT, users, roles, or a broader production
+  identity/security system. Static admin API key authentication remains the
+  MVP mechanism.
+
+**Tasks:**
+
+- [x] Add `Aspire.Hosting.Azure.KeyVault` to `CEOAgent.AppHost`.
+- [x] Add a Key Vault resource in AppHost for publish/deployed mode.
+- [x] Pass selected Key Vault secrets to API and Worker as environment/config
+  values.
+- [x] Keep Aspire-managed PostgreSQL connection string via
+  `.WithReference(postgres)`.
+- [x] Keep Aspire-managed queue/blob wiring via `.WithReference(queues)` and
+  `.WithReference(blobs)`.
+- [x] Update `AppDbContextFactory` to read `ConnectionStrings:CEOAgent` from
+  configuration.
+- [x] Add focused tests for design-time factory configuration behavior.
+- [x] Add documentation for local user-secrets setup.
+
+### Local EF design-time connection string
+
+For local `dotnet ef` and other design-time EF commands, set the
+`ConnectionStrings:CEOAgent` value in user-secrets for the Infrastructure
+project:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:CEOAgent" "<postgres-connection-string>" --project CEOAgent.Infrastructure
+```
+
+This setting is only for local design-time EF usage. Runtime local connection
+strings come from Aspire when running AppHost and must continue to flow through
+`.WithReference(postgres)`.
+
+**Verification:**
+
+```powershell
+dotnet build CEOAgent.slnx
+dotnet test tests/Integration.Tests/Integration.Tests.csproj
+dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
+```
+
+Expected: solution builds, design-time factory tests pass, AppHost starts
+locally, and API/Worker receive their configured local parameter values. Full
+Azure Key Vault access requires deployed Azure resources and credentials, so
+live Key Vault behavior is not verified by local tests.
+
+---
+
+## Phase 2: Persistence, Company, and Admin Authentication
+
+**Purpose:** Build the database foundation, company isolation model, and static admin API key authentication for manual onboarding.
 
 **Deliverables:**
 
 - One `AppDbContext`.
 - EF Core snake_case naming convention.
-- Tenant context abstraction and middleware.
-- EF global query filters for tenant-owned entities.
+- Company context abstraction and middleware.
+- EF global query filters for company-owned entities.
 - Admin API key authentication scheme: `AdminApiKey`.
+- MVP secrets foundation for admin auth:
+  - Local run mode uses Aspire parameters/user-secrets.
+  - Publish mode uses the existing Azure Key Vault.
 - Initial entities and configurations:
-  - `Tenant`
-  - `TenantChannel`
+  - `Company`
+  - `CompanyChannel`
   - `AgentProfile`
-  - `TenantTool`
+  - `CompanyTool`
   - `IntegrationCredentialReference`
   - `Customer`
   - `Conversation`
   - `Message`
   - `ConversationState`
-  - `Reservation`
-  - `ReservationAudit`
   - `ToolExecution`
   - `AudioAsset`
 - Initial migration in `CEOAgent.Infrastructure/Persistence/Migrations/`.
 
 **Admin endpoint slices:**
 
-- `POST /v1/admin/tenants`
-- `POST /v1/admin/tenants/{tenantId}/channels`
-- `POST /v1/admin/tenants/{tenantId}/agent-profile`
-- `POST /v1/admin/tenants/{tenantId}/integration-credentials`
-- `POST /v1/admin/tenants/{tenantId}/tools`
+- `POST /v1/admin/companies`
+- `POST /v1/admin/companies/{companyId}/channels`
+- `POST /v1/admin/companies/{companyId}/agent-profile`
+- `POST /v1/admin/companies/{companyId}/integration-credentials`
+- `POST /v1/admin/companies/{companyId}/tools`
 
 **Tasks:**
 
-- [ ] Create tenant context interfaces and middleware.
-- [ ] Create entities with `Guid.CreateVersion7()`, `tenant_id`, `created_at`, and `updated_at` where required.
-- [ ] Configure singular table names and enum-as-string conversions.
-- [ ] Add global query filters for tenant-owned entities.
-- [ ] Add admin API key authentication handler.
-- [ ] Implement admin onboarding slices with FastEndpoints, FluentValidation, and Mediator.
-- [ ] Add tenant isolation tests proving cross-tenant access returns 404.
-- [ ] Add migration.
+- [x] Create company context interfaces and middleware.
+- [x] Create entities with `Guid.CreateVersion7()`, `company_id`, `created_at`, and `updated_at` where required.
+- [x] Configure singular table names and enum-as-string conversions.
+- [x] Add global query filters for company-owned entities.
+- [x] Add admin API key authentication handler.
+- [x] Add Key Vault publish-mode wiring while keeping local secrets in Aspire parameters/user-secrets.
+- [x] Implement admin onboarding slices with FastEndpoints, FluentValidation, and Mediator.
+- [x] Add company isolation tests proving cross-company access returns 404.
+- [x] Add migration.
+
+Implementation comment: Phase 2 added the shared company context, `AppDbContext`, company-owned entities and EF configurations, scoped company query filters, static `AdminApiKey` authentication, MVP secret wiring with local Aspire parameters/user-secrets and publish-mode Azure Key Vault, FastEndpoints/Mediator admin onboarding routes, focused admin-auth and company-isolation tests, and the initial persistence migration under `CEOAgent.Infrastructure/Persistence/Migrations/`.
 
 **Verification:**
 
 ```powershell
 dotnet build CEOAgent.slnx
-dotnet test CEOAgent.slnx --filter "Tenancy|Admin|Persistence"
+dotnet test CEOAgent.slnx --filter "Company|Admin|Persistence"
 ```
 
-Expected: tenant-owned queries are filtered by ambient tenant context; admin endpoints require `X-Admin-Api-Key`.
+Expected: company-owned queries are filtered by ambient company context; admin endpoints require `X-Admin-Api-Key`.
 
 ---
 
@@ -246,18 +331,18 @@ Expected: queue payloads serialize deterministically and Worker can receive know
 
 ## Phase 4: WhatsApp Webhook Ingestion
 
-**Purpose:** Receive WhatsApp Cloud messages securely, resolve tenants by channel, persist inbound messages, enqueue processing, and return quickly.
+**Purpose:** Receive WhatsApp Cloud messages securely, resolve companies by channel, persist inbound messages, enqueue processing, and return quickly.
 
 **Deliverables:**
 
 - `POST /v1/webhooks/whatsapp`
 - Raw-body HMAC SHA-256 verification using `X-Hub-Signature-256`.
 - Constant-time signature comparison.
-- Tenant resolution by `("whatsapp_cloud", metadata.phone_number_id)`.
+- Company resolution by `("whatsapp_cloud", metadata.phone_number_id)`.
 - Customer resolution by `messages[0].from` or `contacts[0].wa_id`.
 - Open conversation lookup or creation.
 - Inbound message persistence.
-- Unique constraint on `(tenant_id, channel_type, provider_message_id)`.
+- Unique constraint on `(company_id, channel_type, provider_message_id)`.
 - Duplicate webhook returns `200 OK` without enqueueing.
 - Text and voice-note inbound recognition.
 
@@ -266,7 +351,7 @@ Expected: queue payloads serialize deterministically and Worker can receive know
 - [ ] Implement raw request body capture before JSON deserialization.
 - [ ] Implement WhatsApp signature verifier.
 - [ ] Implement webhook payload models with source-generated JSON metadata.
-- [ ] Implement tenant lookup through `TenantChannel`.
+- [ ] Implement company lookup through `CompanyChannel`.
 - [ ] Implement customer and conversation creation via Mediator commands.
 - [ ] Persist inbound text messages.
 - [ ] Persist inbound audio metadata and enqueue transcription when voice note media is present.
@@ -302,15 +387,15 @@ Expected: invalid signatures return 401; duplicate provider messages return 200 
   - `tool_call`
   - `tool_result`
 - System messages excluded from model context.
-- Per-tenant model resolved from `agent_profile.model_name`.
+- Per-company model resolved from `agent_profile.model_name`.
 - One structured-output retry before human handoff.
 - Agent loop iteration cap.
-- Activity tags for tenant, conversation, customer, correlation, provider, model, and prompt version.
+- Activity tags for company, conversation, customer, correlation, provider, model, and prompt version.
 
 **Tasks:**
 
 - [ ] Implement conversation turn projection query.
-- [ ] Implement `PromptBuilder` with tenant context, local date/time, branch settings, and full enabled tool catalog.
+- [ ] Implement `PromptBuilder` with company context, local date/time, branch settings, and full enabled tool catalog.
 - [ ] Implement `IChatCompletionFactory` adapter for OpenAI/Semantic Kernel.
 - [ ] Implement structured output validation and post-deserialization checks.
 - [ ] Implement `AgentRunner` loop without executing side effects directly.
@@ -335,87 +420,69 @@ Expected: prompt snapshots are stable; no full transcript is sent; malformed mod
 **Deliverables:**
 
 - `IToolHandler`
-- `ITenantToolRegistry`
+- `ICompanyToolRegistry`
 - `IToolHandlerFactory`
 - `ToolExecutionGateway`
-- Tenant-enabled tool catalog from `tenant_tool`.
+- Company-enabled tool catalog from `company_tool`.
 - Tool execution persistence.
 - Denial reasons:
   - unknown tool
-  - tool disabled for tenant
+  - tool disabled for company
   - invalid parameters
-  - cross-tenant conversation
+  - cross-company conversation
   - idempotent duplicate
 - Failure counter for two consecutive failures of the same operation type within the same conversation turn.
 
 **Native MVP tools:**
 
-- `create_reservation`
 - `check_availability`
-- `cancel_reservation`
 - `request_human_handoff`
 
 **Tasks:**
 
 - [ ] Define canonical tool request and result schemas.
-- [ ] Implement tenant tool registry query.
+- [ ] Implement company tool registry query.
 - [ ] Implement handler factory with one implementation per tool key.
 - [ ] Implement gateway authorization, validation, idempotency, execution, and persistence.
 - [ ] Implement failure counting and handoff trigger.
-- [ ] Add tests for all denial reasons, tenant-specific registry behavior, duplicate request handling, and two-failure handoff.
+- [ ] Add tests for all denial reasons, company-specific registry behavior, duplicate request handling, and two-failure handoff.
 
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "ToolExecutionGateway|TenantToolRegistry"
+dotnet test CEOAgent.slnx --filter "ToolExecutionGateway|CompanyToolRegistry"
 ```
 
 Expected: the gateway denies unsafe calls before invoking handlers and triggers handoff after repeated same-operation failures.
 
 ---
 
-## Phase 7: Reservations and Google Calendar
 
-**Purpose:** Implement restaurant reservation lifecycle with Google Calendar as the MVP external system.
 
 **Deliverables:**
 
-- Reservation slices:
-  - create reservation
   - check availability
-  - cancel reservation
   - close conversation manually if needed by staff
-- Reservation business rules:
   - cannot create outside working hours
   - cannot create in the past
   - cannot confirm without date, time, party size, name, and customer confirmation
   - cannot double-book `external_calendar_event_id`
-  - cannot cancel already cancelled reservation
-  - party size must respect tenant capacity
-  - rescheduling appends `reservation_audit`
+  - party size must respect company capacity
 - `ICalendarIntegration` Google Calendar adapter.
 - Refit clients for Google Calendar where appropriate.
 - Polly only inside adapter-owned HTTP stack.
-- Tool handlers dispatch Mediator commands rather than duplicating reservation logic.
-- Optimistic concurrency mapping for `Reservation.RowVersion` using PostgreSQL `xmin`.
 
 **Tasks:**
 
-- [ ] Implement reservation commands, queries, handlers, validators, and tests.
-- [ ] Implement availability calculation against local reservation state and calendar reads.
-- [ ] Implement Google Calendar adapter with idempotency key derived from tenant, conversation, tool key, and canonical parameters.
-- [ ] Implement `create_reservation` tool handler.
+- [ ] Implement Google Calendar adapter with idempotency key derived from company, conversation, tool key, and canonical parameters.
 - [ ] Implement `check_availability` tool handler.
-- [ ] Implement `cancel_reservation` tool handler.
 - [ ] Add tests for business rules, concurrency conflict mapping, and adapter contract behavior.
 
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "Reservation|Calendar"
 ```
 
-Expected: reservation rules are enforced in handlers; tool handlers reuse Mediator slices; concurrency maps to 409 or tool failure.
 
 ---
 
@@ -514,10 +581,10 @@ Expected: full text message flow runs through Worker without API doing long-runn
 - No live LLM calls in CI.
 - Operational runbook for local onboarding and smoke test.
 - Metrics emitted for:
-  - inbound messages per tenant
-  - outbound messages per tenant
-  - model token usage per tenant
-  - tool calls by tenant/tool/outcome
+  - inbound messages per company
+  - outbound messages per company
+  - model token usage per company
+  - tool calls by company/tool/outcome
   - handoff rate
   - queue lag
   - dead-letter counts
@@ -529,7 +596,7 @@ Expected: full text message flow runs through Worker without API doing long-runn
 - [ ] Add deterministic OpenAI structured-output fixtures.
 - [ ] Add provider stubs or WireMock-style adapters for integration tests.
 - [ ] Add a scripted manual onboarding smoke test document.
-- [ ] Verify no tenant-owned query bypasses global filters.
+- [ ] Verify no company-owned query bypasses global filters.
 - [ ] Verify no business logic calls external systems outside ports.
 - [ ] Verify all routes are under `/v1/` except `/health`.
 - [ ] Verify sensitive prompt/completion tracing is disabled by default in production.
@@ -542,7 +609,6 @@ dotnet test CEOAgent.slnx
 dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
 ```
 
-Expected: all tests pass, local Aspire stack runs, and a stubbed WhatsApp inbound message can create or check a reservation through the Worker and return an outbound reply.
 
 ---
 
@@ -552,16 +618,15 @@ Expected: all tests pass, local Aspire stack runs, and a stubbed WhatsApp inboun
 - [ ] Aspire starts PostgreSQL, Queue, Blob, OpenAI connection, API, and Worker.
 - [ ] Admin onboarding works through static API key protected endpoints.
 - [ ] WhatsApp webhook verifies HMAC signatures before deserialization.
-- [ ] Tenant is resolved by provider channel ID, never customer phone number.
+- [ ] Company is resolved by provider channel ID, never customer phone number.
 - [ ] Duplicate WhatsApp messages do not enqueue duplicate work.
-- [ ] Tenant-owned data uses global EF query filters.
+- [ ] Company-owned data uses global EF query filters.
 - [ ] Conversation history is persisted as raw turns.
 - [ ] Model context includes only the last 8 eligible turns.
-- [ ] Tenant model name is read from `agent_profile`.
+- [ ] Company model name is read from `agent_profile`.
 - [ ] Model output is structured and validated.
 - [ ] Every side-effect tool call goes through `ToolExecutionGateway`.
-- [ ] Four native tools are available through tenant tool registry.
-- [ ] Google Calendar reservations are idempotent.
+- [ ] Four native tools are available through company tool registry.
 - [ ] Inbound voice notes are stored, transcribed, and processed.
 - [ ] Outbound TTS voice replies are supported.
 - [ ] TTS failure does not block text replies.
@@ -576,23 +641,13 @@ Expected: all tests pass, local Aspire stack runs, and a stubbed WhatsApp inboun
 
 ## Suggested Commit Sequence
 
-1. `chore: establish mvp solution structure`
-2. `chore: add runtime shell and observability`
-3. `feat: add tenancy persistence and onboarding`
-4. `feat: add integration ports and job infrastructure`
-5. `feat: ingest whatsapp webhooks`
-6. `feat: add agent runtime`
-7. `feat: add tool execution gateway`
-8. `feat: add reservations and calendar integration`
-9. `feat: add audio and outbound messaging`
-10. `feat: connect worker conversation pipelines`
-11. `test: add mvp end-to-end coverage`
+1. `CEOAgent.ApiService/CEOAgent.Tools/..etc.. :[{githubIssueId}] establish mvp solution structure`
 
 ## Deferred Until After MVP
 
 - Keycloak or user dashboard authentication.
-- Self-service tenant onboarding.
-- Dedicated database per tenant.
+- Self-service company onboarding.
+- Dedicated database per company.
 - Outbox pattern.
 - Customer long-term memory.
 - Conversation rolling summaries.
