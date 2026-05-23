@@ -5,13 +5,13 @@ using Shouldly;
 namespace Integration.Tests.Persistence;
 
 [NotInParallel]
-public sealed class AppDbContextFactoryTests
+public sealed class CEOAgentDbContextFactoryTests
 {
     [Test]
     public void CreateDbContext_WhenConnectionStringMissing_ThrowsClearError()
     {
         using var environment = ConnectionStringEnvironment.Override(null);
-        var factory = new AppDbContextFactory();
+        var factory = new CEOAgentDbContextFactory();
 
         var exception = Should.Throw<InvalidOperationException>(() => factory.CreateDbContext([]));
 
@@ -24,7 +24,7 @@ public sealed class AppDbContextFactoryTests
     {
         const string connectionString = "Host=localhost;Database=ceoagent_test;Username=postgres;Password=test";
         using var environment = ConnectionStringEnvironment.Override(connectionString);
-        var factory = new AppDbContextFactory();
+        var factory = new CEOAgentDbContextFactory();
 
         using var dbContext = factory.CreateDbContext([]);
 

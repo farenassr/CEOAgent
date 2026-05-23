@@ -39,7 +39,7 @@ Las tablas company-owned heredan los campos:
 | `CreatedAt` | Fecha UTC en la que se creo el registro.                                                   | `2026-05-22T10:15:30Z`                 |
 | `UpdatedAt` | Fecha UTC de la ultima modificacion.                                                       | `2026-05-22T10:45:00Z`                 |
 
-`CreatedAt` y `UpdatedAt` los estampa `AppDbContext` automaticamente al guardar cambios.
+`CreatedAt` y `UpdatedAt` los estampa `CEOAgentDbContext` automaticamente al guardar cambios.
 
 ### JSON
 

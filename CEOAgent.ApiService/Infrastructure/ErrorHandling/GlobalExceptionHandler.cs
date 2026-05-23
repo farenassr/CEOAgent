@@ -1,10 +1,11 @@
 using System.Diagnostics;
+using CEOAgent.ApiService.Infrastructure.Correlation;
 using CEOAgent.Application.Errors;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace CEOAgent.ApiService;
+namespace CEOAgent.ApiService.Infrastructure.ErrorHandling;
 
 public sealed class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
@@ -25,6 +26,14 @@ public sealed class GlobalExceptionHandler(
             OperationCanceledException => (499, "Client closed request", "client_closed_request"),
             _ => (StatusCodes.Status500InternalServerError, "Unexpected server error", "unexpected_error")
         };
+
+        if (Activity.Current is { } activity)
+        {
+            activity.SetStatus(ActivityStatusCode.Error, title);
+            activity.AddException(exception);
+            activity.SetTag("http.response.status_code", status);
+            activity.SetTag("error.type", type);
+        }
 
         logger.LogError(exception, "Request failed with status {StatusCode}", status);
 

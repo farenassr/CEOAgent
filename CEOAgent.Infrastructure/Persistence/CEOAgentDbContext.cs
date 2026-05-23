@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CEOAgent.Infrastructure.Persistence;
 
-public sealed class AppDbContext(
-    DbContextOptions<AppDbContext> options,
+public sealed class CEOAgentDbContext(
+    DbContextOptions<CEOAgentDbContext> options,
     ICompanyContext companyContext,
     TimeProvider timeProvider) : DbContext(options)
 {
@@ -34,7 +34,7 @@ public sealed class AppDbContext(
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CEOAgentDbContext).Assembly);
 
         modelBuilder.Entity<CompanyChannel>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
         modelBuilder.Entity<AgentProfile>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
@@ -64,7 +64,7 @@ public sealed class AppDbContext(
     {
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
-        foreach (var entry in ChangeTracker.Entries())
+        foreach (var entry in ChangeTracker.Entries().ToArray())
         {
             if (entry.Entity is Conversation
                 && entry.State == EntityState.Modified

@@ -216,14 +216,14 @@ public sealed class RelationalConstraintTests
         private readonly SqliteConnection connection;
         private readonly CompanyContextAccessor companyContext;
 
-        private SqliteDatabase(SqliteConnection connection, CompanyContextAccessor companyContext, AppDbContext context)
+        private SqliteDatabase(SqliteConnection connection, CompanyContextAccessor companyContext, CEOAgentDbContext context)
         {
             this.connection = connection;
             this.companyContext = companyContext;
             Context = context;
         }
 
-        public AppDbContext Context { get; }
+        public CEOAgentDbContext Context { get; }
 
         public static async Task<SqliteDatabase> CreateAsync()
         {
@@ -231,12 +231,12 @@ public sealed class RelationalConstraintTests
             await connection.OpenAsync();
 
             var companyContext = new CompanyContextAccessor();
-            var options = new DbContextOptionsBuilder<AppDbContext>()
+            var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
                 .UseSqlite(connection)
                 .UseSnakeCaseNamingConvention()
                 .Options;
 
-            var context = new AppDbContext(options, companyContext, TimeProvider.System);
+            var context = new CEOAgentDbContext(options, companyContext, TimeProvider.System);
             await context.Database.EnsureCreatedAsync();
 
             return new SqliteDatabase(connection, companyContext, context);

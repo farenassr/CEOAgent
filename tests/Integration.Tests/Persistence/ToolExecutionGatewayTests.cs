@@ -19,11 +19,11 @@ public sealed class ToolExecutionGatewayTests
         await connection.OpenAsync();
 
         var companyContext = new CompanyContextAccessor();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
             .UseSqlite(connection)
             .UseSnakeCaseNamingConvention()
             .Options;
-        await using var dbContext = new AppDbContext(options, companyContext, TimeProvider.System);
+        await using var dbContext = new CEOAgentDbContext(options, companyContext, TimeProvider.System);
         await dbContext.Database.EnsureCreatedAsync();
 
         var companyA = Guid.CreateVersion7();
@@ -100,7 +100,7 @@ public sealed class ToolExecutionGatewayTests
         exception.Code.ShouldBe("company_tool_mismatch");
     }
 
-    private static void SeedCompanies(AppDbContext dbContext, Guid companyA, Guid companyB)
+    private static void SeedCompanies(CEOAgentDbContext dbContext, Guid companyA, Guid companyB)
     {
         dbContext.Companies.AddRange(
             new CEOAgent.Infrastructure.Persistence.Entities.Company

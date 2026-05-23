@@ -56,16 +56,16 @@ public sealed class CompanyIsolationTests
         channels.ShouldBeEmpty();
     }
 
-    private static AppDbContext CreateDbContext(ICompanyContext companyContext)
+    private static CEOAgentDbContext CreateDbContext(ICompanyContext companyContext)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
             .UseInMemoryDatabase($"company-isolation-tests-{Guid.CreateVersion7()}")
             .Options;
 
-        return new AppDbContext(options, companyContext, TimeProvider.System);
+        return new CEOAgentDbContext(options, companyContext, TimeProvider.System);
     }
 
-    private static async Task SeedChannelsAsync(AppDbContext dbContext, Guid companyA, Guid companyB)
+    private static async Task SeedChannelsAsync(CEOAgentDbContext dbContext, Guid companyA, Guid companyB)
     {
         dbContext.CompanyChannels.AddRange(
             new CompanyChannel

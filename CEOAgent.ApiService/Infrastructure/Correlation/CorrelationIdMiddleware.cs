@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace CEOAgent.ApiService;
+namespace CEOAgent.ApiService.Infrastructure.Correlation;
 
 public sealed class CorrelationIdMiddleware(
     RequestDelegate next,
@@ -35,11 +35,13 @@ public sealed class CorrelationIdMiddleware(
     private static string GetOrCreateCorrelationId(HttpContext context)
     {
         if (context.Request.Headers.TryGetValue(HeaderName, out var values)
-            && !string.IsNullOrWhiteSpace(values.FirstOrDefault()))
+            && values is [{ Length: > 0 } id])
         {
-            return values.First()!;
+            return id;
         }
 
-        return Guid.CreateVersion7().ToString();
+        Span<char> buffer = stackalloc char[36];
+        Guid.CreateVersion7().TryFormat(buffer, out _, format: "D");
+        return new string(buffer);
     }
 }

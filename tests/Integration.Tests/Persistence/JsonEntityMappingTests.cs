@@ -14,7 +14,7 @@ public sealed class JsonEntityMappingTests
     [Test]
     public void Model_MapsJsonbEntityProperties_AsTypedObjectsWithStableColumnNames()
     {
-        using var dbContext = AppDbContextTestFactory.Create();
+        using var dbContext = CEOAgentDbContextTestFactory.Create();
         var model = dbContext.Model;
 
         AssertJsonProperty<CompanyEntity, WorkingHoursEntity>(model, nameof(CompanyEntity.WorkingHours), "working_hours_json");
@@ -76,16 +76,16 @@ public sealed class JsonEntityMappingTests
         property.GetColumnName().ShouldBe(columnName);
     }
 
-    private static class AppDbContextTestFactory
+    private static class CEOAgentDbContextTestFactory
     {
-        public static AppDbContext Create()
+        public static CEOAgentDbContext Create()
         {
-            var options = new DbContextOptionsBuilder<AppDbContext>()
+            var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
                 .UseNpgsql("Host=localhost;Database=ceoagent_model_test;Username=postgres;Password=postgres")
                 .UseSnakeCaseNamingConvention()
                 .Options;
 
-            return new AppDbContext(options, new CompanyContextAccessor(), TimeProvider.System);
+            return new CEOAgentDbContext(options, new CompanyContextAccessor(), TimeProvider.System);
         }
     }
 }

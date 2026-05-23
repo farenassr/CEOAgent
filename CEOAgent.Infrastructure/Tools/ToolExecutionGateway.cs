@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CEOAgent.Infrastructure.Tools;
 
-public sealed class ToolExecutionGateway(AppDbContext dbContext)
+public sealed class ToolExecutionGateway(CEOAgentDbContext dbContext)
 {
     public async Task<ToolExecution> CreatePendingExecutionAsync(
         CreateToolExecutionRequest request,

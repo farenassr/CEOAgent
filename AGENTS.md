@@ -133,7 +133,7 @@ this list wins.
 8. Use `ProblemDetails` for all error responses, populated by a single global
    `IExceptionHandler`. Throw exceptions for unexpected errors. Do not invest
    in `Result<T, Error>` plumbing for MVP.
-9. Use **PostgreSQL** as the primary database with one `AppDbContext`.
+9. Use **PostgreSQL** as the primary database with one `CEOAgentDbContext`.
 10. Use **Azure Blob Storage** for audio and other media.
 11. Use **Azure Storage Queues** for background jobs.
 12. Use **ZLogger** for structured logging.
@@ -197,7 +197,7 @@ this list wins.
 30. Database tables and columns use **singular `snake_case`**
 31. Entity Framework property names use **PascalCase** in C#. Apply
     `EFCore.NamingConventions` with `UseSnakeCaseNamingConvention()` once at
-    `AppDbContext` configuration to map automatically.
+    `CEOAgentDbContext` configuration to map automatically.
 32. All timestamps stored as `timestamptz` and represented in C# as
     `DateTime` with `DateTimeKind.Utc`. Never use `DateTime.Now`. Always use
     `TimeProvider`.
@@ -328,7 +328,7 @@ builder.Build().Run();
   environment variables. Do not commit local secret values.
 - Do not use `RunAsExisting`/`AsExisting` for MVP unless the explicit goal is
   to require Azure access during local development.
-- `AppDbContextFactory` is design-time only and reads
+- `CEOAgentDbContextFactory` is design-time only and reads
   `ConnectionStrings:CEOAgent` from `appsettings.json`,
   `appsettings.Development.json`, user-secrets, or environment variables.
   It must throw a clear `InvalidOperationException` if the value is missing.
@@ -527,7 +527,7 @@ The endpoint:
 2. Lets FastEndpoints + FluentValidation validate it (status `400` on
    failure).
 3. For simple single-endpoint operations, runs the logic directly using
-   injected services such as `AppDbContext`, ports, and `TimeProvider`.
+   injected services such as `CEOAgentDbContext`, ports, and `TimeProvider`.
 4. For non-trivial or reusable operations, maps to a Mediator command/query
    (direct construction; Mapperly only when shapes diverge) and sends it.
 5. Maps the response back if needed.
@@ -1190,7 +1190,7 @@ This is the deliberate extensibility point.
 
 ```csharp
 public sealed class ToolExecutionGateway(
-    AppDbContext db,
+    CEOAgentDbContext db,
     IToolHandlerFactory factory,
     ITenantContext tenant,
     TimeProvider clock,
@@ -1687,7 +1687,7 @@ rules in methods on the entity when it improves readability:
 
 ## EF Core Migrations
 
-- **One** `AppDbContext` for the whole solution.
+- **One** `CEOAgentDbContext` for the whole solution.
 - Code-first migrations stored in `Infrastructure/Persistence/Migrations/`.
 - Migrations must **never** run automatically on application startup in any
   environment.
@@ -1727,7 +1727,7 @@ rules in methods on the entity when it improves readability:
   conversation state, channel metadata). Stable queryable fields are real
   columns.
 - Use `IEntityTypeConfiguration<T>` classes in
-  `Infrastructure/Persistence/Configurations/`. The `AppDbContext` only
+  `Infrastructure/Persistence/Configurations/`. The `CEOAgentDbContext` only
   declares `DbSet<T>` properties and applies all configurations via
   `modelBuilder.ApplyConfigurationsFromAssembly(...)`.
 
