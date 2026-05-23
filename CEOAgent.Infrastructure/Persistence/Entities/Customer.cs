@@ -8,9 +8,9 @@ public sealed class Customer : AuditableCompanyOwnedEntity
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
     /// <summary>
-    /// Channel type where the customer identity was observed. Example: whatsapp_cloud.
+    /// Company channel where the customer identity was observed. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b31.
     /// </summary>
-    public required string ChannelType { get; set; }
+    public Guid CompanyChannelId { get; set; }
 
     /// <summary>
     /// Provider-side customer identifier within the company and channel. Example: 573001112233.
@@ -23,7 +23,12 @@ public sealed class Customer : AuditableCompanyOwnedEntity
     public string? DisplayName { get; set; }
 
     /// <summary>
+    /// Channel where this customer identity was observed. Example: WhatsApp Cloud phone number.
+    /// </summary>
+    public CompanyChannel CompanyChannel { get; set; } = null!;
+
+    /// <summary>
     /// Conversations associated with this customer. Example: the current open WhatsApp conversation.
     /// </summary>
-    public ICollection<Conversation> Conversations { get; } = [];
+    public ICollection<Conversation> Conversations { get; } = new List<Conversation>();
 }

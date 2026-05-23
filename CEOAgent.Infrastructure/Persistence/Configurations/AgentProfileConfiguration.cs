@@ -17,6 +17,6 @@ public sealed class AgentProfileConfiguration : IEntityTypeConfiguration<AgentPr
         builder.HasOne(entity => entity.Company)
             .WithOne(entity => entity.AgentProfile)
             .HasForeignKey<AgentProfile>(entity => entity.CompanyId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

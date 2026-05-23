@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.Infrastructure.Persistence.Entities;
 
 public sealed class IntegrationCredentialReference : AuditableCompanyOwnedEntity
@@ -25,10 +27,20 @@ public sealed class IntegrationCredentialReference : AuditableCompanyOwnedEntity
     /// <summary>
     /// Optional provider-specific metadata stored as JSON. Example: {"calendarId":"primary"}.
     /// </summary>
-    public string? MetadataJson { get; set; }
+    public CredentialMetadata? Metadata { get; set; }
 
     /// <summary>
     /// Company that owns this credential reference. Example: Contoso Bistro.
     /// </summary>
     public Company Company { get; set; } = null!;
+
+    /// <summary>
+    /// Channels using this credential reference. Example: WhatsApp Cloud channels.
+    /// </summary>
+    public ICollection<CompanyChannel> CompanyChannels { get; } = new List<CompanyChannel>();
+
+    /// <summary>
+    /// Tools using this credential reference. Example: Google Calendar tools.
+    /// </summary>
+    public ICollection<CompanyTool> CompanyTools { get; } = new List<CompanyTool>();
 }

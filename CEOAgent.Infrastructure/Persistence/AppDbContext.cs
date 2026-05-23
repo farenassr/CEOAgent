@@ -66,6 +66,13 @@ public sealed class AppDbContext(
 
         foreach (var entry in ChangeTracker.Entries())
         {
+            if (entry.Entity is Conversation
+                && entry.State == EntityState.Modified
+                && entry.Property(nameof(Conversation.AgentProfileId)).IsModified)
+            {
+                throw new InvalidOperationException("Conversation.AgentProfileId is immutable after conversation creation.");
+            }
+
             if (entry.Entity is AuditableCompanyOwnedEntity companyOwned
                 && entry.State is EntityState.Added or EntityState.Modified)
             {

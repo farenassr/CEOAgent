@@ -1,4 +1,5 @@
 using CEOAgent.Shared.Enums;
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
 
 namespace CEOAgent.Infrastructure.Persistence.Entities;
 
@@ -16,9 +17,9 @@ public sealed class Company
     public required string Name { get; set; }
 
     /// <summary>
-    /// Working hours configuration stored as JSON. Example: {"monday":[{"start":"12:00","end":"22:00"}]}.
+    /// Working hours configuration stored as JSON. Example: {"schedule":{"monday":[{"start":"12:00","end":"22:00"}]}}.
     /// </summary>
-    public string? WorkingHoursJson { get; set; }
+    public WorkingHours? WorkingHours { get; set; }
 
     /// <summary>
     /// IANA time zone used for company-local scheduling. Example: America/Bogota.
@@ -43,7 +44,7 @@ public sealed class Company
     /// <summary>
     /// Channel registrations that resolve inbound messages to this company. Example: one WhatsApp Cloud channel.
     /// </summary>
-    public ICollection<CompanyChannel> Channels { get; } = [];
+    public ICollection<CompanyChannel> Channels { get; } = new List<CompanyChannel>();
 
     /// <summary>
     /// Agent configuration used for this company's conversations. Example: a Spanish support assistant profile.
@@ -53,10 +54,10 @@ public sealed class Company
     /// <summary>
     /// Tools enabled for this company. Example: request_human_handoff.
     /// </summary>
-    public ICollection<CompanyTool> Tools { get; } = [];
+    public ICollection<CompanyTool> Tools { get; } = new List<CompanyTool>();
 
     /// <summary>
     /// External integration credential references owned by this company. Example: google_calendar primary credential.
     /// </summary>
-    public ICollection<IntegrationCredentialReference> IntegrationCredentials { get; } = [];
+    public ICollection<IntegrationCredentialReference> IntegrationCredentials { get; } = new List<IntegrationCredentialReference>();
 }

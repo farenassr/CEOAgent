@@ -15,9 +15,14 @@ public sealed class Conversation : AuditableCompanyOwnedEntity
     public Guid CustomerId { get; set; }
 
     /// <summary>
-    /// Channel type for the conversation. Example: whatsapp_cloud.
+    /// Company channel for the conversation. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b31.
     /// </summary>
-    public required string ChannelType { get; set; }
+    public Guid CompanyChannelId { get; set; }
+
+    /// <summary>
+    /// Agent profile snapshot used by this conversation. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32.
+    /// </summary>
+    public Guid AgentProfileId { get; set; }
 
     /// <summary>
     /// Current conversation status. Example: Open.
@@ -35,6 +40,16 @@ public sealed class Conversation : AuditableCompanyOwnedEntity
     public Customer Customer { get; set; } = null!;
 
     /// <summary>
+    /// Channel navigation for this conversation. Example: WhatsApp Cloud phone number.
+    /// </summary>
+    public CompanyChannel CompanyChannel { get; set; } = null!;
+
+    /// <summary>
+    /// Agent profile used when this conversation was created. Example: Spanish support assistant.
+    /// </summary>
+    public AgentProfile AgentProfile { get; set; } = null!;
+
+    /// <summary>
     /// Short-lived state for the active interaction. Example: waiting for human handoff confirmation.
     /// </summary>
     public ConversationState? State { get; set; }
@@ -42,5 +57,5 @@ public sealed class Conversation : AuditableCompanyOwnedEntity
     /// <summary>
     /// Messages recorded for this conversation. Example: the last inbound user message.
     /// </summary>
-    public ICollection<Message> Messages { get; } = [];
+    public ICollection<Message> Messages { get; } = new List<Message>();
 }

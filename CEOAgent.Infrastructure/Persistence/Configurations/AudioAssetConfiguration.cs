@@ -13,5 +13,9 @@ public sealed class AudioAssetConfiguration : IEntityTypeConfiguration<AudioAsse
         builder.Property(entity => entity.Direction).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(entity => entity.BlobUri).HasMaxLength(1_024).IsRequired();
         builder.Property(entity => entity.ContentType).HasMaxLength(120).IsRequired();
+        builder.HasOne(entity => entity.Message)
+            .WithMany()
+            .HasForeignKey(entity => entity.MessageId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

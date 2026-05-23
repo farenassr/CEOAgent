@@ -50,7 +50,7 @@ public sealed class ConfigureAgentProfileEndpoint(
         profile.Language = req.Language;
         profile.PromptOverride = req.PromptOverride;
         company.TimeZoneId = req.TimeZoneId;
-        company.WorkingHoursJson = req.WorkingHoursJson;
+        company.WorkingHours = req.WorkingHours;
 
         await dbContext.SaveChangesAsync(ct);
 

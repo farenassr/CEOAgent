@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.Infrastructure.Persistence.Entities;
 
 public sealed class CompanyTool : AuditableCompanyOwnedEntity
@@ -18,12 +20,27 @@ public sealed class CompanyTool : AuditableCompanyOwnedEntity
     public bool IsEnabled { get; set; } = true;
 
     /// <summary>
-    /// Optional company-specific tool configuration stored as JSON. Example: {"maxPartySize":8}.
+    /// Optional credential reference used by external-system tools. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42.
     /// </summary>
-    public string? ConfigurationJson { get; set; }
+    public Guid? CredentialReferenceId { get; set; }
+
+    /// <summary>
+    /// Optional company-specific tool configuration stored as JSON. Example: {"toolKey":"check_availability","maxPartySize":8}.
+    /// </summary>
+    public ToolConfiguration? Configuration { get; set; }
 
     /// <summary>
     /// Company that owns this tool registration. Example: Contoso Bistro.
     /// </summary>
     public Company Company { get; set; } = null!;
+
+    /// <summary>
+    /// Optional credential reference used by this tool. Example: Google Calendar OAuth reference.
+    /// </summary>
+    public IntegrationCredentialReference? CredentialReference { get; set; }
+
+    /// <summary>
+    /// Executions recorded for this enabled tool. Example: check_availability calls.
+    /// </summary>
+    public ICollection<ToolExecution> ToolExecutions { get; } = new List<ToolExecution>();
 }

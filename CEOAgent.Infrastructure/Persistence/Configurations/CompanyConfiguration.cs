@@ -12,7 +12,7 @@ public sealed class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Name).HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.TimeZoneId).HasMaxLength(120).IsRequired();
-        builder.Property(entity => entity.WorkingHoursJson).HasColumnType("jsonb");
+        builder.Property(entity => entity.WorkingHours).HasJsonbConversion("working_hours_json");
         builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
     }
 }

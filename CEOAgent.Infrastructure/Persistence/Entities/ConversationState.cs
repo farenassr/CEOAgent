@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.Infrastructure.Persistence.Entities;
 
 public sealed class ConversationState : AuditableCompanyOwnedEntity
@@ -13,9 +15,9 @@ public sealed class ConversationState : AuditableCompanyOwnedEntity
     public Guid ConversationId { get; set; }
 
     /// <summary>
-    /// Serialized short-lived state for the active interaction. Example: {"intent":"human_handoff_request"}.
+    /// Short-lived state for the active interaction stored as JSON. Example: {"currentIntent":"human_handoff_request"}.
     /// </summary>
-    public required string StateJson { get; set; }
+    public required ConversationStateSnapshot Snapshot { get; set; }
 
     /// <summary>
     /// Conversation navigation for this state. Example: the open WhatsApp conversation.
