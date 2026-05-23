@@ -209,6 +209,12 @@ This setting is only for local design-time EF usage. Runtime local connection
 strings come from Aspire when running AppHost and must continue to flow through
 `.WithReference(postgres)`.
 
+Design-time EF configuration enables model inspection and migration
+scaffolding. Applying migrations is intentionally manual: AI agents must not
+run `dotnet ef database update` or otherwise apply migrations to a database.
+The project owner chooses when to run migrations locally, in staging, or in
+production.
+
 **Verification:**
 
 ```powershell
@@ -270,7 +276,7 @@ live Key Vault behavior is not verified by local tests.
 - [x] Add Key Vault publish-mode wiring while keeping local secrets in Aspire parameters/user-secrets.
 - [x] Implement admin onboarding slices with FastEndpoints, FluentValidation, and Mediator.
 - [x] Add company isolation tests proving cross-company access returns 404.
-- [x] Add migration.
+- [x] Add migration file. Applying it remains a manual operator step.
 
 Implementation comment: Phase 2 added the shared company context, `AppDbContext`, company-owned entities and EF configurations, scoped company query filters, static `AdminApiKey` authentication, MVP secret wiring with local Aspire parameters/user-secrets and publish-mode Azure Key Vault, FastEndpoints/Mediator admin onboarding routes, focused admin-auth and company-isolation tests, and the initial persistence migration under `CEOAgent.Infrastructure/Persistence/Migrations/`.
 
@@ -342,7 +348,7 @@ Expected: queue payloads serialize deterministically and Worker can receive know
 - Customer resolution by `messages[0].from` or `contacts[0].wa_id`.
 - Open conversation lookup or creation.
 - Inbound message persistence.
-- Unique constraint on `(company_id, channel_type, provider_message_id)`.
+- Unique constraint on `(company_id, provider_message_id)` filtered to non-null provider message IDs.
 - Duplicate webhook returns `200 OK` without enqueueing.
 - Text and voice-note inbound recognition.
 
@@ -352,7 +358,7 @@ Expected: queue payloads serialize deterministically and Worker can receive know
 - [ ] Implement WhatsApp signature verifier.
 - [ ] Implement webhook payload models with source-generated JSON metadata.
 - [ ] Implement company lookup through `CompanyChannel`.
-- [ ] Implement customer and conversation creation via Mediator commands.
+- [ ] Implement customer creation by `(company_channel_id, external_customer_id)` and conversation creation by `(company_id, customer_id, company_channel_id)`, snapshotting `agent_profile_id`.
 - [ ] Persist inbound text messages.
 - [ ] Persist inbound audio metadata and enqueue transcription when voice note media is present.
 - [ ] Enqueue `ProcessIncomingMessageJob` for text messages.

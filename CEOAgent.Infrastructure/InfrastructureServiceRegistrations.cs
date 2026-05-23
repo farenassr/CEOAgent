@@ -1,5 +1,6 @@
 using CEOAgent.Application.Company;
 using CEOAgent.Infrastructure.Persistence;
+using CEOAgent.Infrastructure.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ public static class InfrastructureServiceRegistrations
         services.AddSingleton<ICompanyContextAccessor, CompanyContextAccessor>();
         services.AddSingleton<ICompanyContext>(provider => provider.GetRequiredService<ICompanyContextAccessor>());
         services.AddSingleton(TimeProvider.System);
+        services.AddScoped<ToolExecutionGateway>();
 
         services.AddDbContext<AppDbContext>(options =>
         {

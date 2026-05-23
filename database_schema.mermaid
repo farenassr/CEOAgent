@@ -3,7 +3,7 @@ erDiagram
     Company {
         Guid Id PK
         string Name
-        string WorkingHoursJson
+        WorkingHours WorkingHours "(JSONB)"
         string TimeZoneId
         CompanyStatus Status
         DateTime CreatedAt
@@ -15,8 +15,8 @@ erDiagram
         Guid CompanyId FK
         string Provider
         string ProviderChannelId
-        string MetadataJson
-        string CredentialReference
+        ChannelMetadata Metadata "(JSONB)"
+        Guid CredentialReferenceId FK
         DateTime CreatedAt
         DateTime UpdatedAt
     }
@@ -37,7 +37,8 @@ erDiagram
         Guid CompanyId FK
         string ToolKey
         bool IsEnabled
-        string ConfigurationJson
+        Guid CredentialReferenceId FK
+        ToolConfiguration Configuration "(JSONB)"
         DateTime CreatedAt
         DateTime UpdatedAt
     }
@@ -48,7 +49,7 @@ erDiagram
         string Provider
         string Purpose
         string Reference
-        string MetadataJson
+        CredentialMetadata Metadata "(JSONB)"
         DateTime CreatedAt
         DateTime UpdatedAt
     }
@@ -57,7 +58,7 @@ erDiagram
     Customer {
         Guid Id PK
         Guid CompanyId FK
-        string ChannelType
+        Guid CompanyChannelId FK
         string ExternalCustomerId
         string DisplayName
         DateTime CreatedAt
@@ -68,7 +69,8 @@ erDiagram
         Guid Id PK
         Guid CompanyId FK
         Guid CustomerId FK
-        string ChannelType
+        Guid CompanyChannelId FK
+        Guid AgentProfileId FK
         ConversationStatus Status
         DateTime LastMessageAt
         DateTime CreatedAt
@@ -79,7 +81,7 @@ erDiagram
         Guid Id PK
         Guid CompanyId FK
         Guid ConversationId FK
-        string StateJson
+        ConversationStateSnapshot Snapshot "(JSONB)"
         DateTime CreatedAt
         DateTime UpdatedAt
     }
@@ -89,10 +91,9 @@ erDiagram
         Guid CompanyId FK
         Guid ConversationId FK
         MessageRole Role
-        string ChannelType
         string Text
         string ProviderMessageId
-        string PayloadJson
+        MessagePayload Payload "(JSONB)"
         DateTime OccurredAt
         DateTime CreatedAt
         DateTime UpdatedAt
@@ -101,7 +102,6 @@ erDiagram
     AudioAsset {
         Guid Id PK
         Guid CompanyId FK
-        Guid ConversationId FK
         Guid MessageId FK
         AudioAssetDirection Direction
         string BlobUri
@@ -117,11 +117,14 @@ erDiagram
         Guid Id PK
         Guid CompanyId FK
         Guid ConversationId FK
+        Guid CompanyToolId FK
+        Guid TriggerMessageId FK
+        Guid ResultMessageId FK
         string ToolKey
         string IdempotencyKey
         ToolExecutionStatus Status
-        string RequestJson
-        string ResultJson
+        ToolExecutionRequest Request "(JSONB)"
+        ToolExecutionResult Result "(JSONB)"
         string FailureReason
         DateTime CreatedAt
         DateTime UpdatedAt
@@ -138,13 +141,20 @@ erDiagram
     Company ||--o{ Message : "owns"
     Company ||--o{ AudioAsset : "owns"
     Company ||--o{ ToolExecution : "owns"
+    IntegrationCredentialReference ||--o{ CompanyChannel : "authenticates"
+    IntegrationCredentialReference ||--o{ CompanyTool : "authenticates"
 
     %% Customer and Conversation relations
+    CompanyChannel ||--o{ Customer : "identifies"
+    CompanyChannel ||--o{ Conversation : "carries"
+    AgentProfile ||--o{ Conversation : "snapshotted_by"
     Customer ||--o{ Conversation : "participates_in"
     Conversation ||--o| ConversationState : "maintains"
     Conversation ||--o{ Message : "contains"
-    Conversation ||--o{ AudioAsset : "has"
     Conversation ||--o{ ToolExecution : "logs"
 
     %% Message relations
     Message ||--o{ AudioAsset : "attached_to"
+    Message ||--o{ ToolExecution : "triggers"
+    Message ||--o{ ToolExecution : "records_result"
+    CompanyTool ||--o{ ToolExecution : "executes"

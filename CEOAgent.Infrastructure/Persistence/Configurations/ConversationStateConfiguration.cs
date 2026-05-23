@@ -11,10 +11,10 @@ public sealed class ConversationStateConfiguration : IEntityTypeConfiguration<Co
         builder.ToTable("conversation_state");
         builder.HasKey(entity => entity.Id);
         builder.HasIndex(entity => entity.ConversationId).IsUnique();
-        builder.Property(entity => entity.StateJson).HasColumnType("jsonb");
+        builder.Property(entity => entity.Snapshot).HasJsonbConversion("state_json").IsRequired();
         builder.HasOne(entity => entity.Conversation)
             .WithOne(entity => entity.State)
             .HasForeignKey<ConversationState>(entity => entity.ConversationId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

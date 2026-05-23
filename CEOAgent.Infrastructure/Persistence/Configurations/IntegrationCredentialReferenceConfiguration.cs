@@ -14,10 +14,10 @@ public sealed class IntegrationCredentialReferenceConfiguration : IEntityTypeCon
         builder.Property(entity => entity.Purpose).HasMaxLength(80).IsRequired();
         builder.Property(entity => entity.Reference).HasMaxLength(300).IsRequired();
         builder.HasIndex(entity => new { entity.CompanyId, entity.Provider, entity.Purpose }).IsUnique();
-        builder.Property(entity => entity.MetadataJson).HasColumnType("jsonb");
+        builder.Property(entity => entity.Metadata).HasJsonbConversion("metadata_json");
         builder.HasOne(entity => entity.Company)
             .WithMany(entity => entity.IntegrationCredentials)
             .HasForeignKey(entity => entity.CompanyId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

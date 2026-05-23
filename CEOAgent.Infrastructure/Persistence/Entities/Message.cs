@@ -1,4 +1,5 @@
 using CEOAgent.Shared.Enums;
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
 
 namespace CEOAgent.Infrastructure.Persistence.Entities;
 
@@ -20,11 +21,6 @@ public sealed class Message : AuditableCompanyOwnedEntity
     public MessageRole Role { get; set; }
 
     /// <summary>
-    /// Channel type where this message belongs. Example: whatsapp_cloud.
-    /// </summary>
-    public required string ChannelType { get; set; }
-
-    /// <summary>
     /// Text content or transcribed audio content. Example: I need a table for four tonight.
     /// </summary>
     public string? Text { get; set; }
@@ -35,9 +31,9 @@ public sealed class Message : AuditableCompanyOwnedEntity
     public string? ProviderMessageId { get; set; }
 
     /// <summary>
-    /// Raw or normalized provider payload stored as JSON. Example: {"type":"text","id":"wamid..."}.
+    /// Raw or normalized provider payload stored as JSON. Example: {"providerType":"text","providerMessageId":"wamid..."}.
     /// </summary>
-    public string? PayloadJson { get; set; }
+    public MessagePayload? Payload { get; set; }
 
     /// <summary>
     /// UTC timestamp when the message occurred. Example: 2026-05-22T10:15:30Z.
@@ -48,4 +44,14 @@ public sealed class Message : AuditableCompanyOwnedEntity
     /// Conversation navigation for this message. Example: the active customer conversation.
     /// </summary>
     public Conversation Conversation { get; set; } = null!;
+
+    /// <summary>
+    /// Tool executions triggered by this assistant message. Example: check_availability call.
+    /// </summary>
+    public ICollection<ToolExecution> TriggeredToolExecutions { get; } = new List<ToolExecution>();
+
+    /// <summary>
+    /// Tool executions whose result was recorded by this message. Example: tool result message.
+    /// </summary>
+    public ICollection<ToolExecution> ResultToolExecutions { get; } = new List<ToolExecution>();
 }

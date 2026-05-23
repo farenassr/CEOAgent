@@ -33,4 +33,9 @@ public sealed class AgentProfile : AuditableCompanyOwnedEntity
     /// Company that owns this agent profile. Example: Contoso Bistro.
     /// </summary>
     public Company Company { get; set; } = null!;
+
+    /// <summary>
+    /// Conversations created with this profile snapshot. Example: Spanish support conversations.
+    /// </summary>
+    public ICollection<Conversation> Conversations { get; } = new List<Conversation>();
 }

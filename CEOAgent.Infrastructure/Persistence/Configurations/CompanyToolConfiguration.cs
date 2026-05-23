@@ -12,10 +12,14 @@ public sealed class CompanyToolConfiguration : IEntityTypeConfiguration<CompanyT
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.ToolKey).HasMaxLength(120).IsRequired();
         builder.HasIndex(entity => new { entity.CompanyId, entity.ToolKey }).IsUnique();
-        builder.Property(entity => entity.ConfigurationJson).HasColumnType("jsonb");
+        builder.Property(entity => entity.Configuration).HasJsonbConversion("configuration_json");
         builder.HasOne(entity => entity.Company)
             .WithMany(entity => entity.Tools)
             .HasForeignKey(entity => entity.CompanyId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(entity => entity.CredentialReference)
+            .WithMany(entity => entity.CompanyTools)
+            .HasForeignKey(entity => entity.CredentialReferenceId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.Infrastructure.Persistence.Entities;
 
 public sealed class CompanyChannel : AuditableCompanyOwnedEntity
@@ -18,17 +20,32 @@ public sealed class CompanyChannel : AuditableCompanyOwnedEntity
     public required string ProviderChannelId { get; set; }
 
     /// <summary>
-    /// Provider-specific metadata stored as JSON. Example: {"business_account_id":"987654321"}.
+    /// Provider-specific metadata stored as JSON. Example: {"businessAccountId":"987654321"}.
     /// </summary>
-    public string? MetadataJson { get; set; }
+    public ChannelMetadata? Metadata { get; set; }
 
     /// <summary>
-    /// Secret or credential reference used by the channel adapter. Example: kv://whatsapp/contoso.
+    /// Credential reference used by the channel adapter. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42.
     /// </summary>
-    public string? CredentialReference { get; set; }
+    public Guid? CredentialReferenceId { get; set; }
 
     /// <summary>
     /// Company that owns this channel registration. Example: Contoso Bistro.
     /// </summary>
     public Company Company { get; set; } = null!;
+
+    /// <summary>
+    /// Credential reference used by this channel registration. Example: WhatsApp Cloud token reference.
+    /// </summary>
+    public IntegrationCredentialReference? CredentialReference { get; set; }
+
+    /// <summary>
+    /// Customers whose identities were observed through this channel. Example: WhatsApp customers.
+    /// </summary>
+    public ICollection<Customer> Customers { get; } = new List<Customer>();
+
+    /// <summary>
+    /// Conversations started through this channel. Example: active WhatsApp conversations.
+    /// </summary>
+    public ICollection<Conversation> Conversations { get; } = new List<Conversation>();
 }

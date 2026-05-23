@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
 
 public sealed class CompanyChannelRequest
@@ -13,12 +15,12 @@ public sealed class CompanyChannelRequest
     public string ProviderChannelId { get; set; } = string.Empty;
 
     /// <summary>
-    /// Provider-specific metadata as JSON. Example: {"business_account_id":"987654321"}.
+    /// Provider-specific metadata as JSON. Example: {"businessAccountId":"987654321"}.
     /// </summary>
-    public string? MetadataJson { get; set; }
+    public ChannelMetadata? Metadata { get; set; }
 
     /// <summary>
-    /// Secret or credential reference used by the channel adapter. Example: kv://whatsapp/contoso.
+    /// Credential reference used by the channel adapter. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42.
     /// </summary>
-    public string? CredentialReference { get; set; }
+    public Guid? CredentialReferenceId { get; set; }
 }

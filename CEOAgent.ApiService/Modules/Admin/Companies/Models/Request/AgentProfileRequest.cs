@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
 
 public sealed class AgentProfileRequest
@@ -28,8 +30,8 @@ public sealed class AgentProfileRequest
     public string? PromptOverride { get; set; }
 
     /// <summary>
-    /// Working hours configuration as JSON. Example: {"monday":[{"start":"12:00","end":"22:00"}]}.
+    /// Working hours configuration as JSON. Example: {"schedule":{"monday":[{"start":"12:00","end":"22:00"}]}}.
     /// </summary>
-    public string? WorkingHoursJson { get; set; }
+    public WorkingHours? WorkingHours { get; set; }
 
 }

@@ -28,6 +28,7 @@ public sealed class EnableCompanyToolEndpoint(
     {
         var companyId = Route<Guid>("companyId");
         await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, ct);
+        await EnsureCredentialReferenceIsAccessibleAsync(dbContext, req.CredentialReferenceId, ct);
 
         var tool = await dbContext.CompanyTools.SingleOrDefaultAsync(
             entity => entity.CompanyId == companyId && entity.ToolKey == req.ToolKey,
@@ -44,7 +45,8 @@ public sealed class EnableCompanyToolEndpoint(
         }
 
         tool.IsEnabled = req.IsEnabled;
-        tool.ConfigurationJson = req.ConfigurationJson;
+        tool.CredentialReferenceId = req.CredentialReferenceId;
+        tool.Configuration = req.Configuration;
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -61,6 +63,18 @@ public sealed class EnableCompanyToolEndpoint(
             || !await dbContext.Companies.AnyAsync(entity => entity.Id == companyId, cancellationToken))
         {
             throw new NotFoundException("company", companyId);
+        }
+    }
+
+    private static async Task EnsureCredentialReferenceIsAccessibleAsync(
+        AppDbContext dbContext,
+        Guid? credentialReferenceId,
+        CancellationToken cancellationToken)
+    {
+        if (credentialReferenceId is { } id
+            && !await dbContext.IntegrationCredentialReferences.AnyAsync(entity => entity.Id == id, cancellationToken))
+        {
+            throw new NotFoundException("integration_credential_reference", id);
         }
     }
 }

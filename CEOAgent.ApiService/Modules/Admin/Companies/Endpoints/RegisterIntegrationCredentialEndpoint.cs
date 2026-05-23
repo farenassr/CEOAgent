@@ -35,7 +35,7 @@ public sealed class RegisterIntegrationCredentialEndpoint(
             Provider = req.Provider,
             Purpose = req.Purpose,
             Reference = req.Reference,
-            MetadataJson = req.MetadataJson
+            Metadata = req.Metadata
         };
 
         dbContext.IntegrationCredentialReferences.Add(credential);

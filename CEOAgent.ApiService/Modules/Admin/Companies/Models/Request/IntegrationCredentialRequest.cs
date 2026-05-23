@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
 
 public sealed class IntegrationCredentialRequest
@@ -20,5 +22,5 @@ public sealed class IntegrationCredentialRequest
     /// <summary>
     /// Optional provider-specific metadata as JSON. Example: {"calendarId":"primary"}.
     /// </summary>
-    public string? MetadataJson { get; set; }
+    public CredentialMetadata? Metadata { get; set; }
 }

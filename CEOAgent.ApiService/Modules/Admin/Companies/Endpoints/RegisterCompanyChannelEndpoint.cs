@@ -28,14 +28,15 @@ public sealed class RegisterCompanyChannelEndpoint(
     {
         var companyId = Route<Guid>("companyId");
         await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, ct);
+        await EnsureCredentialReferenceIsAccessibleAsync(dbContext, req.CredentialReferenceId, ct);
 
         var channel = new CompanyChannel
         {
             CompanyId = companyId,
             Provider = req.Provider,
             ProviderChannelId = req.ProviderChannelId,
-            MetadataJson = req.MetadataJson,
-            CredentialReference = req.CredentialReference
+            Metadata = req.Metadata,
+            CredentialReferenceId = req.CredentialReferenceId
         };
 
         dbContext.CompanyChannels.Add(channel);
@@ -56,6 +57,18 @@ public sealed class RegisterCompanyChannelEndpoint(
             throw new NotFoundException("company", companyId);
         }
     }
+
+    private static async Task EnsureCredentialReferenceIsAccessibleAsync(
+        AppDbContext dbContext,
+        Guid? credentialReferenceId,
+        CancellationToken cancellationToken)
+    {
+        if (credentialReferenceId is { } id
+            && !await dbContext.IntegrationCredentialReferences.AnyAsync(entity => entity.Id == id, cancellationToken))
+        {
+            throw new NotFoundException("integration_credential_reference", id);
+        }
+    }
 }
 
 public sealed class CompanyChannelValidator : Validator<CompanyChannelRequest>
@@ -64,6 +77,5 @@ public sealed class CompanyChannelValidator : Validator<CompanyChannelRequest>
     {
         RuleFor(request => request.Provider).NotEmpty().MaximumLength(80);
         RuleFor(request => request.ProviderChannelId).NotEmpty().MaximumLength(160);
-        RuleFor(request => request.CredentialReference).MaximumLength(300);
     }
 }

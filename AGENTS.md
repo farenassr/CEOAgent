@@ -95,7 +95,7 @@ The solution lives at the repository root with a flat project layout (no
 - Keycloak (admin endpoints use a static API key for now)
 - Soft delete
 - Cross-channel customer identity unification (one customer = one
-  `(tenant_id, channel_type, external_customer_id)` for now)
+  `(tenant_id, company_channel_id, external_customer_id)` for now)
 
 These are intentionally deferred. Add them only when concrete pain justifies
 them.
@@ -459,7 +459,7 @@ Initial modules:
 
 - `Tenancy` — tenants, channels, integration credentials references, agent
   profiles, tool configuration per tenant.
-- `Customers` — customer records keyed by `(tenant_id, channel_type,
+- `Customers` — customer records keyed by `(tenant_id, company_channel_id,
 external_customer_id)`.
 - `Conversations` — conversations, messages, transcriptions, conversation
   state.
@@ -741,8 +741,9 @@ Generalized for any channel (WhatsApp Cloud is the only MVP implementation):
 4. Resolve tenant via tenant_channel.
 5. Extract customer identifier from the provider payload — for WhatsApp,
    messages[0].from or contacts[0].wa_id.
-6. Find or create customer by (tenant_id, channel_type, external_customer_id).
-7. Find or create OPEN conversation for (tenant_id, customer_id, channel_type).
+6. Find or create customer by (tenant_id, company_channel_id, external_customer_id).
+7. Find or create OPEN conversation for (tenant_id, customer_id, company_channel_id),
+   snapshotting the agent_profile_id selected at conversation creation.
 8. Persist inbound message idempotently using provider_message_id.
 9. Enqueue ProcessIncomingMessageJob to Azure Storage Queue.
 10. Return 200 OK.
@@ -800,7 +801,7 @@ Required behavior:
 ### Replay protection
 
 - Persist `provider_message_id` with a unique constraint on
-  `(tenant_id, channel_type, provider_message_id)`.
+  `(tenant_id, provider_message_id)` when `provider_message_id` is not null.
 - A duplicate insert returns **200 OK** without re-enqueuing.
 
 ---
@@ -1579,7 +1580,7 @@ For MVP, idempotency is enforced at three specific places:
 
 | Origin                       | Key                                                                                               | Storage                                                                       |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| WhatsApp inbound webhook     | `provider_message_id`                                                                             | Unique constraint on `(tenant_id, channel_type, provider_message_id)`         |
+| WhatsApp inbound webhook     | `provider_message_id`                                                                             | Unique constraint on `(tenant_id, provider_message_id)` where not null        |
 | Tool call to Google Calendar | `request_id` derived from `(tenant_id, conversation_id, tool_key, params_canonical_json)` SHA-256 | Passed to Google Calendar's idempotency parameter; logged in `tool_execution` |
 | Outbound message send        | `client_message_id` derived from `(tenant_id, conversation_id, message_id)`                       | Passed to WhatsApp Cloud's `biz_opaque_callback_data` and stored in `message` |
 
@@ -1688,10 +1689,14 @@ rules in methods on the entity when it improves readability:
 
 - **One** `AppDbContext` for the whole solution.
 - Code-first migrations stored in `Infrastructure/Persistence/Migrations/`.
-- Migrations run automatically on startup **only in non-production
-  environments**.
-- Production migrations are applied via a dedicated CLI step in the
-  deployment pipeline (`dotnet ef database update`), gated by approval.
+- Migrations must **never** run automatically on application startup in any
+  environment.
+- AI coding agents may scaffold migration files only when a schema change
+  requires them, but they must **not** apply or run migrations against any
+  database.
+- Applying migrations is a human/operator-controlled step. The project owner
+  chooses when to run `dotnet ef database update` locally, in staging, or in
+  production.
 - Each migration is named `{yyyyMMddHHmmss}_{Description}` (the default
   EF Core format). Example: `20260508153012_AddTenantChannel`.
 - Migrations must be **forward-only**. Down migrations exist for local

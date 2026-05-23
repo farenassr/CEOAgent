@@ -1,3 +1,5 @@
+using CEOAgent.Infrastructure.Persistence.Entities.Json;
+
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
 
 public sealed class CompanyToolRequest
@@ -13,7 +15,12 @@ public sealed class CompanyToolRequest
     public bool IsEnabled { get; set; } = true;
 
     /// <summary>
-    /// Optional company-specific tool configuration as JSON. Example: {"maxPartySize":8}.
+    /// Optional credential reference used by external-system tools. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42.
     /// </summary>
-    public string? ConfigurationJson { get; set; }
+    public Guid? CredentialReferenceId { get; set; }
+
+    /// <summary>
+    /// Optional company-specific tool configuration as JSON. Example: {"toolKey":"check_availability","maxPartySize":8}.
+    /// </summary>
+    public ToolConfiguration? Configuration { get; set; }
 }

@@ -10,11 +10,6 @@ public sealed class AudioAsset : AuditableCompanyOwnedEntity
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
     /// <summary>
-    /// Conversation associated with the audio asset when available. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34.
-    /// </summary>
-    public Guid? ConversationId { get; set; }
-
-    /// <summary>
     /// Message associated with the audio asset when available. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36.
     /// </summary>
     public Guid? MessageId { get; set; }
@@ -43,4 +38,9 @@ public sealed class AudioAsset : AuditableCompanyOwnedEntity
     /// Transcribed text for inbound audio when available. Example: Necesito una mesa para cuatro.
     /// </summary>
     public string? Transcript { get; set; }
+
+    /// <summary>
+    /// Message associated with this audio asset. Example: inbound voice-note message.
+    /// </summary>
+    public Message? Message { get; set; }
 }
