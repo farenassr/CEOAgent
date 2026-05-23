@@ -18,7 +18,7 @@ public static class InfrastructureServiceRegistrations
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ToolExecutionGateway>();
 
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddDbContext<CEOAgentDbContext>(options =>
         {
             if (bool.TryParse(configuration["Persistence:UseInMemoryDatabase"], out var useInMemoryDatabase)
                 && useInMemoryDatabase)
@@ -27,9 +27,7 @@ public static class InfrastructureServiceRegistrations
                 return;
             }
 
-            var connectionString = configuration.GetConnectionString("CEOAgent")
-                ?? configuration.GetConnectionString("DefaultConnection")
-                ?? "Host=localhost;Database=CEOAgent;Username=postgres;Password=postgres";
+            var connectionString = configuration.GetConnectionString("CEOAgent") ?? configuration.GetConnectionString("DefaultConnection");
 
             options.UseNpgsql(connectionString)
                 .UseSnakeCaseNamingConvention();

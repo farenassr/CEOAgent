@@ -1,7 +1,10 @@
 using CEOAgent.ApiService;
 using CEOAgent.ApiService.Infrastructure.Company;
+using CEOAgent.ApiService.Infrastructure.Correlation;
+using CEOAgent.ApiService.Infrastructure.ErrorHandling;
 using CEOAgent.Application.Errors;
 using CEOAgent.Infrastructure;
+using CEOAgent.ServiceDefaults;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -10,10 +13,22 @@ using ZLogger;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
-builder.Logging.AddZLoggerConsole();
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
+
+builder.Logging.AddZLoggerConsole(options =>
+{
+    options.IncludeScopes = true;
+    options.UseJsonFormatter();
+});
+
+builder.Logging.AddOpenTelemetry(logging =>
+{
+    logging.IncludeFormattedMessage = true;
+    logging.IncludeScopes = true;
+    logging.ParseStateValues = true;
+});
 
 if (!builder.Environment.IsEnvironment("Testing"))
 {
@@ -68,12 +83,12 @@ if (app.Environment.IsDevelopment())
 
 if (app.Environment.IsEnvironment("Testing"))
 {
-    app.MapGet("/__test/not-found", (HttpContext _) => throw new NotFoundException("conversation", "missing"));
-    app.MapGet("/__test/business-rule", (HttpContext _) => throw new BusinessRuleException("conversation_closed", "Conversation is already closed."));
-    app.MapGet("/__test/concurrency", (HttpContext _) => throw new DbUpdateConcurrencyException("Concurrency conflict."));
-    app.MapGet("/__test/cancelled", (HttpContext _) => throw new OperationCanceledException("Request cancelled."));
-    app.MapGet("/__test/integration", (HttpContext _) => throw new IntegrationException("google_calendar", "Calendar unavailable."));
-    app.MapGet("/__test/unexpected", (HttpContext _) => throw new InvalidOperationException("Unexpected failure."));
+    app.MapGet("/__test/not-found", _ => throw new NotFoundException("conversation", "missing"));
+    app.MapGet("/__test/business-rule", _ => throw new BusinessRuleException("conversation_closed", "Conversation is already closed."));
+    app.MapGet("/__test/concurrency", _ => throw new DbUpdateConcurrencyException("Concurrency conflict."));
+    app.MapGet("/__test/cancelled", _ => throw new OperationCanceledException("Request cancelled."));
+    app.MapGet("/__test/integration", _ => throw new IntegrationException("google_calendar", "Calendar unavailable."));
+    app.MapGet("/__test/unexpected", _ => throw new InvalidOperationException("Unexpected failure."));
 }
 
 app.MapDefaultEndpoints();
@@ -86,5 +101,3 @@ static bool HasAspireOpenAIConnectionString(string? connectionString)
     return !string.IsNullOrWhiteSpace(connectionString)
         && connectionString.Contains('=', StringComparison.Ordinal);
 }
-
-public partial class Program;

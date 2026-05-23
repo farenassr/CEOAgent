@@ -15,7 +15,7 @@ namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 /// Enables or disables a tool for a company.
 /// </summary>
 public sealed class EnableCompanyToolEndpoint(
-    AppDbContext dbContext,
+    CEOAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<CompanyToolRequest, CreatedResourceResponse>
 {
     public override void Configure()
@@ -54,7 +54,7 @@ public sealed class EnableCompanyToolEndpoint(
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
-        AppDbContext dbContext,
+        CEOAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)
@@ -67,7 +67,7 @@ public sealed class EnableCompanyToolEndpoint(
     }
 
     private static async Task EnsureCredentialReferenceIsAccessibleAsync(
-        AppDbContext dbContext,
+        CEOAgentDbContext dbContext,
         Guid? credentialReferenceId,
         CancellationToken cancellationToken)
     {

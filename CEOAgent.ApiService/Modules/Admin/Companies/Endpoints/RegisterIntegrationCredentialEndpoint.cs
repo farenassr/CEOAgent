@@ -15,7 +15,7 @@ namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 /// Registers an external integration credential reference for a company.
 /// </summary>
 public sealed class RegisterIntegrationCredentialEndpoint(
-    AppDbContext dbContext,
+    CEOAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<IntegrationCredentialRequest, CreatedResourceResponse>
 {
     public override void Configure()
@@ -45,7 +45,7 @@ public sealed class RegisterIntegrationCredentialEndpoint(
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
-        AppDbContext dbContext,
+        CEOAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)

@@ -15,7 +15,7 @@ namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 /// Creates or updates the company's agent profile.
 /// </summary>
 public sealed class ConfigureAgentProfileEndpoint(
-    AppDbContext dbContext,
+    CEOAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<AgentProfileRequest, CreatedResourceResponse>
 {
     public override void Configure()
@@ -58,7 +58,7 @@ public sealed class ConfigureAgentProfileEndpoint(
     }
 
     private static async Task<CEOAgent.Infrastructure.Persistence.Entities.Company> GetAccessibleCompanyAsync(
-        AppDbContext dbContext,
+        CEOAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)

@@ -11,7 +11,7 @@ namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 /// <summary>
 /// Creates a company for manual platform onboarding.
 /// </summary>
-public sealed class CreateCompanyEndpoint(AppDbContext dbContext) : Endpoint<CreateCompanyRequest, CompanyResponse>
+public sealed class CreateCompanyEndpoint(CEOAgentDbContext dbContext) : Endpoint<CreateCompanyRequest, CompanyResponse>
 {
     public override void Configure()
     {

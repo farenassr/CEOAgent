@@ -1,4 +1,5 @@
 using CEOAgent.Infrastructure;
+using CEOAgent.ServiceDefaults;
 using CEOAgent.Worker;
 using ZLogger;
 

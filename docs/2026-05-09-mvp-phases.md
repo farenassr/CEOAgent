@@ -159,7 +159,7 @@ variables.
   - API and Worker receive Langfuse keys.
 - Aspire-managed PostgreSQL, queue, and blob connection strings continue to
   flow through existing `.WithReference(...)` calls.
-- `AppDbContextFactory` reads `ConnectionStrings:CEOAgent` from configuration
+- `CEOAgentDbContextFactory` reads `ConnectionStrings:CEOAgent` from configuration
   instead of hardcoding a local PostgreSQL connection string.
 - Company integration credential tables store references such as `kv://...`
   only. They never store raw provider secrets.
@@ -171,7 +171,7 @@ variables.
   strings for PostgreSQL, Azure Storage Queues, and Azure Blob Storage.
 - Azure Key Vault is the target store for deployed/shared secrets.
 - User-secrets and environment variables are local development inputs only.
-- `AppDbContextFactory` reads `ConnectionStrings:CEOAgent` from
+- `CEOAgentDbContextFactory` reads `ConnectionStrings:CEOAgent` from
   `appsettings.json`, `appsettings.Development.json`, user-secrets, or
   environment variables, and fails fast when the value is missing.
 - Company integration credential rows store references only, for example
@@ -190,7 +190,7 @@ variables.
   `.WithReference(postgres)`.
 - [x] Keep Aspire-managed queue/blob wiring via `.WithReference(queues)` and
   `.WithReference(blobs)`.
-- [x] Update `AppDbContextFactory` to read `ConnectionStrings:CEOAgent` from
+- [x] Update `CEOAgentDbContextFactory` to read `ConnectionStrings:CEOAgent` from
   configuration.
 - [x] Add focused tests for design-time factory configuration behavior.
 - [x] Add documentation for local user-secrets setup.
@@ -236,7 +236,7 @@ live Key Vault behavior is not verified by local tests.
 
 **Deliverables:**
 
-- One `AppDbContext`.
+- One `CEOAgentDbContext`.
 - EF Core snake_case naming convention.
 - Company context abstraction and middleware.
 - EF global query filters for company-owned entities.
@@ -278,7 +278,7 @@ live Key Vault behavior is not verified by local tests.
 - [x] Add company isolation tests proving cross-company access returns 404.
 - [x] Add migration file. Applying it remains a manual operator step.
 
-Implementation comment: Phase 2 added the shared company context, `AppDbContext`, company-owned entities and EF configurations, scoped company query filters, static `AdminApiKey` authentication, MVP secret wiring with local Aspire parameters/user-secrets and publish-mode Azure Key Vault, FastEndpoints/Mediator admin onboarding routes, focused admin-auth and company-isolation tests, and the initial persistence migration under `CEOAgent.Infrastructure/Persistence/Migrations/`.
+Implementation comment: Phase 2 added the shared company context, `CEOAgentDbContext`, company-owned entities and EF configurations, scoped company query filters, static `AdminApiKey` authentication, MVP secret wiring with local Aspire parameters/user-secrets and publish-mode Azure Key Vault, FastEndpoints/Mediator admin onboarding routes, focused admin-auth and company-isolation tests, and the initial persistence migration under `CEOAgent.Infrastructure/Persistence/Migrations/`.
 
 **Verification:**
 

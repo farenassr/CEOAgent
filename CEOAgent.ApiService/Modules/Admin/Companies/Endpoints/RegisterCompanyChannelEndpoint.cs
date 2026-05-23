@@ -15,7 +15,7 @@ namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 /// Registers a provider channel for company resolution.
 /// </summary>
 public sealed class RegisterCompanyChannelEndpoint(
-    AppDbContext dbContext,
+    CEOAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<CompanyChannelRequest, CreatedResourceResponse>
 {
     public override void Configure()
@@ -46,7 +46,7 @@ public sealed class RegisterCompanyChannelEndpoint(
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
-        AppDbContext dbContext,
+        CEOAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)
@@ -59,7 +59,7 @@ public sealed class RegisterCompanyChannelEndpoint(
     }
 
     private static async Task EnsureCredentialReferenceIsAccessibleAsync(
-        AppDbContext dbContext,
+        CEOAgentDbContext dbContext,
         Guid? credentialReferenceId,
         CancellationToken cancellationToken)
     {

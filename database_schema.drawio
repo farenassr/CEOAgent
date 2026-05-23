@@ -52,7 +52,7 @@
         <mxCell id="Conversation" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#bbf7d0;strokeColor=#15803d;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="Conversation" vertex="1">
           <mxGeometry height="270" width="300" x="950" y="720" as="geometry" />
         </mxCell>
-        <mxCell id="Conversation_Props" parent="Conversation" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;CustomerId : Guid [FK]&lt;br&gt;CompanyChannelId : Guid [FK]&lt;br&gt;AgentProfileId : Guid [FK]&lt;br&gt;Status : ConversationStatus (JSONB)&lt;br&gt;LastMessageAt : DateTime&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
+        <mxCell id="Conversation_Props" parent="Conversation" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;CustomerId : Guid [FK]&lt;br&gt;CompanyChannelId : Guid [FK]&lt;br&gt;AgentProfileId : Guid [FK]&lt;br&gt;Status : ConversationStatus&lt;br&gt;LastMessageAt : DateTime&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
           <mxGeometry height="230" width="300" y="38" as="geometry" />
         </mxCell>
         <mxCell id="ConversationState" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fecaca;strokeColor=#dc2626;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="ConversationState" vertex="1">

@@ -5,15 +5,15 @@ using Microsoft.Extensions.Configuration;
 
 namespace CEOAgent.Infrastructure.Persistence;
 
-public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+public sealed class CEOAgentDbContextFactory : IDesignTimeDbContextFactory<CEOAgentDbContext>
 {
-    public AppDbContext CreateDbContext(string[] args)
+    public CEOAgentDbContext CreateDbContext(string[] args)
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile("appsettings.Development.json", optional: true)
-            .AddUserSecrets<AppDbContextFactory>(optional: true)
+            .AddUserSecrets<CEOAgentDbContextFactory>(optional: true)
             .AddEnvironmentVariables()
             .Build();
 
@@ -26,11 +26,11 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
                 "For local EF commands, set it with: dotnet user-secrets set \"ConnectionStrings:CEOAgent\" \"<postgres-connection-string>\" --project CEOAgent.Infrastructure");
         }
 
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
             .UseNpgsql(connectionString)
             .UseSnakeCaseNamingConvention()
             .Options;
 
-        return new AppDbContext(options, new CompanyContextAccessor(), TimeProvider.System);
+        return new CEOAgentDbContext(options, new CompanyContextAccessor(), TimeProvider.System);
     }
 }
