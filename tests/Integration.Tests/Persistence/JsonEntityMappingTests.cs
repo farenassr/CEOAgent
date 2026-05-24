@@ -23,7 +23,7 @@ public sealed class JsonEntityMappingTests
         var model = dbContext.Model;
 
         AssertJsonProperty<CompanyEntity, WorkingHoursEntity>(model, nameof(CompanyEntity.WorkingHours), "working_hours_json");
-        AssertJsonProperty<CompanyChannel, ChannelMetadata>(model, nameof(CompanyChannel.Metadata), "metadata_json");
+        AssertJsonComplexProperty<CompanyChannel, ChannelMetadata>(model, nameof(CompanyChannel.Metadata), "metadata_json");
         AssertJsonProperty<CompanyTool, ToolConfiguration>(model, nameof(CompanyTool.Configuration), "configuration_json");
         AssertJsonProperty<ConversationState, ConversationStateSnapshot>(model, nameof(ConversationState.Snapshot), "state_json");
         AssertJsonProperty<IntegrationCredentialReference, CredentialMetadata>(model, nameof(IntegrationCredentialReference.Metadata), "metadata_json");
@@ -33,14 +33,14 @@ public sealed class JsonEntityMappingTests
     }
 
     /// <summary>
-    /// Verifies that JSON entity base types expose the expected polymorphic derived types.
+    /// Verifies that JSON entity base types expose the expected polymorphic derived types, except channels which use wrapper metadata.
     /// </summary>
     [Test]
     public void JsonEntityTypes_ExposeExpectedPolymorphicDerivedTypes()
     {
-        AssertAssignableTo<ChannelMetadata, WhatsAppCloudMetadata>();
-        AssertAssignableTo<ChannelMetadata, InstagramMetadata>();
-        AssertAssignableTo<ChannelMetadata, TelegramMetadata>();
+        typeof(ChannelMetadata).IsAssignableFrom(typeof(WhatsAppCloudMetadata)).ShouldBeFalse();
+        typeof(ChannelMetadata).IsAssignableFrom(typeof(InstagramMetadata)).ShouldBeFalse();
+        typeof(ChannelMetadata).IsAssignableFrom(typeof(TelegramMetadata)).ShouldBeFalse();
 
         AssertAssignableTo<ToolConfiguration, CheckAvailabilityConfig>();
         AssertAssignableTo<ToolConfiguration, RequestHumanHandoffConfig>();
@@ -82,5 +82,24 @@ public sealed class JsonEntityMappingTests
         property.ClrType.ShouldBe(typeof(TProperty));
         property.GetColumnType().ShouldBe("jsonb");
         property.GetColumnName().ShouldBe(columnName);
+    }
+
+    private static void AssertJsonComplexProperty<TEntity, TProperty>(
+        Microsoft.EntityFrameworkCore.Metadata.IModel model,
+        string propertyName,
+        string columnName)
+    {
+        var entityType = model.FindEntityType(typeof(TEntity));
+        entityType.ShouldNotBeNull();
+
+        var property = entityType.FindComplexProperty(propertyName);
+        property.ShouldNotBeNull();
+        property.ClrType.ShouldBe(typeof(TProperty));
+        property.ComplexType.GetContainerColumnName().ShouldBe(columnName);
+
+        var table = model.GetRelationalModel()
+            .Tables
+            .Single(table => table.Name == entityType.GetTableName() && table.Schema == entityType.GetSchema());
+        table.Columns.Single(column => column.Name == columnName).StoreType.ShouldBe("jsonb");
     }
 }

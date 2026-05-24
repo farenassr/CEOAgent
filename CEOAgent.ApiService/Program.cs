@@ -56,7 +56,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApi(builder.Configuration);
+builder.Services.AddApi();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();

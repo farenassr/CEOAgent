@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using CEOAgent.ServiceDefaults.Configuration;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -47,13 +49,15 @@ public static class Extensions
 
     public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
+        var serviceDefaultsOptions = ConfigureServiceDefaultsOptions(builder);
+
         builder.Logging.AddOpenTelemetry(logging =>
         {
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
         });
 
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        var useOtlpExporter = serviceDefaultsOptions.Otlp.IsConfigured;
 
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics =>
@@ -88,33 +92,42 @@ public static class Extensions
                     tracing.AddOtlpExporter();
                 }
 
-                AddLangfuseExporterIfConfigured(builder, tracing);
+                AddLangfuseExporterIfConfigured(serviceDefaultsOptions.Langfuse, tracing);
             });
 
         return builder;
     }
 
-    private static void AddLangfuseExporterIfConfigured<TBuilder>(
-    TBuilder builder,
-    TracerProviderBuilder tracing) where TBuilder : IHostApplicationBuilder
+    private static ServiceDefaultsOptions ConfigureServiceDefaultsOptions<TBuilder>(TBuilder builder)
+        where TBuilder : IHostApplicationBuilder
     {
-        var endpoint = builder.Configuration["LANGFUSE_OTEL_TRACES_ENDPOINT"];
-        var publicKey = builder.Configuration["LANGFUSE_PUBLIC_KEY"];
-        var secretKey = builder.Configuration["LANGFUSE_SECRET_KEY"];
+        var options = new ServiceDefaultsOptions();
+        builder.Configuration.Bind(ServiceDefaultsOptions.SectionName, options);
 
-        if (string.IsNullOrWhiteSpace(endpoint)
-            || string.IsNullOrWhiteSpace(publicKey)
-            || string.IsNullOrWhiteSpace(secretKey))
+        builder.Services.AddOptions<ServiceDefaultsOptions>()
+            .BindConfiguration(ServiceDefaultsOptions.SectionName)
+            .Validate(ServiceDefaultsOptions.IsValid,
+                "ServiceDefaults telemetry options must be complete and valid absolute URIs.")
+            .ValidateOnStart();
+
+        return options;
+    }
+
+    private static void AddLangfuseExporterIfConfigured(
+        LangfuseOptions langfuseOptions,
+        TracerProviderBuilder tracing)
+    {
+        if (!langfuseOptions.IsConfigured)
         {
             return;
         }
 
         var authString = Convert.ToBase64String(
-            Encoding.UTF8.GetBytes($"{publicKey}:{secretKey}"));
+            Encoding.UTF8.GetBytes($"{langfuseOptions.PublicKey}:{langfuseOptions.SecretKey}"));
 
         tracing.AddOtlpExporter(options =>
         {
-            options.Endpoint = new Uri(endpoint);
+            options.Endpoint = langfuseOptions.GetOtlpTracesEndpoint();
             options.Protocol = OtlpExportProtocol.HttpProtobuf;
             options.Headers = $"Authorization=Basic {authString},x-langfuse-ingestion-version=4";
         });

@@ -194,7 +194,10 @@ this list wins.
     `/health` which is **not** versioned (operational endpoint).
 29. All identifiers are `Guid` generated as **GUID v7**
     (`Guid.CreateVersion7()`).
-30. Database tables and columns use **singular `snake_case`**
+30. Database tables and columns use **singular `snake_case`**.
+    Closed provider sets, such as channel providers, are modeled as C# enums
+    instead of raw string properties. Persist them as strings with
+    `HasConversion<string>()`; never persist enum ordinals.
 31. Entity Framework property names use **PascalCase** in C#. Apply
     `EFCore.NamingConventions` with `UseSnakeCaseNamingConvention()` once at
     `CEOAgentDbContext` configuration to map automatically.
@@ -224,6 +227,9 @@ this list wins.
 38. Generated code and hand-written initializers must not produce MA0007
     diagnostics. Prefer trailing commas in multi-line initializer and
     collection expressions when the analyzer requests them.
+38a. Do not use abbreviated variable names in hand-written code. Prefer
+    descriptive names such as `request`, `cancellationToken`,
+    `companyContext`, and `toolExecutionContext` instead of abbreviated names.
 
 ### Secrets and configuration
 
@@ -533,6 +539,10 @@ Rules:
   at the feature level when reused across slices in the same module.
 - Do **not** register services directly in `Program.cs`. Use
   `<Module>ServiceRegistrations` extension classes per module.
+- When request-to-entity mapping is non-trivial, reused, or crosses boundary
+  types such as `JsonElement` to entity JSONB documents, put that mapping in
+  the module Mapperly mapper instead of constructing EF Core entities directly
+  inside endpoints.
 
 The endpoint:
 
@@ -1096,9 +1106,9 @@ public interface IToolHandler
     bool RequiresExplicitConfirmation { get; }   // safety hint
 
     Task<ToolResult> ExecuteAsync(
-        ToolExecutionContext ctx,
+        ToolExecutionContext toolExecutionContext,
         JsonElement parameters,
-        CancellationToken ct);
+        CancellationToken cancellationToken);
 }
 
 public sealed record ToolExecutionContext(
@@ -1120,7 +1130,7 @@ public abstract record ToolResult
 public interface ICompanyToolRegistry
 {
     Task<IReadOnlyList<ToolDescriptor>> GetEnabledToolsAsync(
-        Guid companyId, CancellationToken ct);
+        Guid companyId, CancellationToken cancellationToken);
 }
 
 public sealed record ToolDescriptor(
@@ -1133,7 +1143,7 @@ public sealed record ToolDescriptor(
 public interface IToolHandlerFactory
 {
     Task<IToolHandler?> ResolveAsync(
-        Guid companyId, string toolKey, CancellationToken ct);
+        Guid companyId, string toolKey, CancellationToken cancellationToken);
 }
 ```
 
@@ -1175,7 +1185,7 @@ business rules:
     /* ... schema, description ... */
 
     public async Task<ToolResult> ExecuteAsync(
-        ToolExecutionContext ctx, JsonElement parameters, CancellationToken ct)
+        ToolExecutionContext toolExecutionContext, JsonElement parameters, CancellationToken cancellationToken)
     {
 
         try
@@ -1324,37 +1334,37 @@ Use Ports and Adapters with **four MVP ports**:
 ```csharp
 public interface IMessageChannelIntegration
 {
-    string Provider { get; }   // "whatsapp_cloud", future: "telegram", etc.
+    CompanyChannelProvider Provider { get; }   // WhatsAppCloud for MVP.
 
-    Task<SendResult> SendTextAsync(SendTextInput input, CancellationToken ct);
-    Task<SendResult> SendAudioAsync(SendAudioInput input, CancellationToken ct);
+    Task<SendResult> SendTextAsync(SendTextInput input, CancellationToken cancellationToken);
+    Task<SendResult> SendAudioAsync(SendAudioInput input, CancellationToken cancellationToken);
 
     // Optional capabilities. Adapters that don't support them throw
     // NotSupportedException; consumers feature-detect via try/catch or
     // capability flags.
-    Task<SendResult> SendInteractiveAsync(SendInteractiveInput input, CancellationToken ct);
-    Task MarkAsReadAsync(string providerMessageId, CancellationToken ct);
+    Task<SendResult> SendInteractiveAsync(SendInteractiveInput input, CancellationToken cancellationToken);
+    Task MarkAsReadAsync(string providerMessageId, CancellationToken cancellationToken);
 
-    Task<Stream> DownloadMediaAsync(string mediaId, CancellationToken ct);
+    Task<Stream> DownloadMediaAsync(string mediaId, CancellationToken cancellationToken);
 }
 
 public interface ICalendarIntegration
 {
-    Task<CalendarEvent> CreateEventAsync(CreateEventInput input, CancellationToken ct);
-    Task<bool> IsSlotAvailableAsync(DateTime startUtc, TimeSpan duration, CancellationToken ct);
-    Task<bool> CancelEventAsync(string externalEventId, CancellationToken ct);
+    Task<CalendarEvent> CreateEventAsync(CreateEventInput input, CancellationToken cancellationToken);
+    Task<bool> IsSlotAvailableAsync(DateTime startUtc, TimeSpan duration, CancellationToken cancellationToken);
+    Task<bool> CancelEventAsync(string externalEventId, CancellationToken cancellationToken);
 }
 
 public interface ITranscriptionIntegration
 {
     Task<TranscriptionResult> TranscribeAsync(
-        Stream audio, string contentType, string? languageHint, CancellationToken ct);
+        Stream audio, string contentType, string? languageHint, CancellationToken cancellationToken);
 }
 
 public interface ISpeechSynthesisIntegration
 {
     Task<SynthesisResult> SynthesizeAsync(
-        string text, string voiceProfile, string language, CancellationToken ct);
+        string text, string voiceProfile, string language, CancellationToken cancellationToken);
 }
 ```
 
@@ -1506,7 +1516,7 @@ When throughput requires more concurrency, the next step is the
 ```csharp
 await db.Database.ExecuteSqlInterpolatedAsync(
     $"SELECT pg_advisory_xact_lock(hashtext({conversationId.ToString()}))",
-    ct);
+    cancellationToken);
 ```
 
 Beyond that, migrate to Azure Service Bus Sessions with
@@ -1662,7 +1672,8 @@ rules in methods on the entity when it improves readability:
   C#.
 - Never use `DateTime.Now`. Use `TimeProvider`.
 - Every foreign key is explicit.
-- Persist enums as strings (`HasConversion<string>()`).
+- Model closed sets such as channel providers as C# enums, not raw strings.
+- Persist enums as strings (`HasConversion<string>()`), never ordinals.
 - Use `jsonb` only for genuinely flexible payloads (tool parameters,
   conversation state, channel metadata). Stable queryable fields are real
   columns.
@@ -1672,6 +1683,38 @@ rules in methods on the entity when it improves readability:
   `Infrastructure/Persistence/Configurations/`. The `CEOAgentDbContext` only
   declares `DbSet<T>` properties and applies all configurations via
   `modelBuilder.ApplyConfigurationsFromAssembly(...)`.
+
+### JSON Columns With EF Core 11 + Npgsql
+
+When modeling a property as a Postgres `jsonb` column:
+
+- **By default**, use complex types with
+  `entity.ComplexProperty(x => x.Prop, b => b.ToJson())`. This is the
+  recommended EF Core 11 and Npgsql path, supports `ExecuteUpdateAsync` over
+  nested properties, and allows server-side LINQ queries inside the JSON.
+- **Do not use System.Text.Json polymorphism** (`[JsonPolymorphic]` +
+  `[JsonDerivedType]`) for types mapped to `jsonb`. EF Core complex types do
+  not support inheritance, and that pushes the mapping back to legacy POCO
+  JSON mapping, which does not support `ExecuteUpdate` or server-side JSON
+  queries.
+- If variants are needed, such as a discriminated union shape, use the
+  **wrapper pattern with nullable properties** plus a separate discriminator
+  column on the root entity. Protect the "discriminator matches populated
+  property" invariant with static factories, private setters, and an
+  exhaustive `Match` method.
+- Avoid `Property(...).HasColumnType("jsonb")` as the primary mapping for
+  complex types. That is Npgsql's legacy POCO JSON mapping and is deprecated
+  for this use case. Use it only for opaque `string` values or raw
+  `JsonDocument` payloads.
+- Do not register `JsonSerializerContext`, `ValueConverter`, or manual
+  System.Text.Json configuration for types mapped with
+  `ComplexProperty().ToJson()`. EF Core handles serialization internally.
+- For discriminators stored as separate columns, use `HasConversion<string>()`
+  rather than enum ordinals and add an index. This survives enum reordering.
+- For the strongest consistency between a discriminator and JSON content,
+  consider a Postgres generated column (`GENERATED ALWAYS AS (...)`) instead
+  of maintaining the discriminator by hand. This is optional, but removes the
+  final possibility of drift.
 
 ### Mandatory minimum indexes
 
@@ -2039,7 +2082,7 @@ When proposing or modifying code:
 32. When the bot sends voice replies, do not block text replies on TTS
     failure.
 33. When adding a new channel, add a new `IMessageChannelIntegration`
-    implementation and a new `company_channel.provider` value. Do not
+    implementation and a new `CompanyChannelProvider` enum value. Do not
     hardcode WhatsApp specifics outside the WhatsApp adapter.
 
 ---

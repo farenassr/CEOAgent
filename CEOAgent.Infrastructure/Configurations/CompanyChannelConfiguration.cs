@@ -10,9 +10,16 @@ public sealed class CompanyChannelConfiguration : IEntityTypeConfiguration<Compa
     {
         builder.ToTable("company_channel");
         builder.HasKey(entity => entity.Id);
-        builder.Property(entity => entity.Provider).HasMaxLength(80).IsRequired();
+        builder.Property(entity => entity.Provider).HasConversion<string>().HasMaxLength(80).IsRequired();
         builder.Property(entity => entity.ProviderChannelId).HasMaxLength(160).IsRequired();
-        builder.Property(entity => entity.Metadata).HasJsonbConversion("metadata_json");
+        builder.ComplexProperty(entity => entity.Metadata, metadata =>
+        {
+            metadata.ToJson("metadata_json");
+            metadata.ComplexProperty(entity => entity.WhatsAppCloud);
+            metadata.ComplexProperty(entity => entity.Instagram);
+            metadata.ComplexProperty(entity => entity.Telegram);
+        });
+        builder.HasIndex(entity => entity.Provider);
         builder.HasIndex(entity => new { entity.Provider, entity.ProviderChannelId }).IsUnique();
         builder.HasOne(entity => entity.Company)
             .WithMany(entity => entity.Channels)
