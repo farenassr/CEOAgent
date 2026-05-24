@@ -43,7 +43,7 @@ Las tablas company-owned heredan los campos:
 
 ### JSON
 
-Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como objetos tipados bajo `CEOAgent.Infrastructure.Persistence.Entities.Json`, no como strings crudos. Se usan cuando la estructura puede variar por proveedor o configuracion:
+Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como objetos tipados bajo `CEOAgent.Infrastructure.Persistence.Entities.JsonDocuments`, no como strings crudos. Se usan cuando la estructura puede variar por proveedor o configuracion:
 
 - `WorkingHours`
 - `Metadata`
@@ -59,7 +59,7 @@ Las columnas fisicas siguen usando nombres `snake_case` historicos como `working
 
 ### Tipos JSON
 
-Estos objetos viven en `CEOAgent.Infrastructure.Persistence.Entities.Json` y se serializan en columnas `jsonb`.
+Estos objetos viven en `CEOAgent.Infrastructure.Persistence.Entities.JsonDocuments` y se serializan en columnas `jsonb`.
 
 | Entidad | Propiedad C# | Columna | Tipo C# |
 | ------- | ------------ | ------- | ------- |

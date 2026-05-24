@@ -1,9 +1,9 @@
-using CEOAgent.ApiService;
+using CEOAgent.ApiService.Dependencies;
 using CEOAgent.ApiService.Infrastructure.Company;
 using CEOAgent.ApiService.Infrastructure.Correlation;
 using CEOAgent.ApiService.Infrastructure.ErrorHandling;
 using CEOAgent.Application.Errors;
-using CEOAgent.Infrastructure;
+using CEOAgent.Infrastructure.DependencyInjection;
 using CEOAgent.ServiceDefaults;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -48,11 +48,6 @@ if (!builder.Environment.IsEnvironment("Testing"))
     {
         builder.AddAzureBlobServiceClient("blobs");
     }
-
-    if (HasAspireOpenAIConnectionString(builder.Configuration.GetConnectionString("openai")))
-    {
-        builder.AddOpenAIClient("openai");
-    }
 }
 
 // Add services to the container.
@@ -61,24 +56,29 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddApiService(builder.Configuration);
-
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddApi(builder.Configuration);
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
+
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    app.UseHsts();
+}
+
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseMiddleware<CompanyContextMiddleware>();
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseConfiguredCors();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference("/api");
+    app.MapScalarApiReference("/scalar");
 }
 
 if (app.Environment.IsEnvironment("Testing"))
@@ -92,12 +92,6 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 
 app.MapDefaultEndpoints();
-app.UseFastEndpoints();
+app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
 
-app.Run();
-
-static bool HasAspireOpenAIConnectionString(string? connectionString)
-{
-    return !string.IsNullOrWhiteSpace(connectionString)
-        && connectionString.Contains('=', StringComparison.Ordinal);
-}
+await app.RunAsync();

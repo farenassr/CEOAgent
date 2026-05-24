@@ -1,9 +1,7 @@
-using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Persistence.Entities;
-using CEOAgent.Infrastructure.Persistence.Entities.Json;
+using CEOAgent.Infrastructure.Entities;
+using CEOAgent.Infrastructure.Entities.JsonDocuments;
 using CEOAgent.Shared.Enums;
-using Microsoft.Data.Sqlite;
+using Integration.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 
@@ -11,10 +9,13 @@ namespace Integration.Tests.Persistence;
 
 public sealed class RelationalConstraintTests
 {
+    /// <summary>
+    /// Verifies that a company, customer, and channel can have only one open conversation.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenTwoOpenConversationsExistForSameCompanyCustomerAndChannel_Throws()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
 
@@ -25,10 +26,13 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    /// <summary>
+    /// Verifies that closed conversations do not participate in the one-open-conversation uniqueness rule.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenTwoClosedConversationsExistForSameCompanyCustomerAndChannel_AllowsBoth()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
 
@@ -42,10 +46,13 @@ public sealed class RelationalConstraintTests
         count.ShouldBe(2);
     }
 
+    /// <summary>
+    /// Verifies that provider message IDs are unique within a company.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenDuplicateProviderMessageIdExistsInCompany_Throws()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
         var conversation = CreateConversation(companyId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
@@ -58,10 +65,13 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    /// <summary>
+    /// Verifies that messages without provider IDs can be stored more than once.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenProviderMessageIdIsNull_AllowsMultipleMessages()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
         var conversation = CreateConversation(companyId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
@@ -77,10 +87,13 @@ public sealed class RelationalConstraintTests
         count.ShouldBe(2);
     }
 
+    /// <summary>
+    /// Verifies that a customer external ID is unique within the same company channel.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenDuplicateCustomerExistsForCompanyChannel_Throws()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
 
@@ -91,10 +104,13 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    /// <summary>
+    /// Verifies that each conversation can have only one conversation state row.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenDuplicateConversationStateExists_Throws()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
         var conversation = CreateConversation(companyId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
@@ -111,10 +127,13 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    /// <summary>
+    /// Verifies that tool execution idempotency keys are unique within a company.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenDuplicateToolExecutionIdempotencyKeyExistsForCompany_Throws()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
         var conversation = CreateConversation(companyId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
@@ -129,10 +148,13 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    /// <summary>
+    /// Verifies that a conversation cannot change its agent profile after creation.
+    /// </summary>
     [Test]
     public async Task SaveChanges_WhenConversationAgentProfileIdChangesAfterCreation_Throws()
     {
-        await using var database = await SqliteDatabase.CreateAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
         var seed = await database.SeedCompanyGraphAsync(companyId);
         var conversation = CreateConversation(companyId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
@@ -159,7 +181,7 @@ public sealed class RelationalConstraintTests
             CompanyChannelId = channelId,
             AgentProfileId = agentProfileId,
             Status = status,
-            LastMessageAt = DateTime.UtcNow
+            LastMessageAt = TimeProvider.System.GetUtcNow().UtcDateTime
         };
     }
 
@@ -176,7 +198,7 @@ public sealed class RelationalConstraintTests
             Role = role,
             Text = "hello",
             ProviderMessageId = providerMessageId,
-            OccurredAt = DateTime.UtcNow
+            OccurredAt = TimeProvider.System.GetUtcNow().UtcDateTime
         };
     }
 
@@ -209,90 +231,4 @@ public sealed class RelationalConstraintTests
         };
     }
 
-    private sealed record SeedIds(Guid ChannelId, Guid AgentProfileId, Guid CustomerId, Guid ToolId);
-
-    private sealed class SqliteDatabase : IAsyncDisposable
-    {
-        private readonly SqliteConnection connection;
-        private readonly CompanyContextAccessor companyContext;
-
-        private SqliteDatabase(SqliteConnection connection, CompanyContextAccessor companyContext, CEOAgentDbContext context)
-        {
-            this.connection = connection;
-            this.companyContext = companyContext;
-            Context = context;
-        }
-
-        public CEOAgentDbContext Context { get; }
-
-        public static async Task<SqliteDatabase> CreateAsync()
-        {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            await connection.OpenAsync();
-
-            var companyContext = new CompanyContextAccessor();
-            var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
-                .UseSqlite(connection)
-                .UseSnakeCaseNamingConvention()
-                .Options;
-
-            var context = new CEOAgentDbContext(options, companyContext, TimeProvider.System);
-            await context.Database.EnsureCreatedAsync();
-
-            return new SqliteDatabase(connection, companyContext, context);
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            await Context.DisposeAsync();
-            await connection.DisposeAsync();
-        }
-
-        public async Task<SeedIds> SeedCompanyGraphAsync(Guid companyId)
-        {
-            var channelId = Guid.CreateVersion7();
-            var agentProfileId = Guid.CreateVersion7();
-            var customerId = Guid.CreateVersion7();
-            var toolId = Guid.CreateVersion7();
-
-            Context.Companies.Add(new CEOAgent.Infrastructure.Persistence.Entities.Company
-            {
-                Id = companyId,
-                Name = "Contoso Bistro",
-                TimeZoneId = "America/Bogota"
-            });
-            Context.CompanyChannels.Add(new CompanyChannel
-            {
-                Id = channelId,
-                CompanyId = companyId,
-                Provider = "whatsapp_cloud",
-                ProviderChannelId = $"channel-{Guid.CreateVersion7()}"
-            });
-            Context.AgentProfiles.Add(new AgentProfile
-            {
-                Id = agentProfileId,
-                CompanyId = companyId,
-                ModelName = "gpt-4.1-mini",
-                DisplayName = "Contoso Assistant",
-                Language = "es"
-            });
-            Context.Customers.Add(new Customer
-            {
-                Id = customerId,
-                CompanyId = companyId,
-                CompanyChannelId = channelId,
-                ExternalCustomerId = "573001112233"
-            });
-            Context.CompanyTools.Add(new CompanyTool
-            {
-                Id = toolId,
-                CompanyId = companyId,
-                ToolKey = "request_human_handoff"
-            });
-
-            await Context.SaveChangesAsync();
-            companyContext.SetCompany(companyId);
-            return new SeedIds(channelId, agentProfileId, customerId, toolId);
-        }
-    }
 }

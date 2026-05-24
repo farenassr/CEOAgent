@@ -7,6 +7,9 @@ namespace Integration.Tests.Persistence;
 [NotInParallel]
 public sealed class CEOAgentDbContextFactoryTests
 {
+    /// <summary>
+    /// Verifies that the design-time DbContext factory fails with a clear setup message when no connection string is configured.
+    /// </summary>
     [Test]
     public void CreateDbContext_WhenConnectionStringMissing_ThrowsClearError()
     {
@@ -19,6 +22,9 @@ public sealed class CEOAgentDbContextFactoryTests
         exception.Message.ShouldContain("dotnet user-secrets set");
     }
 
+    /// <summary>
+    /// Verifies that the design-time DbContext factory uses the configured CEOAgent connection string.
+    /// </summary>
     [Test]
     public void CreateDbContext_WhenConnectionStringConfigured_UsesConfiguredConnectionString()
     {

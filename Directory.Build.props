@@ -6,6 +6,18 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <AnalysisLevel>latest</AnalysisLevel>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591;EXTEXP0001</NoWarn>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CEOAgent.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Analyzer" Version="2.0.190" PrivateAssets="all" />
+    <PackageReference Include="Roslynator.Analyzers" Version="4.13.1" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.11.0-beta1.24454.1" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" Visible="false" />
+  </ItemGroup>
 </Project>

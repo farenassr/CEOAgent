@@ -11,11 +11,4 @@
     <PackageReference Include="TUnit" Version="1.45.29" />
     <PackageReference Include="Verify.TUnit" Version="31.17.0" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
 </Project>

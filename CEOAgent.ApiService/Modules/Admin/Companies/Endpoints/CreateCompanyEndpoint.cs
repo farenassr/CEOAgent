@@ -1,10 +1,9 @@
-using CEOAgent.ApiService.Infrastructure.Auth;
-using CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
-using CEOAgent.ApiService.Modules.Admin.Companies.Models.Response;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Persistence.Entities;
+using CEOAgent.Infrastructure.Entities;
+using CEOAgent.Shared.Request.Company;
+using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
+using CEOAgent.Infrastructure;
 
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 
@@ -16,7 +15,6 @@ public sealed class CreateCompanyEndpoint(CEOAgentDbContext dbContext) : Endpoin
     public override void Configure()
     {
         Post("/v1/admin/companies");
-        AuthSchemes(AdminApiKeyAuthenticationDefaults.AuthenticationScheme);
     }
 
     public override async Task HandleAsync(CreateCompanyRequest req, CancellationToken ct)
@@ -24,7 +22,7 @@ public sealed class CreateCompanyEndpoint(CEOAgentDbContext dbContext) : Endpoin
         var company = new Company
         {
             Name = req.Name,
-            TimeZoneId = req.TimeZoneId
+            TimeZoneId = req.TimeZoneId,
         };
 
         dbContext.Companies.Add(company);

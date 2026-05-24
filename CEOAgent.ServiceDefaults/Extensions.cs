@@ -1,12 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.ServiceDiscovery;
-using OpenTelemetry;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -56,82 +53,71 @@ public static class Extensions
             logging.IncludeScopes = true;
         });
 
+        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics =>
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
+
+                if (useOtlpExporter)
+                {
+                    metrics.AddOtlpExporter();
+                }
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
-                    .AddSource("Microsoft.SemanticKernel*")
-                    .AddSource("OpenAI.*")
+                    .AddSource("Microsoft.AgentFramework*")
+                    .AddSource("Microsoft.Extensions.AI*")
                     .AddSource("CeoAgent.*")
                     .AddAspNetCoreInstrumentation(tracing =>
-                        // Exclude health check requests from tracing
+                    {
                         tracing.Filter = context =>
-                            !context.Request.Path.StartsWithSegments(HealthEndpointPath)
-                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath)
-                    )
+                            !context.Request.Path.StartsWithSegments(HealthEndpointPath, StringComparison.Ordinal)
+                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath, StringComparison.Ordinal);
+                    })
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation();
+
+                if (useOtlpExporter)
+                {
+                    tracing.AddOtlpExporter();
+                }
+
+                AddLangfuseExporterIfConfigured(builder, tracing);
             });
 
-        builder.AddOpenTelemetryExporters();
-        builder.AddLangfuseExporter();
-
         return builder;
     }
 
-    private static TBuilder AddLangfuseExporter<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    private static void AddLangfuseExporterIfConfigured<TBuilder>(
+    TBuilder builder,
+    TracerProviderBuilder tracing) where TBuilder : IHostApplicationBuilder
     {
-        var langfuseHost = builder.Configuration["LANGFUSE_HOST"];
-        var langfusePublicKey = builder.Configuration["LANGFUSE_PUBLIC_KEY"];
-        var langfuseSecretKey = builder.Configuration["LANGFUSE_SECRET_KEY"];
+        var endpoint = builder.Configuration["LANGFUSE_OTEL_TRACES_ENDPOINT"];
+        var publicKey = builder.Configuration["LANGFUSE_PUBLIC_KEY"];
+        var secretKey = builder.Configuration["LANGFUSE_SECRET_KEY"];
 
-        if (string.IsNullOrWhiteSpace(langfuseHost)
-            || string.IsNullOrWhiteSpace(langfusePublicKey)
-            || string.IsNullOrWhiteSpace(langfuseSecretKey))
+        if (string.IsNullOrWhiteSpace(endpoint)
+            || string.IsNullOrWhiteSpace(publicKey)
+            || string.IsNullOrWhiteSpace(secretKey))
         {
-            return builder;
+            return;
         }
 
-        var langfuseAuth = "Basic " + Convert.ToBase64String(
-            Encoding.UTF8.GetBytes($"{langfusePublicKey}:{langfuseSecretKey}"));
+        var authString = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{publicKey}:{secretKey}"));
 
-        builder.Services.AddOpenTelemetry()
-            .WithTracing(tracing => tracing.AddOtlpExporter(options =>
-            {
-                options.Endpoint = new Uri($"{langfuseHost.TrimEnd('/')}/api/public/otel/v1/traces");
-                options.Protocol = OtlpExportProtocol.HttpProtobuf;
-                options.Headers = $"Authorization={langfuseAuth}";
-            }));
-
-        return builder;
-    }
-
-    private static TBuilder AddOpenTelemetryExporters<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
-    {
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-
-        if (useOtlpExporter)
+        tracing.AddOtlpExporter(options =>
         {
-            builder.Services.AddOpenTelemetry()
-                .WithMetrics(metrics => metrics.AddOtlpExporter())
-                .WithTracing(tracing => tracing.AddOtlpExporter());
-        }
-
-        // Uncomment the following lines to enable the Azure Monitor exporter (requires the Azure.Monitor.OpenTelemetry.AspNetCore package)
-        //if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
-        //{
-        //    builder.Services.AddOpenTelemetry()
-        //       .UseAzureMonitor();
-        //}
-
-        return builder;
+            options.Endpoint = new Uri(endpoint);
+            options.Protocol = OtlpExportProtocol.HttpProtobuf;
+            options.Headers = $"Authorization=Basic {authString},x-langfuse-ingestion-version=4";
+        });
     }
 
     public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
@@ -145,32 +131,14 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        // Adding health checks endpoints to applications in non-development environments has security implications.
-        // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
-        // All health checks must pass for app to be considered ready to accept traffic after starting.
-        app.MapGet(HealthEndpointPath, async (
-                HealthCheckService healthCheckService,
-                CancellationToken cancellationToken) =>
-            {
-                var report = await healthCheckService.CheckHealthAsync(cancellationToken);
-                var statusCode = report.Status == HealthStatus.Healthy
-                    ? StatusCodes.Status200OK
-                    : StatusCodes.Status503ServiceUnavailable;
-
-                return Results.Text(report.Status.ToString(), statusCode: statusCode);
-            })
-            .WithName("Health")
-            .WithSummary("Checks API health.")
-            .WithDescription("Returns 200 when required health checks are healthy, or 503 when one or more required checks are unhealthy.")
-            .Produces(StatusCodes.Status200OK, contentType: "text/plain")
-            .Produces(StatusCodes.Status503ServiceUnavailable, contentType: "text/plain");
+        app.MapHealthChecks(HealthEndpointPath);
 
         if (app.Environment.IsDevelopment())
         {
             // Only health checks tagged with the "live" tag must pass for app to be considered alive
             app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
             {
-                Predicate = r => r.Tags.Contains("live")
+                Predicate = r => r.Tags.Contains("live"),
             });
         }
 

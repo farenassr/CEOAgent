@@ -1,0 +1,5 @@
+# Use TimeProvider instead of wall-clock static APIs.
+P:System.DateTime.Now;Use TimeProvider.GetUtcNow() and convert at the boundary when needed.
+P:System.DateTime.UtcNow;Use TimeProvider.GetUtcNow().
+P:System.DateTimeOffset.Now;Use TimeProvider.GetUtcNow().
+P:System.DateTimeOffset.UtcNow;Use TimeProvider.GetUtcNow().

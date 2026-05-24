@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 
-**Architecture:** The MVP is a modular monolith with a separate API process and Worker process, coordinated locally through Aspire. HTTP use cases are implemented as FastEndpoints vertical slices that dispatch Mediator commands/queries; background work is handled by Worker pipelines; side effects go through ports, adapters, and `ToolExecutionGateway`.
+**Architecture:** The MVP is a modular monolith with a separate API process and Worker process, coordinated locally through Aspire. HTTP use cases are implemented as FastEndpoints vertical slices that dispatch Mediator commands/queries; background work is handled by Worker pipelines; side effects go through ports, adapters, and validated tool handlers/workflows.
 
 **Tech Stack:** .NET, Aspire, FastEndpoints, martinothamar/Mediator, FluentValidation, EF Core PostgreSQL, Azure Storage Queues, Azure Blob Storage, Semantic Kernel, OpenAI direct, Refit, ZLogger, OpenTelemetry, Langfuse, TUnit, Shouldly, NSubstitute, Verify, Testcontainers.
 
@@ -428,7 +428,7 @@ Expected: prompt snapshots are stable; no full transcript is sent; malformed mod
 - `IToolHandler`
 - `ICompanyToolRegistry`
 - `IToolHandlerFactory`
-- `ToolExecutionGateway`
+- Tool handler/workflow execution
 - Company-enabled tool catalog from `company_tool`.
 - Tool execution persistence.
 - Denial reasons:
@@ -456,7 +456,7 @@ Expected: prompt snapshots are stable; no full transcript is sent; malformed mod
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "ToolExecutionGateway|CompanyToolRegistry"
+dotnet test CEOAgent.slnx --filter "CompanyToolRegistry"
 ```
 
 Expected: the gateway denies unsafe calls before invoking handlers and triggers handoff after repeated same-operation failures.
@@ -631,7 +631,7 @@ dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
 - [ ] Model context includes only the last 8 eligible turns.
 - [ ] Company model name is read from `agent_profile`.
 - [ ] Model output is structured and validated.
-- [ ] Every side-effect tool call goes through `ToolExecutionGateway`.
+- [ ] Every side-effect tool call goes through validated tool handlers/workflows.
 - [ ] Four native tools are available through company tool registry.
 - [ ] Inbound voice notes are stored, transcribed, and processed.
 - [ ] Outbound TTS voice replies are supported.

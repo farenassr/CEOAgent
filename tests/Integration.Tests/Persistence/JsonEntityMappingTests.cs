@@ -1,20 +1,25 @@
 using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Persistence.Entities;
-using CEOAgent.Infrastructure.Persistence.Entities.Json;
+using CEOAgent.Infrastructure.Entities;
+using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using Integration.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
-using CompanyEntity = CEOAgent.Infrastructure.Persistence.Entities.Company;
-using WorkingHoursEntity = CEOAgent.Infrastructure.Persistence.Entities.Json.WorkingHours;
+using CompanyEntity = CEOAgent.Infrastructure.Entities.Company;
+using WorkingHoursEntity = CEOAgent.Infrastructure.Entities.JsonDocuments.WorkingHours;
 
 namespace Integration.Tests.Persistence;
 
 public sealed class JsonEntityMappingTests
 {
+    /// <summary>
+    /// Verifies that JSON-backed entity properties are mapped to stable jsonb column names.
+    /// </summary>
     [Test]
     public void Model_MapsJsonbEntityProperties_AsTypedObjectsWithStableColumnNames()
     {
-        using var dbContext = CEOAgentDbContextTestFactory.Create();
+        using var dbContext = CEOAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=ceoagent_model_test;Username=postgres;Password=postgres",
+            new CompanyContextAccessor());
         var model = dbContext.Model;
 
         AssertJsonProperty<CompanyEntity, WorkingHoursEntity>(model, nameof(CompanyEntity.WorkingHours), "working_hours_json");
@@ -27,6 +32,9 @@ public sealed class JsonEntityMappingTests
         AssertJsonProperty<ToolExecution, ToolExecutionResult>(model, nameof(ToolExecution.Result), "result_json");
     }
 
+    /// <summary>
+    /// Verifies that JSON entity base types expose the expected polymorphic derived types.
+    /// </summary>
     [Test]
     public void JsonEntityTypes_ExposeExpectedPolymorphicDerivedTypes()
     {
@@ -74,18 +82,5 @@ public sealed class JsonEntityMappingTests
         property.ClrType.ShouldBe(typeof(TProperty));
         property.GetColumnType().ShouldBe("jsonb");
         property.GetColumnName().ShouldBe(columnName);
-    }
-
-    private static class CEOAgentDbContextTestFactory
-    {
-        public static CEOAgentDbContext Create()
-        {
-            var options = new DbContextOptionsBuilder<CEOAgentDbContext>()
-                .UseNpgsql("Host=localhost;Database=ceoagent_model_test;Username=postgres;Password=postgres")
-                .UseSnakeCaseNamingConvention()
-                .Options;
-
-            return new CEOAgentDbContext(options, new CompanyContextAccessor(), TimeProvider.System);
-        }
     }
 }

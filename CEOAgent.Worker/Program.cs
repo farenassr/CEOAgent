@@ -1,4 +1,4 @@
-using CEOAgent.Infrastructure;
+using CEOAgent.Infrastructure.DependencyInjection;
 using CEOAgent.ServiceDefaults;
 using CEOAgent.Worker;
 using ZLogger;
@@ -25,19 +25,9 @@ if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
     builder.AddAzureBlobServiceClient("blobs");
 }
 
-if (HasAspireOpenAIConnectionString(builder.Configuration.GetConnectionString("openai")))
-{
-    builder.AddOpenAIClient("openai");
-}
-
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
-host.Run();
 
-static bool HasAspireOpenAIConnectionString(string? connectionString)
-{
-    return !string.IsNullOrWhiteSpace(connectionString)
-        && connectionString.Contains('=', StringComparison.Ordinal);
-}
+await host.RunAsync();

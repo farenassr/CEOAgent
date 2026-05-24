@@ -1,13 +1,15 @@
 using CEOAgent.Application.Errors;
 using CEOAgent.Application.Company;
-using CEOAgent.ApiService.Infrastructure.Auth;
-using CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
-using CEOAgent.ApiService.Modules.Admin.Companies.Models.Response;
+using CEOAgent.ApiService.Infrastructure.Json;
 using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Persistence.Entities;
+using CEOAgent.Infrastructure.Entities;
+using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CEOAgent.Shared.Request.Company;
+using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using CEOAgent.Infrastructure;
 
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 
@@ -21,7 +23,6 @@ public sealed class EnableCompanyToolEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{companyId}/tools");
-        AuthSchemes(AdminApiKeyAuthenticationDefaults.AuthenticationScheme);
     }
 
     public override async Task HandleAsync(CompanyToolRequest req, CancellationToken ct)
@@ -30,7 +31,9 @@ public sealed class EnableCompanyToolEndpoint(
         await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, ct);
         await EnsureCredentialReferenceIsAccessibleAsync(dbContext, req.CredentialReferenceId, ct);
 
-        var tool = await dbContext.CompanyTools.SingleOrDefaultAsync(
+        var tool = await dbContext.CompanyTools
+            .WithDefaultTracking(trackChanges: true)
+            .FirstOrDefaultAsync(
             entity => entity.CompanyId == companyId && entity.ToolKey == req.ToolKey,
             ct);
 
@@ -39,14 +42,14 @@ public sealed class EnableCompanyToolEndpoint(
             tool = new CompanyTool
             {
                 CompanyId = companyId,
-                ToolKey = req.ToolKey
+                ToolKey = req.ToolKey,
             };
             dbContext.CompanyTools.Add(tool);
         }
 
         tool.IsEnabled = req.IsEnabled;
         tool.CredentialReferenceId = req.CredentialReferenceId;
-        tool.Configuration = req.Configuration;
+        tool.Configuration = req.Configuration.DeserializeOptional<ToolConfiguration>();
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -60,7 +63,9 @@ public sealed class EnableCompanyToolEndpoint(
         CancellationToken cancellationToken)
     {
         if (companyContext.CompanyId != companyId
-            || !await dbContext.Companies.AnyAsync(entity => entity.Id == companyId, cancellationToken))
+            || !await dbContext.Companies
+                .WithDefaultTracking()
+                .AnyAsync(entity => entity.Id == companyId, cancellationToken))
         {
             throw new NotFoundException("company", companyId);
         }
@@ -72,7 +77,9 @@ public sealed class EnableCompanyToolEndpoint(
         CancellationToken cancellationToken)
     {
         if (credentialReferenceId is { } id
-            && !await dbContext.IntegrationCredentialReferences.AnyAsync(entity => entity.Id == id, cancellationToken))
+            && !await dbContext.IntegrationCredentialReferences
+                .WithDefaultTracking()
+                .AnyAsync(entity => entity.Id == id, cancellationToken))
         {
             throw new NotFoundException("integration_credential_reference", id);
         }

@@ -1,13 +1,15 @@
 using CEOAgent.Application.Errors;
 using CEOAgent.Application.Company;
-using CEOAgent.ApiService.Infrastructure.Auth;
-using CEOAgent.ApiService.Modules.Admin.Companies.Models.Request;
-using CEOAgent.ApiService.Modules.Admin.Companies.Models.Response;
+using CEOAgent.ApiService.Infrastructure.Json;
 using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Persistence.Entities;
+using CEOAgent.Infrastructure.Entities;
+using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CEOAgent.Shared.Request.Company;
+using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using CEOAgent.Infrastructure;
 
 namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
 
@@ -21,7 +23,6 @@ public sealed class RegisterCompanyChannelEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{companyId}/channels");
-        AuthSchemes(AdminApiKeyAuthenticationDefaults.AuthenticationScheme);
     }
 
     public override async Task HandleAsync(CompanyChannelRequest req, CancellationToken ct)
@@ -35,8 +36,8 @@ public sealed class RegisterCompanyChannelEndpoint(
             CompanyId = companyId,
             Provider = req.Provider,
             ProviderChannelId = req.ProviderChannelId,
-            Metadata = req.Metadata,
-            CredentialReferenceId = req.CredentialReferenceId
+            Metadata = req.Metadata.DeserializeOptional<ChannelMetadata>(),
+            CredentialReferenceId = req.CredentialReferenceId,
         };
 
         dbContext.CompanyChannels.Add(channel);
@@ -52,7 +53,9 @@ public sealed class RegisterCompanyChannelEndpoint(
         CancellationToken cancellationToken)
     {
         if (companyContext.CompanyId != companyId
-            || !await dbContext.Companies.AnyAsync(entity => entity.Id == companyId, cancellationToken))
+            || !await dbContext.Companies
+                .WithDefaultTracking()
+                .AnyAsync(entity => entity.Id == companyId, cancellationToken))
         {
             throw new NotFoundException("company", companyId);
         }
@@ -64,7 +67,9 @@ public sealed class RegisterCompanyChannelEndpoint(
         CancellationToken cancellationToken)
     {
         if (credentialReferenceId is { } id
-            && !await dbContext.IntegrationCredentialReferences.AnyAsync(entity => entity.Id == id, cancellationToken))
+            && !await dbContext.IntegrationCredentialReferences
+                .WithDefaultTracking()
+                .AnyAsync(entity => entity.Id == id, cancellationToken))
         {
             throw new NotFoundException("integration_credential_reference", id);
         }
