@@ -11,11 +11,11 @@ internal static class LangfuseEnvironmentExtensions
         {
             var keyVault = builder.AddAzureKeyVault("keyvault").PublishAsExisting("kv-ceo-agent-dev", "rg-ceo-agent-dev");
             apiService
-                .WithEnvironment("LANGFUSE_PUBLIC_KEY", keyVault.GetSecret("LangfusePublicKey"))
-                .WithEnvironment("LANGFUSE_SECRET_KEY", keyVault.GetSecret("LangfuseSecretKey"));
+                .WithEnvironment("ServiceDefaults__Langfuse__PublicKey", keyVault.GetSecret("LangfusePublicKey"))
+                .WithEnvironment("ServiceDefaults__Langfuse__SecretKey", keyVault.GetSecret("LangfuseSecretKey"));
             worker
-                .WithEnvironment("LANGFUSE_PUBLIC_KEY", keyVault.GetSecret("LangfusePublicKey"))
-                .WithEnvironment("LANGFUSE_SECRET_KEY", keyVault.GetSecret("LangfuseSecretKey"));
+                .WithEnvironment("ServiceDefaults__Langfuse__PublicKey", keyVault.GetSecret("LangfusePublicKey"))
+                .WithEnvironment("ServiceDefaults__Langfuse__SecretKey", keyVault.GetSecret("LangfuseSecretKey"));
             return;
         }
 
@@ -31,7 +31,7 @@ internal static class LangfuseEnvironmentExtensions
         IResourceBuilder<ParameterResource> secretKey)
     {
         project
-            .WithEnvironment("LANGFUSE_PUBLIC_KEY", publicKey)
-            .WithEnvironment("LANGFUSE_SECRET_KEY", secretKey);
+            .WithEnvironment("ServiceDefaults__Langfuse__PublicKey", publicKey)
+            .WithEnvironment("ServiceDefaults__Langfuse__SecretKey", secretKey);
     }
 }

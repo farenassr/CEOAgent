@@ -1,4 +1,4 @@
-using CEOAgent.Infrastructure.Persistence;
+using CEOAgent.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 

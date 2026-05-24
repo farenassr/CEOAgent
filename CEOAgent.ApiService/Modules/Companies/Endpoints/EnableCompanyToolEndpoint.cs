@@ -1,49 +1,51 @@
 using CEOAgent.Application.Errors;
 using CEOAgent.Application.Company;
-using CEOAgent.ApiService.Infrastructure.Json;
 using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Entities;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
 using CEOAgent.Shared.Request.Company;
 using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using CEOAgent.Infrastructure;
+using CEOAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
+namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
-/// Registers a provider channel for company resolution.
+/// Enables or disables a tool for a company.
 /// </summary>
-public sealed class RegisterCompanyChannelEndpoint(
+public sealed class EnableCompanyToolEndpoint(
     CEOAgentDbContext dbContext,
-    ICompanyContext companyContext) : Endpoint<CompanyChannelRequest, CreatedResourceResponse>
+    ICompanyContext companyContext) : Endpoint<CompanyToolRequest, CompanyToolResponse>
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/channels");
+        Post("/v1/admin/companies/{companyId}/tools");
     }
 
-    public override async Task HandleAsync(CompanyChannelRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CompanyToolRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, ct);
-        await EnsureCredentialReferenceIsAccessibleAsync(dbContext, req.CredentialReferenceId, ct);
+        await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, cancellationToken);
+        await EnsureCredentialReferenceIsAccessibleAsync(dbContext, request.CredentialReferenceId, cancellationToken);
 
-        var channel = new CompanyChannel
+        var tool = await dbContext.CompanyTools
+            .WithDefaultTracking(trackChanges: true)
+            .FirstOrDefaultAsync(
+            entity => entity.CompanyId == companyId && entity.ToolKey == request.ToolKey,
+            cancellationToken);
+
+        if (tool is null)
         {
-            CompanyId = companyId,
-            Provider = req.Provider,
-            ProviderChannelId = req.ProviderChannelId,
-            Metadata = req.Metadata.DeserializeOptional<ChannelMetadata>(),
-            CredentialReferenceId = req.CredentialReferenceId,
-        };
+            tool = CompanyMapper.ToEntity(request, companyId);
+            dbContext.CompanyTools.Add(tool);
+        }
 
-        dbContext.CompanyChannels.Add(channel);
-        await dbContext.SaveChangesAsync(ct);
+        CompanyMapper.ApplyToEntity(request, tool);
 
-        await Send.OkAsync(new CreatedResourceResponse(channel.Id), ct);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await Send.OkAsync(CompanyMapper.ToResponse(tool), cancellationToken);
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
@@ -76,11 +78,10 @@ public sealed class RegisterCompanyChannelEndpoint(
     }
 }
 
-public sealed class CompanyChannelValidator : Validator<CompanyChannelRequest>
+public sealed class CompanyToolValidator : Validator<CompanyToolRequest>
 {
-    public CompanyChannelValidator()
+    public CompanyToolValidator()
     {
-        RuleFor(request => request.Provider).NotEmpty().MaximumLength(80);
-        RuleFor(request => request.ProviderChannelId).NotEmpty().MaximumLength(160);
+        RuleFor(request => request.ToolKey).NotEmpty().MaximumLength(120);
     }
 }

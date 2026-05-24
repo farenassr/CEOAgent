@@ -34,4 +34,27 @@ public sealed class InfrastructureRegistrationTests
         options.InMemoryDatabaseName.ShouldBe("options-test-db");
         directOptions.ShouldBeSameAs(options);
     }
+
+    /// <summary>
+    /// Verifies that persistence options reject invalid startup configuration.
+    /// </summary>
+    [Test]
+    public void AddInfrastructure_WhenInMemoryDatabaseNameIsMissing_FailsOptionsValidation()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Persistence:UseInMemoryDatabase"] = "true",
+                ["Persistence:InMemoryDatabaseName"] = string.Empty,
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddInfrastructure(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var action = () => provider.GetRequiredService<IOptions<PersistenceOptions>>().Value;
+
+        action.ShouldThrow<OptionsValidationException>();
+    }
 }

@@ -1,11 +1,11 @@
-using CEOAgent.Infrastructure.Entities;
 using CEOAgent.Shared.Request.Company;
 using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using CEOAgent.Infrastructure;
+using CEOAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
+namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Creates a company for manual platform onboarding.
@@ -17,19 +17,15 @@ public sealed class CreateCompanyEndpoint(CEOAgentDbContext dbContext) : Endpoin
         Post("/v1/admin/companies");
     }
 
-    public override async Task HandleAsync(CreateCompanyRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CreateCompanyRequest request, CancellationToken cancellationToken)
     {
-        var company = new Company
-        {
-            Name = req.Name,
-            TimeZoneId = req.TimeZoneId,
-        };
+        var company = CompanyMapper.ToEntity(request);
 
         dbContext.Companies.Add(company);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
-        var response = new CompanyResponse(company.Id, company.Name, company.Status.ToString());
-        await Send.CreatedAtAsync<CreateCompanyEndpoint>(new { response.Id }, response, cancellation: ct);
+        var response = CompanyMapper.ToResponse(company);
+        await Send.CreatedAtAsync<CreateCompanyEndpoint>(new { response.Id }, response, cancellation: cancellationToken);
     }
 }
 

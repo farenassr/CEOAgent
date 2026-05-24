@@ -1,63 +1,50 @@
 using CEOAgent.Application.Errors;
 using CEOAgent.Application.Company;
-using CEOAgent.ApiService.Infrastructure.Json;
 using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Entities;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
 using CEOAgent.Shared.Request.Company;
 using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using CEOAgent.Infrastructure;
+using CEOAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
+namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Creates or updates the company's agent profile.
 /// </summary>
 public sealed class ConfigureAgentProfileEndpoint(
     CEOAgentDbContext dbContext,
-    ICompanyContext companyContext) : Endpoint<AgentProfileRequest, CreatedResourceResponse>
+    ICompanyContext companyContext) : Endpoint<AgentProfileRequest, AgentProfileResponse>
 {
     public override void Configure()
     {
         Post("/v1/admin/companies/{companyId}/agent-profile");
     }
 
-    public override async Task HandleAsync(AgentProfileRequest req, CancellationToken ct)
+    public override async Task HandleAsync(AgentProfileRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        var company = await GetAccessibleCompanyAsync(dbContext, companyContext, companyId, ct);
+        var company = await GetAccessibleCompanyAsync(dbContext, companyContext, companyId, cancellationToken);
 
         var profile = await dbContext.AgentProfiles
             .WithDefaultTracking(trackChanges: true)
             .FirstOrDefaultAsync(
             entity => entity.CompanyId == companyId,
-            ct);
+            cancellationToken);
 
         if (profile is null)
         {
-            profile = new AgentProfile
-            {
-                CompanyId = companyId,
-                ModelName = req.ModelName,
-                DisplayName = req.DisplayName,
-                Language = req.Language,
-            };
+            profile = CompanyMapper.ToEntity(request, companyId);
             dbContext.AgentProfiles.Add(profile);
         }
 
-        profile.ModelName = req.ModelName;
-        profile.DisplayName = req.DisplayName;
-        profile.Language = req.Language;
-        profile.PromptOverride = req.PromptOverride;
-        company.TimeZoneId = req.TimeZoneId;
-        company.WorkingHours = req.WorkingHours.DeserializeOptional<WorkingHours>();
+        CompanyMapper.ApplyToEntity(request, profile, company);
 
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
-        await Send.OkAsync(new CreatedResourceResponse(profile.Id), ct);
+        await Send.OkAsync(CompanyMapper.ToResponse(profile), cancellationToken);
     }
 
     private static async Task<CEOAgent.Infrastructure.Entities.Company> GetAccessibleCompanyAsync(

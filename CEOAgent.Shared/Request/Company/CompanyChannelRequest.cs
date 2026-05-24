@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CEOAgent.Shared.Enums;
 
 namespace CEOAgent.Shared.Request.Company;
 
@@ -9,8 +10,8 @@ public sealed class CompanyChannelRequest
     /// Channel provider key.
     /// </summary>
     [Description("Channel provider key.")]
-    [DefaultValue("whatsapp_cloud")]
-    public string Provider { get; set; } = string.Empty;
+    [DefaultValue(CompanyChannelProvider.WhatsAppCloud)]
+    public CompanyChannelProvider Provider { get; set; } = CompanyChannelProvider.WhatsAppCloud;
 
     /// <summary>
     /// Provider-side channel identifier used for company resolution.

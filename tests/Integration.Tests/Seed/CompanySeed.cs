@@ -1,4 +1,5 @@
 using CEOAgent.Infrastructure.Entities;
+using CEOAgent.Infrastructure.Entities.JsonDocuments;
 using CompanyEntity = CEOAgent.Infrastructure.Entities.Company;
 using CEOAgent.Infrastructure;
 
@@ -9,18 +10,8 @@ internal static class CompanySeed
     public static async Task SeedChannelsAsync(CEOAgentDbContext dbContext, Guid companyA, Guid companyB)
     {
         dbContext.CompanyChannels.AddRange(
-            new CompanyChannel
-            {
-                CompanyId = companyA,
-                Provider = "whatsapp_cloud",
-                ProviderChannelId = "company-a-channel",
-            },
-            new CompanyChannel
-            {
-                CompanyId = companyB,
-                Provider = "whatsapp_cloud",
-                ProviderChannelId = "company-b-channel",
-            });
+            CompanyChannel.ForWhatsAppCloud(companyA, "company-a-channel", CreateWhatsAppMetadata("company-a-channel")),
+            CompanyChannel.ForWhatsAppCloud(companyB, "company-b-channel", CreateWhatsAppMetadata("company-b-channel")));
 
         await dbContext.SaveChangesAsync();
     }
@@ -41,13 +32,11 @@ internal static class CompanySeed
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         });
-        dbContext.CompanyChannels.Add(new CompanyChannel
-        {
-            Id = channelId,
-            CompanyId = companyId,
-            Provider = "whatsapp_cloud",
-            ProviderChannelId = providerChannelId,
-        });
+        dbContext.CompanyChannels.Add(CompanyChannel.ForWhatsAppCloud(
+            companyId,
+            providerChannelId,
+            CreateWhatsAppMetadata(providerChannelId),
+            id: channelId));
         dbContext.AgentProfiles.Add(new AgentProfile
         {
             Id = agentProfileId,
@@ -73,6 +62,15 @@ internal static class CompanySeed
         await dbContext.SaveChangesAsync();
 
         return new CompanySeedIds(channelId, agentProfileId, customerId, toolId);
+    }
+
+    private static WhatsAppCloudMetadata CreateWhatsAppMetadata(string phoneNumberId)
+    {
+        return new WhatsAppCloudMetadata
+        {
+            BusinessAccountId = "987654321",
+            PhoneNumberId = phoneNumberId,
+        };
     }
 }
 

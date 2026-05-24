@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using CEOAgent.Shared.Response.Company;
 using CEOAgent.Tests.Support;
 using Shouldly;
 
@@ -48,6 +49,43 @@ public sealed class AdminEndpointAccessTests
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    [Test]
+    public async Task RegisterCompanyChannel_WithWhatsAppCloudProvider_ReturnsCompanyChannelResponse()
+    {
+        await using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var companyId = await CreateCompanyAsync(client, "Company A");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{companyId}/channels")
+        {
+            Content = JsonContent.Create(new
+            {
+                provider = "whatsapp_cloud",
+                providerChannelId = "123456",
+                metadata = new
+                {
+                    whatsapp_cloud = new
+                    {
+                        business_account_id = "987654321",
+                        phone_number_id = "123456",
+                    },
+                },
+            }),
+        };
+        request.Headers.Add("X-Company-Id", companyId.ToString());
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<CompanyChannelResponse>();
+        body.ShouldNotBeNull();
+        body.Id.ShouldNotBe(Guid.Empty);
+        body.CompanyId.ShouldBe(companyId);
+        body.ProviderChannelId.ShouldBe("123456");
+        body.Metadata.ShouldNotBeNull();
+        body.Metadata.Value.GetProperty("whatsapp_cloud").GetProperty("phone_number_id").GetString().ShouldBe("123456");
+    }
+
     private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/companies")
@@ -60,14 +98,5 @@ public sealed class AdminEndpointAccessTests
         var body = await response.Content.ReadFromJsonAsync<CompanyResponse>();
         body.ShouldNotBeNull();
         return body.Id;
-    }
-
-    private sealed class CompanyResponse
-    {
-        public Guid Id { get; set; }
-
-        public string Name { get; set; } = string.Empty;
-
-        public string Status { get; set; } = string.Empty;
     }
 }

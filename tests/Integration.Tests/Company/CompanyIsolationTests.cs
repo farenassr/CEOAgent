@@ -69,6 +69,7 @@ public sealed class CompanyIsolationTests
 
         var channels = await dbContext.CompanyChannels
             .WithDefaultTracking()
+            .Select(entity => entity.Id)
             .ToListAsync();
 
         channels.ShouldBeEmpty();

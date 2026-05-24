@@ -17,7 +17,7 @@ var apiService = builder.AddProject<Projects.CEOAgent_ApiService>("api")
     .WithReference(postgres)
     .WithReference(queues)
     .WithReference(blobs)
-    .WithEnvironment("LANGFUSE_HOST", langfuseHost)
+    .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
     .WithUrlForEndpoint("https", url =>
     {
         url.DisplayText = "Scalar API Reference";
@@ -29,7 +29,7 @@ var worker = builder.AddProject<Projects.CEOAgent_Worker>("worker")
     .WithReference(postgres)
     .WithReference(queues)
     .WithReference(blobs)
-    .WithEnvironment("LANGFUSE_HOST", langfuseHost)
+    .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
     .WaitFor(apiService);
 
 builder.AddLangfuseEnvironment(apiService, worker);

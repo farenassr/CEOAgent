@@ -1,48 +1,39 @@
 using CEOAgent.Application.Errors;
 using CEOAgent.Application.Company;
-using CEOAgent.ApiService.Infrastructure.Json;
 using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Infrastructure.Entities;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
 using CEOAgent.Shared.Request.Company;
 using CEOAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using CEOAgent.Infrastructure;
+using CEOAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Admin.Companies.Endpoints;
+namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Registers an external integration credential reference for a company.
 /// </summary>
 public sealed class RegisterIntegrationCredentialEndpoint(
     CEOAgentDbContext dbContext,
-    ICompanyContext companyContext) : Endpoint<IntegrationCredentialRequest, CreatedResourceResponse>
+    ICompanyContext companyContext) : Endpoint<IntegrationCredentialRequest, IntegrationCredentialResponse>
 {
     public override void Configure()
     {
         Post("/v1/admin/companies/{companyId}/integration-credentials");
     }
 
-    public override async Task HandleAsync(IntegrationCredentialRequest req, CancellationToken ct)
+    public override async Task HandleAsync(IntegrationCredentialRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, ct);
+        await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, cancellationToken);
 
-        var credential = new IntegrationCredentialReference
-        {
-            CompanyId = companyId,
-            Provider = req.Provider,
-            Purpose = req.Purpose,
-            Reference = req.Reference,
-            Metadata = req.Metadata.DeserializeOptional<CredentialMetadata>(),
-        };
+        var credential = CompanyMapper.ToEntity(request, companyId);
 
         dbContext.IntegrationCredentialReferences.Add(credential);
-        await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
-        await Send.OkAsync(new CreatedResourceResponse(credential.Id), ct);
+        await Send.OkAsync(CompanyMapper.ToResponse(credential), cancellationToken);
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
