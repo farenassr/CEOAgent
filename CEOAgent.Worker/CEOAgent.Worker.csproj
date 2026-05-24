@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-CEOAgent.Worker-dc360349-44d6-4061-b1d5-c4930babab77</UserSecretsId>
   </PropertyGroup>
 
@@ -11,7 +8,6 @@
     <PackageReference Include="Aspire.Azure.Storage.Blobs" Version="13.3.5" />
     <PackageReference Include="Aspire.Azure.Storage.Queues" Version="13.3.5" />
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.3.5" />
-    <PackageReference Include="Aspire.OpenAI" Version="13.3.5-preview.1.26270.6" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="Mediator.Abstractions" Version="3.0.2" />

@@ -5,7 +5,7 @@ The long-term direction is broader than restaurants: the core should support mor
 
 ## What We Are Building
 
-The MVP backend receives inbound WhatsApp text or voice messages, resolves the company from the WhatsApp phone number ID, stores the conversation, processes the customer request through an AI agent, executes approved business actions through a tool gateway, and sends the reply back through WhatsApp.
+The MVP backend receives inbound WhatsApp text or voice messages, resolves the company from the WhatsApp phone number ID, stores the conversation, processes the customer request through a Microsoft Agent Framework-backed AI agent, executes approved business actions through application tool workflows, and sends the reply back through WhatsApp.
 
 Core MVP capabilities:
 
@@ -13,7 +13,7 @@ Core MVP capabilities:
 - Company resolution by channel, not by customer phone number.
 - Conversation history stored as raw turns.
 - AI agent execution with company-specific model and prompt settings.
-- Tool execution through a controlled `ToolExecutionGateway`.
+- Tool execution through controlled application tool handlers and workflows.
 - Background processing through a Worker and Azure Storage Queues.
 - PostgreSQL persistence with company isolation.
 - Azure Blob Storage for inbound and outbound media.
@@ -38,16 +38,16 @@ Azure Storage Queue
 CEOAgent.Worker
     |  runs agent, executes tools, calls adapters, sends outbound messages
     v
-PostgreSQL / Blob Storage / Google Calendar / OpenAI
+PostgreSQL / Blob Storage / Google Calendar / Microsoft Agent Framework providers
 ```
 
-The important architectural rule is that business logic does not call external systems directly. External systems are reached through ports and adapters, and model-requested side effects must pass through the tool execution gateway.
+The important architectural rule is that business logic does not call external systems directly. External systems are reached through ports and adapters, and AI/LLM work goes through Microsoft Agent Framework.
 
 ## Project Layout
 
 Current repository baseline:
 
-- `CEOAgent.AppHost` - Aspire local orchestration for API, Worker, PostgreSQL, queues, blobs, and OpenAI configuration.
+- `CEOAgent.AppHost` - Aspire local orchestration for API, Worker, PostgreSQL, queues, and blobs.
 - `CEOAgent.ApiService` - HTTP surface, health endpoint, correlation middleware, global error handling, and future FastEndpoints slices.
 - `CEOAgent.Worker` - background process for queued jobs and future agent/integration pipelines.
 - `CEOAgent.ServiceDefaults` - shared Aspire service defaults, health checks, telemetry, and resilience setup.
@@ -58,10 +58,10 @@ Current repository baseline:
 
 Target backend projects from `AGENTS.md`:
 
-- `CEOAgent.Application` - shared business logic such as `AgentRunner`, `PromptBuilder`, and `ToolExecutionGateway`.
+- `CEOAgent.Application` - shared business logic such as `AgentRunner`, `PromptBuilder`, and AI runtime coordination.
 - `CEOAgent.Infrastructure` - EF Core persistence, queues, blob storage, and infrastructure glue.
 - `CEOAgent.Integrations` - port contracts only.
-- `CEOAgent.Adapters` - implementations for WhatsApp, Google Calendar, OpenAI, transcription, and TTS.
+- `CEOAgent.Adapters` - implementations for WhatsApp, Google Calendar, Microsoft Agent Framework providers, transcription, and TTS.
 
 ## Main Message Flow
 
@@ -73,7 +73,7 @@ Target backend projects from `AGENTS.md`:
 6. A processing job is placed on Azure Storage Queue.
 7. The Worker loads the conversation and calls the agent.
 8. The agent may request a tool call.
-9. `ToolExecutionGateway` validates and executes the tool if allowed.
+9. The matching tool handler/workflow validates and executes the tool if allowed.
 10. The Worker persists the result and sends the outbound reply.
 
 ## Key Rules

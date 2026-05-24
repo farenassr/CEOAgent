@@ -1,9 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.AspNetCore.Hosting;
+using CEOAgent.Tests.Support;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Shouldly;
 
 namespace CEOAgent.Tests;
@@ -11,6 +10,9 @@ namespace CEOAgent.Tests;
 [NotInParallel]
 public sealed class RuntimeShellTests
 {
+    /// <summary>
+    /// Verifies that the health endpoint echoes the caller-provided correlation ID header.
+    /// </summary>
     [Test]
     public async Task Health_ReturnsCorrelationIdHeader()
     {
@@ -27,6 +29,9 @@ public sealed class RuntimeShellTests
         values.Single().ShouldBe("test-correlation-id");
     }
 
+    /// <summary>
+    /// Verifies that the health endpoint generates a correlation ID when the request omits one.
+    /// </summary>
     [Test]
     public async Task Health_GeneratesCorrelationIdHeaderWhenMissing()
     {
@@ -40,18 +45,24 @@ public sealed class RuntimeShellTests
         Guid.TryParse(values.Single(), out _).ShouldBeTrue();
     }
 
+    /// <summary>
+    /// Verifies that the Scalar API reference page is exposed in the Development environment.
+    /// </summary>
     [Test]
-    public async Task ScalarApiReference_IsAvailableAtApiInDevelopment()
+    public async Task ScalarApiReference_IsAvailableAtScalarInDevelopment()
     {
         await using var factory = new ApiFactory("Development");
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/api");
+        using var response = await client.GetAsync("/scalar");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
     }
 
+    /// <summary>
+    /// Verifies that the Development OpenAPI document includes the versioned API surface.
+    /// </summary>
     [Test]
     public async Task OpenApiDocument_IncludesHealthEndpointInDevelopment()
     {
@@ -64,10 +75,13 @@ public sealed class RuntimeShellTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         document.RootElement
             .GetProperty("paths")
-            .TryGetProperty("/health", out _)
+            .TryGetProperty("/v1/admin/companies", out _)
             .ShouldBeTrue();
     }
 
+    /// <summary>
+    /// Verifies that business rule exceptions are returned as problem details with trace and correlation metadata.
+    /// </summary>
     [Test]
     public async Task BusinessRuleException_ReturnsProblemDetailsWithCorrelationExtension()
     {
@@ -80,7 +94,7 @@ public sealed class RuntimeShellTests
         using var response = await client.SendAsync(request);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
 
-        response.StatusCode.ShouldBe((HttpStatusCode)422);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         problem.ShouldNotBeNull();
         problem.Title.ShouldBe("Business rule violation");
         problem.Type.ShouldBe("business_rule_violation");
@@ -89,6 +103,9 @@ public sealed class RuntimeShellTests
         problem.Extensions["traceId"].ShouldNotBeNull();
     }
 
+    /// <summary>
+    /// Verifies that common application exceptions map to the expected problem details status and type.
+    /// </summary>
     [Test]
     [Arguments("/__test/not-found", 404, "not_found")]
     [Arguments("/__test/concurrency", 409, "concurrency_conflict")]
@@ -114,14 +131,4 @@ public sealed class RuntimeShellTests
         problem.Extensions["traceId"].ShouldNotBeNull();
     }
 
-    private sealed class ApiFactory(string environmentName = "Testing") : WebApplicationFactory<Program>
-    {
-        protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
-        {
-            builder.UseEnvironment(environmentName);
-            builder.UseSetting("Authentication:AdminApiKey", "test-admin-key");
-            builder.UseSetting("Persistence:UseInMemoryDatabase", "true");
-            builder.UseSetting("Persistence:InMemoryDatabaseName", $"runtime-shell-tests-{Guid.CreateVersion7()}");
-        }
-    }
 }

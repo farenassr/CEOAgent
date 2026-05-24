@@ -24,7 +24,7 @@ public sealed class GlobalExceptionHandler(
             DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Concurrency conflict", "concurrency_conflict"),
             IntegrationException => (StatusCodes.Status503ServiceUnavailable, "Downstream dependency unavailable", "downstream_dependency_unavailable"),
             OperationCanceledException => (499, "Client closed request", "client_closed_request"),
-            _ => (StatusCodes.Status500InternalServerError, "Unexpected server error", "unexpected_error")
+            _ => (StatusCodes.Status500InternalServerError, "Unexpected server error", "unexpected_error"),
         };
 
         if (Activity.Current is { } activity)
@@ -35,7 +35,20 @@ public sealed class GlobalExceptionHandler(
             activity.SetTag("error.type", type);
         }
 
-        logger.LogError(exception, "Request failed with status {StatusCode}", status);
+        if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
+        {
+            logger.LogInformation(
+                "Request cancelled by client. CorrelationId: {CorrelationId}",
+                correlationIdAccessor.CorrelationId);
+        }
+        else
+        {
+            logger.LogError(
+                exception,
+                "Request failed with status {StatusCode}. CorrelationId: {CorrelationId}",
+                status,
+                correlationIdAccessor.CorrelationId);
+        }
 
         httpContext.Response.StatusCode = status;
 
@@ -44,7 +57,7 @@ public sealed class GlobalExceptionHandler(
             Status = status,
             Title = title,
             Type = type,
-            Detail = exception is BusinessRuleException or NotFoundException ? exception.Message : null
+            Detail = exception is BusinessRuleException or NotFoundException ? exception.Message : null,
         };
 
         problemDetails.Extensions["traceId"] = Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier;
@@ -59,7 +72,7 @@ public sealed class GlobalExceptionHandler(
         {
             HttpContext = httpContext,
             ProblemDetails = problemDetails,
-            Exception = exception
+            Exception = exception,
         });
 
         return true;

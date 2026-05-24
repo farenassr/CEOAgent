@@ -8,6 +8,9 @@ namespace Integration.Tests;
 
 public sealed class FoundationTests
 {
+    /// <summary>
+    /// Verifies that the infrastructure, adapter, integration, and tool assemblies can be loaded.
+    /// </summary>
     [Test]
     public void FoundationProjectsAssemblies_AreLoadable()
     {

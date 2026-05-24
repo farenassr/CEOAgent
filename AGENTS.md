@@ -1,4 +1,4 @@
-# agents.md — MVP Edition (Revised)
+﻿# agents.md — MVP Edition (Revised)
 
 > **Audience:** AI coding agents and human contributors generating code for
 > this project. Every rule here is normative. If something below conflicts
@@ -10,16 +10,16 @@
 ## Project Summary
 
 This project is a modern **C# / .NET multi-tenant SaaS backend** for
-AI-assisted business conversations. The MVP focus is **restaurants using
+AI-assisted business conversations. The MVP focus is \*\*restaurants using
 deliberately built so that other channels (Telegram, Instagram DM, web chat)
 and other integrations (REST APIs, Excel, customer databases, POS) can be
 added later without rewriting the core.
 
 The platform receives inbound channel messages (text or audio), resolves the
-tenant by channel, loads tenant configuration, processes the message through
-an AI agent, executes approved business tools through a **Tool Execution
-Gateway**, and synchronizes results with external systems (Google Calendar
-for MVP).
+company by channel, loads company configuration, processes the message through
+an AI agent built with **Microsoft Agent Framework**, executes approved
+business tools through validated application workflows, and synchronizes
+results with external systems (Google Calendar for MVP).
 
 The system is **AOT-aware**, not **AOT-first**. Maintainability and developer
 experience win over Native AOT purity, but every chosen library is
@@ -39,10 +39,10 @@ The solution lives at the repository root with a flat project layout (no
 | `CEOAgent.ServiceDefaults` | classlib    | OTel, health checks, resilience defaults. Referenced by `Api`/`Worker`. |
 | `CEOAgent.ApiService`      | webapi      | HTTP surface (FastEndpoints). Webhook receiver and admin endpoints.     |
 | `CEOAgent.Worker`          | worker      | Background processing. Queue-driven jobs, agent loop, integrations.     |
-| `CEOAgent.Application`     | classlib    | Cross-slice business logic (`AgentRunner`, `PromptBuilder`, gateway).   |
+| `CEOAgent.Application`     | classlib    | Cross-slice business logic (`AgentRunner`, `PromptBuilder`, AI runtime). |
 | `CEOAgent.Infrastructure`  | classlib    | Persistence (EF Core), queues, blob storage, observability glue.        |
 | `CEOAgent.Integrations`    | classlib    | **Port contracts only**. No implementations.                            |
-| `CEOAgent.Adapters`        | classlib    | Port implementations (WhatsApp, Google Calendar, OpenAI, etc.).         |
+| `CEOAgent.Adapters`        | classlib    | Port implementations (WhatsApp, Google Calendar, Agent Framework providers, etc.). |
 | `CEOAgent.Tools`           | classlib    | `IToolHandler` implementations (native MVP tools).                      |
 
 ---
@@ -53,21 +53,21 @@ The solution lives at the repository root with a flat project layout (no
 
 - WhatsApp Cloud inbound and outbound messaging — **text and audio**
   (audio is received as voice notes and sent as TTS-generated voice replies)
-- Tenant resolution by `(provider, provider_channel_id)` — for WhatsApp this
+- Company resolution by `(provider, provider_channel_id)` — for WhatsApp this
   is `("whatsapp_cloud", phone_number_id)`
 - Audio transcription (single attempt; on failure → human handoff)
 - Audio synthesis (TTS) for outbound voice replies — single provider
-- Per-tenant agent profile with tenant-selectable model
-- Per-tenant **dynamic tool registry** — even though MVP ships with 4 native
+- Per-company agent profile with company-selectable model
+- Per-company **dynamic tool registry** — even though MVP ships with 4 native
   tools, the registry contract is in place from day one
 - Conversation history persistence (raw turns; no rolling summaries)
-- `ToolExecutionGateway`
+- Microsoft Agent Framework for all AI/LLM agent runtime work
 - Worker-based background processing
 - PostgreSQL — single DbContext, code-first migrations
 - Azure Storage Queues for background jobs
 - Azure Blob Storage for media files (inbound voice notes, outbound TTS,
   attachments)
-- Manual tenant onboarding through admin endpoints protected by a static API
+- Manual company onboarding through admin endpoints protected by a static API
   key
 - Basic observability (OpenTelemetry + Langfuse)
 - A single health check endpoint
@@ -83,8 +83,8 @@ The solution lives at the repository root with a flat project layout (no
 - RAG / knowledge retrieval
 - Multiple calendar providers
 - WhatsApp Web (only WhatsApp Business Cloud API is supported)
-- Dedicated database per tenant
-- Self-service tenant onboarding
+- Dedicated database per company
+- Self-service company onboarding
 - Customer long-term memory profile
 - Conversation rolling summaries
 - Outbox pattern
@@ -95,7 +95,7 @@ The solution lives at the repository root with a flat project layout (no
 - Keycloak (admin endpoints use a static API key for now)
 - Soft delete
 - Cross-channel customer identity unification (one customer = one
-  `(tenant_id, company_channel_id, external_customer_id)` for now)
+  `(company_id, company_channel_id, external_customer_id)` for now)
 
 These are intentionally deferred. Add them only when concrete pain justifies
 them.
@@ -124,10 +124,7 @@ this list wins.
 5. Use **FluentValidation** for request validation in the API. Validate
    command preconditions inside Worker handlers via the same validators
    (resolved through DI), since the Worker has no FastEndpoints layer.
-6. Use **Mapperly** only when the source and destination shape diverge
-   (renames, transformations, flattening). When the request and command are
-   shape-equivalent, instantiate the command directly — do not introduce
-   Mapperly purely for "consistency".
+6. Use **Mapperly** for entity-to-DTO mapping. Create one partial mapper per module (e.g., CompanyMapper for all Company CRUD operations)..
 7. Use **Aspire** for local orchestration only. Production Azure resources
    come from Bicep / Terraform / Azure DevOps pipelines.
 8. Use `ProblemDetails` for all error responses, populated by a single global
@@ -149,10 +146,10 @@ this list wins.
       channels (WhatsApp for MVP).
     - `ICalendarIntegration` — calendar reads and writes (Google Calendar for
       MVP).
-    - `ITranscriptionIntegration` — speech-to-text. Per-tenant adapter
+    - `ITranscriptionIntegration` — speech-to-text. Per-company adapter
       selection, single configured implementation in MVP.
-      Optionally a fourth, internal-only **chat completion factory**
-      (`IChatCompletionFactory`) acts as the LLM port — see
+      Optionally a fourth, internal-only Microsoft Agent Framework-backed AI
+      runtime abstraction acts as the LLM port — see
       _AI Agent Runtime_.
 15. No keyed DI for ports yet — one implementation per port. Introduce keyed
     DI when a second provider arrives for the same capability.
@@ -162,25 +159,28 @@ this list wins.
 ### AI safety
 
 17. The model **never** executes side effects directly.
-18. Every model-requested action passes through `ToolExecutionGateway`.
-19. The backend **never** trusts model output directly. Validate with
-    OpenAI Structured Outputs at the provider, plus a small set of
-    post-deserialization checks.
+18. Every model-requested action is validated against the enabled company
+    tool catalog and executed only through application-owned tool handlers or
+    workflows. Do not reintroduce `ToolExecutionGateway` or
+    `CreateToolExecutionRequest`.
+19. The backend **never** trusts model output directly. Use Microsoft Agent
+    Framework capabilities and provider-side structured output where
+    available, plus a small set of post-deserialization checks.
 20. Do not send the full conversation transcript to the model. Send the
     last 8 raw turns (see _Definition of "turn"_).
-21. Do not hardcode model names. Resolve from the tenant's `agent_profile`.
-22. The model receives the **full enabled tool catalog** for the tenant
+21. Do not hardcode model names. Resolve from the company's `agent_profile`.
+22. The model receives the **full enabled tool catalog** for the company
     every turn. Tool selection logic is unnecessary at MVP scale (≤10
-    tools). Add it when catalogs exceed ~10 tools per tenant.
+    tools). Add it when catalogs exceed ~10 tools per company.
 
 ### Multi-tenancy
 
-23. Every tenant-owned table includes `tenant_id`.
-24. Every tenant-owned query enforces tenant isolation through EF Core
-    **global query filters**. Manual tenant resolution from request bodies
+23. Every company-owned table includes `company_id`.
+24. Every company-owned query enforces company isolation through EF Core
+    **global query filters**. Manual company resolution from request bodies
     is forbidden.
-25. The customer phone number is **never** a tenant identifier. Resolve
-    tenant from `(provider, provider_channel_id)`.
+25. The customer phone number is **never** a company identifier. Resolve
+    company from `(provider, provider_channel_id)`.
 
 ### Reliability
 
@@ -211,23 +211,36 @@ this list wins.
     parameterless constructor is required by a framework, when object
     initializer binding is clearer, or when the constructor body contains
     meaningful setup logic.
+36. API request/response DTOs live in `CEOAgent.Shared`, not
+    `CEOAgent.ApiService`. Request DTOs go under
+    `Request/<Domain>/<Name>Request.cs` and response DTOs go under
+    `Response/<Domain>/<Name>Response.cs`, with one `public sealed class` per
+    file. Example: `Request/Company/CompanyToolRequest.cs`.
+37. JSONB document types used by Infrastructure entities live under
+    `CEOAgent.Infrastructure/Persistence/Entities/JsonDocuments/`, not in
+    `CEOAgent.Shared`. Shared API DTOs that accept flexible JSON payloads use
+    boundary-safe JSON types such as `JsonElement`, then map to entity JSONB
+    document classes inside API/Application code.
+38. Generated code and hand-written initializers must not produce MA0007
+    diagnostics. Prefer trailing commas in multi-line initializer and
+    collection expressions when the analyzer requests them.
 
 ### Secrets and configuration
 
-36. Never hardcode connection strings, passwords, API keys, provider secrets,
+39. Never hardcode connection strings, passwords, API keys, provider secrets,
     client secrets, refresh tokens, webhook secrets, or signing keys.
-37. Aspire `.WithReference(...)` is the default source for runtime resource
+40. Aspire `.WithReference(...)` is the default source for runtime resource
     connection strings between AppHost-managed resources and projects. Do not
     move PostgreSQL, queue, or blob runtime connection strings into Key Vault.
-38. Azure Key Vault is the target store for deployed/shared secrets such as
+41. Azure Key Vault is the target store for deployed/shared secrets such as
     admin API keys, provider app secrets, OAuth client secrets, and Langfuse
     keys.
-39. User-secrets and environment variables are local development inputs only.
+42. User-secrets and environment variables are local development inputs only.
     Do not treat them as the production secret store.
-40. EF design-time factories must read from configuration, environment
+43. EF design-time factories must read from configuration, environment
     variables, and user-secrets. They must fail fast with a clear message when
     a required connection string is missing.
-41. Tenant credential tables store references only, such as `kv://...`.
+44. Company credential tables store references only, such as `kv://...`.
     Database rows must never contain raw secret values.
 
 ---
@@ -261,14 +274,11 @@ microservices for the MVP.**
   emulation
 - `Aspire.Hosting.Azure.KeyVault` — represents the existing deployed/shared
   secret store used in publish mode
-- `Aspire.OpenAI` — registers the OpenAI client with logging, metrics, and
-  resilience. Currently preview; the underlying `OpenAIClient` is stable.
-  If the preview API changes, only the inside of
-  `IChatCompletionFactory` needs to update — consumers stay untouched.
 
-We use **OpenAI directly**, not Azure OpenAI. `Aspire.Azure.AI.OpenAI` is
-intentionally **not** used. If a tenant later requires Azure OpenAI for data
-residency, swap the provider behind `IChatCompletionFactory`.
+Do **not** wire direct OpenAI Aspire client resources in AppHost. All AI and
+LLM work is implemented through **Microsoft Agent Framework** packages in the
+application/adapter layer, even when an OpenAI-compatible provider is used
+behind that framework.
 
 ### `AppHost/Program.cs` skeleton
 
@@ -283,7 +293,6 @@ var storage = builder.AddAzureStorage("storage").RunAsEmulator();
 var queues  = storage.AddQueues("queues");
 var blobs   = storage.AddBlobs("blobs");
 
-var openai = builder.AddConnectionString("openai");
 var keyVault = builder.AddAzureKeyVault("keyvault")
     .PublishAsExisting("kv-ceo-agent-dev", "rg-ceo-agent-dev");
 
@@ -297,7 +306,6 @@ builder.AddProject<Projects.Api>("api")
     .WithReference(postgres)
     .WithReference(queues)
     .WithReference(blobs)
-    .WithReference(openai)
     .WithEnvironment("LANGFUSE_HOST",       langfuseHost)
     .WithEnvironment("LANGFUSE_PUBLIC_KEY", langfusePublicKey)
     .WithEnvironment("LANGFUSE_SECRET_KEY", langfuseSecretKey);
@@ -306,7 +314,6 @@ builder.AddProject<Projects.Worker>("worker")
     .WithReference(postgres)
     .WithReference(queues)
     .WithReference(blobs)
-    .WithReference(openai)
     .WithEnvironment("LANGFUSE_HOST",       langfuseHost)
     .WithEnvironment("LANGFUSE_PUBLIC_KEY", langfusePublicKey)
     .WithEnvironment("LANGFUSE_SECRET_KEY", langfuseSecretKey);
@@ -332,15 +339,17 @@ builder.Build().Run();
   `ConnectionStrings:CEOAgent` from `appsettings.json`,
   `appsettings.Development.json`, user-secrets, or environment variables.
   It must throw a clear `InvalidOperationException` if the value is missing.
-- Tenant integration credential rows store references such as
-  `kv://tenant/provider/credential`, never secret payloads.
+- Company integration credential rows store references such as
+  `kv://company/provider/credential`, never secret payloads.
 
 ### Client packages (in API and Worker)
 
 - `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`
 - `Aspire.Azure.Storage.Queues`
 - `Aspire.Azure.Storage.Blobs`
-- `Aspire.OpenAI`
+- `Microsoft.Agents.AI.Abstractions` where AI abstractions are needed
+- `Microsoft.Agents.AI.OpenAI` only inside adapters that implement an
+  Agent Framework provider against OpenAI-compatible services
 
 ### Resilience
 
@@ -365,9 +374,9 @@ LLM-specific tracing — prompts, completions, tool calls, token usage,
 latency, estimated cost — is sent to **Langfuse** in addition to general
 OpenTelemetry exports.
 
-Langfuse exposes a native OTLP HTTP endpoint that understands the GenAI
-semantic conventions emitted by Semantic Kernel. No Langfuse-specific SDK is
-required.
+Langfuse exposes a native OTLP HTTP endpoint that understands GenAI semantic
+conventions emitted by Microsoft Agent Framework / Microsoft.Extensions.AI.
+No Langfuse-specific SDK is required.
 
 ### Configuration
 
@@ -393,8 +402,8 @@ var langfuseAuth = "Basic " + Convert.ToBase64String(
 
 builder.Services.AddOpenTelemetry()
     .WithTracing(tracing => tracing
-        .AddSource("Microsoft.SemanticKernel*")
-        .AddSource("OpenAI.*")
+        .AddSource("Microsoft.AgentFramework*")
+        .AddSource("Microsoft.Extensions.AI*")
         .AddSource("CeoAgent.*")          // application sources
         .AddOtlpExporter()                // general OTel (Aspire dashboard, Azure Monitor)
         .AddOtlpExporter("langfuse", o =>
@@ -409,7 +418,7 @@ builder.Services.AddOpenTelemetry()
 
 Every LLM-related activity must carry, where applicable:
 
-- `tenant_id`
+- `company_id`
 - `conversation_id`
 - `customer_id`
 - `correlation_id`
@@ -417,7 +426,8 @@ Every LLM-related activity must carry, where applicable:
 - `model_name` (resolved from `agent_profile`)
 - `prompt_version` (set by `PromptBuilder` when prompts change)
 
-`AgentRunner` adds these as activity tags before invoking Semantic Kernel.
+`AgentRunner` adds these as activity tags before invoking the Microsoft Agent
+Framework-backed runtime.
 
 ### What goes to Langfuse vs general OTel
 
@@ -426,8 +436,8 @@ Every LLM-related activity must carry, where applicable:
 | HTTP request traces                 | Yes          | No       |
 | Database spans                      | Yes          | No       |
 | Queue spans                         | Yes          | No       |
-| `Microsoft.SemanticKernel.*` spans  | Yes          | Yes      |
-| `OpenAI.*` spans (chat completions) | Yes          | Yes      |
+| `Microsoft.AgentFramework.*` spans  | Yes          | Yes      |
+| `Microsoft.Extensions.AI.*` spans   | Yes          | Yes      |
 | Application logs                    | Yes          | No       |
 
 The same span can be exported to both backends; Langfuse only displays the
@@ -435,10 +445,10 @@ GenAI-shaped ones.
 
 ### Privacy: prompt and completion content
 
-The Semantic Kernel switch
-`Microsoft.SemanticKernel.Experimental.GenAI.EnableOTelDiagnosticsSensitive`
-controls whether prompt and completion **text** is included in traces. This
-switch is **process-global** — it cannot be toggled per tenant.
+Agent Framework / Microsoft.Extensions.AI diagnostics may include prompt and
+completion **text** depending on provider instrumentation and configuration.
+Treat sensitive LLM content capture as process-level operational behavior —
+do not claim per-company toggling unless a custom processor enforces it.
 
 Rule:
 
@@ -448,8 +458,8 @@ Rule:
 - For controlled debugging, enable it temporarily in a non-production
   environment and never on shared production processes.
 - A future enhancement (post-MVP) is a custom `ActivityProcessor` that strips
-  prompt/completion content per tenant before export. Until then, the
-  per-tenant claim is **not** something we offer.
+  prompt/completion content per company before export. Until then, the
+  per-company claim is **not** something we offer.
 
 ---
 
@@ -457,14 +467,14 @@ Rule:
 
 Initial modules:
 
-- `Tenancy` — tenants, channels, integration credentials references, agent
-  profiles, tool configuration per tenant.
-- `Customers` — customer records keyed by `(tenant_id, company_channel_id,
+- `Companies` — companies, channels, integration credentials references, agent
+  profiles, tool configuration per company.
+- `Customers` — customer records keyed by `(company_id, company_channel_id,
 external_customer_id)`.
 - `Conversations` — conversations, messages, transcriptions, conversation
   state.
 - `Agents` — prompt building, tool selection (trivial in MVP), model
-  orchestration, tool gateway.
+  orchestration, and tool handling.
 - `Integrations` — port contracts and shared DTOs (no implementations).
 
 Modules communicate **only** through Mediator commands and queries within
@@ -483,18 +493,18 @@ Adapters live outside the modules under `Adapters/`.
   - `Endpoints/` for FastEndpoints endpoint classes and endpoint validators.
   - `Commands/` for Mediator commands/queries and handlers, only when the
     use case actually needs Mediator.
-  - `Models/Request/` for request DTOs.
-  - `Models/Response/` for response DTOs.
-  This is "controller-like" code that orchestrates business logic.
+  - Shared DTOs are referenced from `CEOAgent.Shared/Request/<Domain>` and
+    `CEOAgent.Shared/Response/<Domain>`.
+    This is "controller-like" code that orchestrates business logic.
 - **`Application/<X>/`** holds **stateful or non-trivial business logic**
   shared across slices and used by the Worker. `AgentRunner`,
-  `PromptBuilder`, `ToolExecutionGateway`, `ConversationStateApplier` live
+  `PromptBuilder`, AI runtime services, and `ConversationStateApplier` live
   here. Slice handlers and tool handlers depend on `Application/`, not the
   other way around.
 - **`Tools/`** holds `IToolHandler` implementations. Each tool handler may
   internally dispatch a Mediator command into the appropriate module —
   that is how a tool reuses a slice's logic without duplicating it. See
-  _Tools and ToolExecutionGateway_.
+  _Tools and Tool Handling_.
 
 ---
 
@@ -504,8 +514,11 @@ Rules:
 
 - Endpoint files use the suffix `Endpoint` and live under the slice's
   `Endpoints/` folder.
-- Request DTO files live under the slice's `Models/Request/` folder.
-- Response DTO files live under the slice's `Models/Response/` folder.
+- Request DTO files live under `CEOAgent.Shared/Request/<Domain>/`.
+- Response DTO files live under `CEOAgent.Shared/Response/<Domain>/`.
+- Entity-owned JSONB document classes live under
+  `CEOAgent.Infrastructure/Persistence/Entities/JsonDocuments/`; do not place
+  them in `CEOAgent.Shared`.
 - Every API request/response DTO is declared in its own independent class
   file. Do not group multiple DTO classes in one file.
 - DTOs are declared as `class`, not `record` and not `sealed record`. Use
@@ -547,6 +560,8 @@ Worker.
 
 - All routes versioned under `/v1/`. Health endpoint at `/health` (not
   versioned).
+- In development, expose the Scalar API reference at `/scalar` and serve the
+  backing OpenAPI document through the built-in OpenAPI endpoint.
 - Validation runs **before** the handler, via FluentValidation integrated
   with FastEndpoints.
 - Mapping uses **Mapperly only when needed** (see rule 6 in
@@ -563,7 +578,7 @@ Worker.
 | 400    | Invalid request shape or validation error             |
 | 401    | Unauthenticated                                       |
 | 403    | Authenticated but lacks permission                    |
-| 404    | Not found, including cross-tenant hidden resources    |
+| 404    | Not found, including cross-company hidden resources   |
 | 409    | Concurrency conflict (`DbUpdateConcurrencyException`) |
 | 422    | Semantic / domain rule violation                      |
 | 499    | Client closed request (cancelled)                     |
@@ -607,7 +622,7 @@ Rule for choosing between FluentValidation and `BusinessRuleException`:
 - **FluentValidation** is for **request shape**: required fields, ranges
   visible from the request alone, regex, length. Returns **400**.
 - **`BusinessRuleException`** is for rules that require domain state to
-  evaluate: working hours, capacity, "already cancelled", tenant-disabled
+  evaluate: working hours, capacity, "already cancelled", company-disabled
   tool, etc. Returns **422**.
 
 ### 3. Unexpected errors
@@ -632,7 +647,7 @@ Every error response includes:
 
 - `traceId` — from `Activity.Current?.TraceId`
 - `correlationId` — from middleware that reads or generates `X-Correlation-Id`
-- `tenantId` — when the request is tenant-scoped
+- `companyId` — when the request is company-scoped
 
 When `Result<T, Error>` and a richer error model start paying for themselves,
 introduce them gradually. For now, exceptions plus FluentValidation are
@@ -642,36 +657,36 @@ enough.
 
 ## Multi-Tenancy
 
-Use **shared database, shared schema, with `tenant_id` discriminator**.
+Use **shared database, shared schema, with `company_id` discriminator**.
 
 Rules:
 
-- The customer phone number is **never** a tenant identifier.
-- Resolve tenant from the receiving channel:
+- The customer phone number is **never** a company identifier.
+- Resolve company from the receiving channel:
   - For WhatsApp Cloud: `metadata.phone_number_id` from the webhook payload.
   - For any future channel: the channel's stable provider-side identifier.
-  - The lookup is `tenant_channel WHERE provider = ? AND provider_channel_id = ?`.
+  - The lookup is `company_channel WHERE provider = ? AND provider_channel_id = ?`.
 - Use `messages[0].from` or `contacts[0].wa_id` to identify the customer
-  within that tenant (for WhatsApp).
-- Every tenant-owned table includes `tenant_id`.
-- Every tenant-owned query filters by `tenant_id` via EF Core global query
+  within that company (for WhatsApp).
+- Every company-owned table includes `company_id`.
+- Every company-owned query filters by `company_id` via EF Core global query
   filters. Never rely on developers remembering to add the filter manually.
-- Return `404` when a resource exists but belongs to another tenant — never
-  reveal cross-tenant existence.
+- Return `404` when a resource exists but belongs to another company — never
+  reveal cross-company existence.
 
-### Tenant context
+### Company context
 
-A request middleware sets the ambient `ITenantContext` from one of two
+A request middleware sets the ambient `ICompanyContext` from one of two
 sources:
 
 - For webhook routes: resolved from the channel's
   `(provider, provider_channel_id)` after signature verification.
-- For admin routes: read from a header (`X-Tenant-Id`) authorized by the
+- For admin routes: read from a header (`X-Company-Id`) authorized by the
   static admin API key.
 
-EF Core global query filters read the ambient `ITenantContext` and append
-`WHERE tenant_id = @currentTenant` to every tenant-owned query. Manual
-tenant resolution from request bodies is forbidden.
+EF Core global query filters read the ambient `ICompanyContext` and append
+`WHERE company_id = @currentCompany` to every company-owned query. Manual
+company resolution from request bodies is forbidden.
 
 ---
 
@@ -691,7 +706,7 @@ This static admin API key remains the MVP admin authentication mechanism.
 Do not introduce Keycloak, JWT, users, roles, or a dashboard identity system
 as part of the Key Vault/configuration foundation.
 
-Admin endpoints handle tenant onboarding, channel configuration, integration
+Admin endpoints handle company onboarding, channel configuration, integration
 credentials registration, agent profile management, and tool enablement.
 
 ### Webhook endpoints
@@ -707,21 +722,21 @@ choices. Plan for it; do not implement it now.
 
 ---
 
-## Tenant Onboarding
+## Company Onboarding
 
 For MVP, onboarding is **manual** by a platform operator hitting admin
 endpoints.
 
 Steps:
 
-1. Create the `tenant` row.
-2. Register the channel: `tenant_channel` row with `provider`,
+1. Create the `company` row.
+2. Register the channel: `company_channel` row with `provider`,
    `provider_channel_id`, `metadata` (jsonb for provider-specific extras like
    `phone_number_id`, `business_account_id`, …), and a credentials reference.
 3. Configure the agent profile (model, prompt overrides, language, timezone,
    working hours, capacity).
 4. Configure the calendar integration credentials reference.
-5. Enable tools for the tenant: insert `tenant_tool` rows for each native
+5. Enable tools for the company: insert `company_tool` rows for each native
 6. Smoke-test inbound and outbound flows.
 
 All steps are scripted as admin endpoints under `/v1/admin/...`, available
@@ -738,18 +753,18 @@ Generalized for any channel (WhatsApp Cloud is the only MVP implementation):
 2. Verify provider signature (see Webhook Security).
 3. Extract (provider, provider_channel_id) — for WhatsApp this is
    ("whatsapp_cloud", metadata.phone_number_id).
-4. Resolve tenant via tenant_channel.
+4. Resolve company via company_channel.
 5. Extract customer identifier from the provider payload — for WhatsApp,
    messages[0].from or contacts[0].wa_id.
-6. Find or create customer by (tenant_id, company_channel_id, external_customer_id).
-7. Find or create OPEN conversation for (tenant_id, customer_id, company_channel_id),
+6. Find or create customer by (company_id, company_channel_id, external_customer_id).
+7. Find or create OPEN conversation for (company_id, customer_id, company_channel_id),
    snapshotting the agent_profile_id selected at conversation creation.
 8. Persist inbound message idempotently using provider_message_id.
 9. Enqueue ProcessIncomingMessageJob to Azure Storage Queue.
 10. Return 200 OK.
 ```
 
-The customer phone number is **never** used to resolve the tenant. The same
+The customer phone number is **never** used to resolve the company. The same
 customer may message multiple businesses on the platform.
 
 WhatsApp Web is not supported. Production must use WhatsApp Business Cloud
@@ -801,7 +816,7 @@ Required behavior:
 ### Replay protection
 
 - Persist `provider_message_id` with a unique constraint on
-  `(tenant_id, provider_message_id)` when `provider_message_id` is not null.
+  `(company_id, provider_message_id)` when `provider_message_id` is not null.
 - A duplicate insert returns **200 OK** without re-enqueuing.
 
 ---
@@ -826,10 +841,10 @@ Azure Blob Storage stores:
 The model receives only:
 
 - platform system prompt
-- tenant context (brand voice, language, timezone, current local date/time,
+- company context (brand voice, language, timezone, current local date/time,
   branch info)
 - last 8 raw turns of the conversation
-- the enabled tool catalog for the tenant
+- the enabled tool catalog for the company
 
 Full conversation history is retained for auditability but is **not** sent
 to the model in full. No rolling summary, no customer memory profile
@@ -847,10 +862,11 @@ is one of:
   `AgentTurnResult`).
 - `tool_call` — the agent's request to invoke a tool, serialized from the
   `toolCallRequest` of an `AgentTurnResult`.
-- `tool_result` — the structured outcome returned by `ToolExecutionGateway`.
+- `tool_result` — the structured outcome returned by the application tool
+  handler/workflow.
 
 The **last 8 turns** = the last 8 entries in chronological order, regardless
-of role mix. The platform system prompt and tenant context are **not**
+of role mix. The platform system prompt and company context are **not**
 counted as turns; they are prepended on every model call.
 
 System notes (handoff triggered, conversation reopened, etc.) are stored as
@@ -882,72 +898,38 @@ closes (see _Definition of "open conversation"_).
 
 ## AI Agent Runtime
 
-Use **Semantic Kernel** for prompt execution and chat-completion abstraction.
-The provider is **OpenAI direct** (not Azure OpenAI), wired through
-`Aspire.OpenAI` so the underlying `OpenAIClient` benefits from Aspire's
-logging, metrics, and resilience.
+Use **Microsoft Agent Framework** for all AI, LLM, agent orchestration, tool
+calling, model interaction, and provider integration work. Do not introduce
+direct OpenAI client usage in API, Worker, Application, or Infrastructure.
+If an OpenAI-compatible model is used, it is accessed through the Agent
+Framework provider packages from `CEOAgent.Adapters`.
 
-**Tool calling is not delegated to SK function calling.** All tool requests
-come back inside `AgentTurnResult.ToolCallRequest` and are executed through
-`ToolExecutionGateway`. This keeps the gateway as the single chokepoint for
-side effects.
+Agent tool calls are not authorization to mutate state. Tool requests are
+validated against the enabled company tool catalog and then routed into
+application-owned tool handlers or Mediator workflows that enforce business
+rules.
 
-### Per-tenant model
+### Per-company model
 
-Each tenant's `agent_profile` declares the model. There is one model per
-tenant — no escalation tier. If the chosen model fails to produce valid
+Each company's `agent_profile` declares the model. There is one model per
+company — no escalation tier. If the chosen model fails to produce valid
 structured output after **one retry**, the agent triggers a human handoff.
 
 Model names are never hardcoded. They live in `agent_profile.model_name`.
 
-### Client registration (API and Worker)
+### Client registration
 
 ```csharp
-// Register the OpenAI client through Aspire — picks up connection string
-// "openai" from AppHost, including API key and (optionally) base URL.
-builder.AddOpenAIClient("openai");
-
-// Register Semantic Kernel and the per-tenant chat completion factory.
-// The model id is NOT bound at DI time — it is resolved per request from
-// the tenant's agent_profile by IChatCompletionFactory.
-builder.Services.AddKernel();
-builder.Services.AddSingleton<IChatCompletionFactory, OpenAIChatCompletionFactory>();
+// Register application AI abstractions and Microsoft Agent Framework-backed
+// adapters. The model id is resolved per turn from agent_profile.
+builder.Services.AddSingleton<IAgentRuntime, MicrosoftAgentFrameworkRuntime>();
 ```
 
-```csharp
-public interface IChatCompletionFactory
-{
-    IChatCompletionService ForModel(string modelId);
-}
-
-internal sealed class OpenAIChatCompletionFactory(OpenAIClient client)
-    : IChatCompletionFactory
-{
-    public IChatCompletionService ForModel(string modelId)
-        => new OpenAIChatCompletionService(modelId, client);
-}
-```
-
-`AgentRunner` resolves the tenant's `agent_profile`, calls
-`factory.ForModel(profile.ModelName)`, and uses the returned chat service for
-the turn. If a tenant later needs Azure OpenAI for residency reasons, only
-this factory's implementation changes — consumer code stays put.
-
-### Required experimental switches
-
-Enable the GenAI OpenTelemetry semantic conventions emitted by Semantic
-Kernel:
-
-```csharp
-AppContext.SetSwitch(
-    "Microsoft.SemanticKernel.Experimental.GenAI.EnableOTelDiagnostics", true);
-
-// Process-global. Default to false in production. See the Privacy section
-// in LLM Observability.
-AppContext.SetSwitch(
-    "Microsoft.SemanticKernel.Experimental.GenAI.EnableOTelDiagnosticsSensitive",
-    builder.Configuration.GetValue<bool>("Telemetry:EnableSensitiveLLMContent"));
-```
+`AgentRunner` resolves the company's `agent_profile`, calls
+the Agent Framework-backed runtime for the turn, and never binds the model at
+DI-registration time. If a company later needs a different provider for data
+residency or procurement reasons, only the adapter changes — consumer code
+stays put.
 
 ### Agent loop (multi-step turn handling)
 
@@ -957,11 +939,12 @@ The Worker orchestrates this loop inside `ProcessIncomingMessageJob`:
 
 ```text
 loop iteration:
-  1. Build prompt (system + tenant context + last 8 turns + tool catalog).
-  2. Call model.
+  1. Build prompt (system + company context + last 8 turns + tool catalog).
+  2. Run the Agent Framework agent.
   3. Parse AgentTurnResult.
   4. If toolCallRequest != null:
-        - Execute via ToolExecutionGateway.
+        - Validate against the enabled company tool catalog.
+        - Execute through the matching application tool handler/workflow.
         - Append tool_call and tool_result turns.
         - Increment iteration counter.
         - If iteration counter >= MAX_AGENT_LOOP (default 5), trigger
@@ -977,12 +960,12 @@ loop iteration:
         - Exit loop.
 ```
 
-`MAX_AGENT_LOOP` is configurable per tenant in `agent_profile`
+`MAX_AGENT_LOOP` is configurable per company in `agent_profile`
 (`max_loop_iterations`), default `5`.
 
 This loop is **inside** the `ProcessIncomingMessageJob` handler (single
-queue message → single agent loop). Tool execution uses `ToolExecutionGateway`
-synchronously within the loop. `ExecuteToolCallJob` and
+queue message → single agent loop). Tool execution stays inside validated
+application-owned handlers/workflows. `ExecuteToolCallJob` and
 `SynthesizeAudioJob` exist as separate pipelines for **out-of-band**
 operations (e.g., long-running tools or post-message audio generation), not
 for splitting one inbound user message into multiple queue messages.
@@ -994,8 +977,8 @@ for splitting one inbound user message into multiple queue messages.
 `PromptBuilder` composes the final context from three layers:
 
 1. **Platform system prompt** — safety rules, output schema instructions,
-   tool-catalog contract, format reminders. Not editable by tenants.
-2. **Tenant context** — brand voice, language, tone, agent name, timezone,
+   tool-catalog contract, format reminders. Not editable by companies.
+2. **Company context** — brand voice, language, tone, agent name, timezone,
    current local date/time, branch info if any, working hours.
 3. **Last 8 raw turns** — chronological, role-tagged.
 
@@ -1003,9 +986,9 @@ for splitting one inbound user message into multiple queue messages.
 context. Adding a fourth layer (long-term memory, summary, etc.) is a
 deliberate post-MVP decision.
 
-Tenant prompts must not override platform safety, tenant isolation, tool
+Company prompts must not override platform safety, company isolation, tool
 execution, or privacy rules. The platform system prompt explicitly reasserts
-these constraints regardless of tenant configuration.
+these constraints regardless of company configuration.
 
 ---
 
@@ -1015,10 +998,10 @@ The backend never trusts model output directly.
 
 ### Layer 1 — Provider-side enforcement
 
-Use **OpenAI Structured Outputs**
-(`response_format: { type: "json_schema", strict: true }`) configured
-through Semantic Kernel's `OpenAIPromptExecutionSettings.ResponseFormat`.
-This guarantees the model cannot return malformed JSON.
+Use Microsoft Agent Framework structured-output support and provider-side
+schema enforcement where available. For OpenAI-compatible providers, strict
+JSON schema response formatting must be configured through the Agent
+Framework provider, not direct OpenAI client calls.
 
 ### Layer 2 — Source-generated deserialization
 
@@ -1039,11 +1022,11 @@ No reflection at runtime. AOT-friendly.
 
 A handful of inline checks on the deserialized record:
 
-- `partySize` between 1 and the tenant's configured maximum.
-- `date >= today` in tenant timezone.
+- `partySize` between 1 and the company's configured maximum.
+- `date >= today` in company timezone.
 - `time` parseable as `HH:mm`.
-- `toolKey` exists in the tenant's enabled tool set
-  (`ITenantToolRegistry`).
+- `toolKey` exists in the company's enabled tool set
+  (`ICompanyToolRegistry`).
 
 If any check fails, retry the model call **once**. If it fails again,
 trigger a human handoff (`severity = "warning"`,
@@ -1089,17 +1072,17 @@ Structured Outputs handles strings cleanly). The application converts to
 
 ---
 
-## Tools and ToolExecutionGateway
+## Tools and Tool Handling
 
 ### Dynamic tool registry — the extensibility backbone
 
 The MVP ships with **four native** tools (see _Canonical MVP Tools_), but
 the contract is designed from day one to support **dynamic tools registered
-per tenant**, including future kinds such as:
+per company**, including future kinds such as:
 
-- REST API calls into a tenant's own backend.
+- REST API calls into a company's own backend.
 - Excel sheet lookups (read-only initially).
-- SQL queries against a tenant's database.
+- SQL queries against a company's database.
 - POS / CRM integrations.
 
 The contract is the same for all of them.
@@ -1119,11 +1102,11 @@ public interface IToolHandler
 }
 
 public sealed record ToolExecutionContext(
-    Guid TenantId,
+    Guid CompanyId,
     Guid ConversationId,
     Guid CustomerId,
     Guid ExecutionId,
-    DateTimeOffset NowInTenantTz);
+    DateTimeOffset NowInCompanyTz);
 
 public abstract record ToolResult
 {
@@ -1134,10 +1117,10 @@ public abstract record ToolResult
 ```
 
 ```csharp
-public interface ITenantToolRegistry
+public interface ICompanyToolRegistry
 {
     Task<IReadOnlyList<ToolDescriptor>> GetEnabledToolsAsync(
-        Guid tenantId, CancellationToken ct);
+        Guid companyId, CancellationToken ct);
 }
 
 public sealed record ToolDescriptor(
@@ -1150,7 +1133,7 @@ public sealed record ToolDescriptor(
 public interface IToolHandlerFactory
 {
     Task<IToolHandler?> ResolveAsync(
-        Guid tenantId, string toolKey, CancellationToken ct);
+        Guid companyId, string toolKey, CancellationToken ct);
 }
 ```
 
@@ -1163,61 +1146,20 @@ services.AddKeyedSingleton<IToolHandler, CheckAvailabilityToolHandler>("check_av
 services.AddKeyedSingleton<IToolHandler, RequestHumanHandoffToolHandler>("request_human_handoff");
 ```
 
-`tenant_tool` rows control which tools are exposed to the model for each
-tenant. `IToolHandlerFactory` resolves a handler by checking that
-`(tenant_id, tool_key)` is enabled and then pulling the keyed singleton.
+`company_tool` rows control which tools are exposed to the model for each
+company. `IToolHandlerFactory` resolves a handler by checking that
+`(company_id, tool_key)` is enabled and then pulling the keyed singleton.
 
 ### How dynamic tools will register (post-MVP)
 
-A `tenant_tool` row carries a `kind` column (`native | rest_api | excel | sql`)
+A `company_tool` row carries a `kind` column (`native | rest_api | excel | sql`)
 and a `config` jsonb. For non-native kinds, `IToolHandlerFactory` instantiates
 a generic handler (e.g., `RestApiToolHandler`) parameterized by the config:
 endpoint URL, auth reference, request schema, response shape. The
-gateway, the agent loop, the prompt builder, and the canonical schemas do
+tool handlers, the agent loop, the prompt builder, and the canonical schemas do
 **not** change to accommodate new tool kinds.
 
 This is the deliberate extensibility point.
-
-### `ToolExecutionGateway`
-
-`ToolExecutionGateway` is a thin component that:
-
-- Validates that the tool is enabled for the tenant (via `ITenantToolRegistry`).
-- Validates that the conversation belongs to the tenant.
-- Resolves the right `IToolHandler` (via `IToolHandlerFactory`).
-- Logs the request and result to `tool_execution`.
-- Returns a typed result.
-
-```csharp
-public sealed class ToolExecutionGateway(
-    CEOAgentDbContext db,
-    IToolHandlerFactory factory,
-    ITenantContext tenant,
-    TimeProvider clock,
-    ILogger<ToolExecutionGateway> logger)
-{
-    public async Task<ToolResult> ExecuteAsync(
-        Guid conversationId,
-        ToolCallRequest req,
-        CancellationToken ct)
-    {
-        var handler = await factory.ResolveAsync(tenant.TenantId, req.ToolKey, ct);
-        if (handler is null)
-            return new ToolResult.Denied("tool_not_enabled", "Tool not enabled for tenant");
-
-        var execId = Guid.CreateVersion7();
-        await LogIntentAsync(execId, conversationId, req, ct);
-
-        var ctx = new ToolExecutionContext(
-            tenant.TenantId, conversationId, /*customerId*/ default, execId,
-            clock.GetUtcNow().ToOffset(/* tenant tz */ TimeSpan.Zero));
-
-        var result = await handler.ExecuteAsync(ctx, req.Parameters, ct);
-        await LogOutcomeAsync(execId, result, ct);
-        return result;
-    }
-}
-```
 
 A model requesting a tool call is **not** authorization to execute it. Each
 handler enforces its own business rules (capacity, working hours,
@@ -1257,7 +1199,6 @@ This is how a tool reuses the slice handler's logic without duplication.
 
 Four tools are mandatory for MVP. Their schemas are normative.
 
-
 ```csharp
     Datetime Date,
     int PartySize,
@@ -1273,8 +1214,8 @@ Four tools are mandatory for MVP. Their schemas are normative.
 Validation:
 
 - `ConfirmedByCustomer == true` is required to execute.
-- `(Date, Time)` not in the past, within tenant working hours.
-- `PartySize` between 1 and tenant capacity max.
+- `(Date, Time)` not in the past, within company working hours.
+- `PartySize` between 1 and company capacity max.
 
 ### `check_availability`
 
@@ -1290,7 +1231,6 @@ public sealed record CheckAvailabilityOutput(
 ```
 
 Read-only. Idempotent by definition.
-
 
 ```csharp
     bool ConfirmedByCustomer,
@@ -1427,7 +1367,7 @@ One implementation per port for MVP:
 
 Inject directly. **No keyed DI for ports yet.** When a second provider
 arrives for the same capability (e.g., Outlook Calendar), introduce keyed
-DI and a tenant-driven selector.
+DI and a company-driven selector.
 
 Rules:
 
@@ -1454,7 +1394,7 @@ never receives raw audio.
 Rules:
 
 - Store the audio file in Azure Blob Storage with a key like
-  `tenants/{tenantId}/inbound/{conversationId}/{messageId}.ogg`.
+  `companies/{companyId}/inbound/{conversationId}/{messageId}.ogg`.
 - Store the transcription text on the `message` row and the blob URL on
   `audio_asset`.
 - Do not convert OGG/Opus to WAV unless the selected provider requires it
@@ -1474,7 +1414,7 @@ Transcription runs in the Worker, never inside the webhook handler.
 ### Outbound (TTS)
 
 When the active conversation is voice-based (the inbound message was a voice
-note) or the tenant's `agent_profile.voice_reply_enabled = true`, the
+note) or the company's `agent_profile.voice_reply_enabled = true`, the
 assistant message is sent both as **text** and as **audio**.
 
 Pipeline:
@@ -1493,8 +1433,8 @@ TTS failure does **not** block the text send. If TTS fails, the text reply
 still goes out and a warning is logged. The customer is not handed off
 purely for a TTS failure (the text message is sufficient).
 
-The configured TTS voice profile per tenant lives in
-`agent_profile.tts_voice_profile`. Tenants may have voice replies disabled
+The configured TTS voice profile per company lives in
+`agent_profile.tts_voice_profile`. Companys may have voice replies disabled
 entirely.
 
 ---
@@ -1507,7 +1447,7 @@ Webhook path:
 
 ```text
 1. Verify signature.
-2. Resolve tenant.
+2. Resolve company.
 3. Identify customer.
 4. Persist inbound message idempotently.
 5. Enqueue ProcessIncomingMessageJob to Azure Storage Queue.
@@ -1578,11 +1518,11 @@ Beyond that, migrate to Azure Service Bus Sessions with
 
 For MVP, idempotency is enforced at three specific places:
 
-| Origin                       | Key                                                                                               | Storage                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| WhatsApp inbound webhook     | `provider_message_id`                                                                             | Unique constraint on `(tenant_id, provider_message_id)` where not null        |
-| Tool call to Google Calendar | `request_id` derived from `(tenant_id, conversation_id, tool_key, params_canonical_json)` SHA-256 | Passed to Google Calendar's idempotency parameter; logged in `tool_execution` |
-| Outbound message send        | `client_message_id` derived from `(tenant_id, conversation_id, message_id)`                       | Passed to WhatsApp Cloud's `biz_opaque_callback_data` and stored in `message` |
+| Origin                       | Key                                                                                                | Storage                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| WhatsApp inbound webhook     | `provider_message_id`                                                                              | Unique constraint on `(company_id, provider_message_id)` where not null       |
+| Tool call to Google Calendar | `request_id` derived from `(company_id, conversation_id, tool_key, params_canonical_json)` SHA-256 | Passed to Google Calendar's idempotency parameter; logged in `tool_execution` |
+| Outbound message send        | `client_message_id` derived from `(company_id, conversation_id, message_id)`                       | Passed to WhatsApp Cloud's `biz_opaque_callback_data` and stored in `message` |
 
 Before any side effect, the handler checks the appropriate key. If the
 operation already completed, it returns the persisted result.
@@ -1595,7 +1535,6 @@ operations) are deferred until needed.
 ## Naming Conventions
 
 ### Mediator commands and queries
-
 
 ### Job messages
 
@@ -1610,10 +1549,8 @@ operations) are deferred until needed.
   folder, only when a command/query is justified by reuse, Worker execution,
   cross-module dispatch, or meaningful complexity.
 - FastEndpoints endpoints live in `Endpoints/` inside their slice folder.
-- API request DTO classes live in `Models/Request/` inside their slice
-  folder.
-- API response DTO classes live in `Models/Response/` inside their slice
-  folder.
+- API request DTO classes live in `CEOAgent.Shared/Request/<Domain>/`.
+- API response DTO classes live in `CEOAgent.Shared/Response/<Domain>/`.
 - Each API DTO class gets its own file named after the class.
 - Jobs live in `Worker/Pipelines/<Pipeline>/<JobName>.cs`.
 - Tool handlers live in `Tools/<Area>/<ToolKey>ToolHandler.cs`.
@@ -1632,7 +1569,7 @@ Keep touched areas short but explicit. Use `[#0]` when no GitHub issue exists.
 Example:
 
 ```text
-ApiService/AppHost/Infrastructure/Worker/tests/docs: [#0] Add MVP persistence, admin auth, tenant isolation, Aspire setup, and agent rules
+ApiService/AppHost/Infrastructure/Worker/tests/docs: [#0] Add MVP persistence, admin auth, company isolation, Aspire setup, and agent rules
 ```
 
 Rules:
@@ -1652,7 +1589,10 @@ Use PostgreSQL with EF Core directly.
 - No generic repository.
 - No custom Unit of Work — `SaveChangesAsync` is the commit.
 - Use EF Core directly inside Mediator handlers.
-- Use `AsNoTracking()` for read-only queries.
+- Queries are no-tracking by default. Use the centralized query helper
+  (`WithDefaultTracking()` in the current codebase) for query roots; pass the
+  explicit tracking flag only when the query returns entities that will be
+  updated in the same `DbContext`.
 - Project directly to DTOs with `.Select(...)`.
 - Avoid `.Include()` as a default; use it only when the full graph is
   needed.
@@ -1668,7 +1608,7 @@ rules in methods on the entity when it improves readability:
 ```csharp
 {
     public Guid Id { get; set; }
-    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
     public DateOnly Date { get; set; }
     public TimeOnly Time { get; set; }
     public int PartySize { get; set; }
@@ -1698,7 +1638,7 @@ rules in methods on the entity when it improves readability:
   chooses when to run `dotnet ef database update` locally, in staging, or in
   production.
 - Each migration is named `{yyyyMMddHHmmss}_{Description}` (the default
-  EF Core format). Example: `20260508153012_AddTenantChannel`.
+  EF Core format). Example: `20260508153012_AddCompanyChannel`.
 - Migrations must be **forward-only**. Down migrations exist for local
   rollback only — never relied on in production.
 
@@ -1708,7 +1648,7 @@ rules in methods on the entity when it improves readability:
 
 - All identifiers are `Guid` generated as **GUID v7** via
   `Guid.CreateVersion7()`.
-  `tenant_channel`).
+  `company_channel`).
 - Use **`snake_case`** for columns.
 - Entity Framework property names use **PascalCase** in C#. Map to snake_case
   via `EFCore.NamingConventions`:
@@ -1717,7 +1657,7 @@ rules in methods on the entity when it improves readability:
   options.UseSnakeCaseNamingConvention();
   ```
 
-- Every tenant-owned table includes `tenant_id`, `created_at`, `updated_at`.
+- Every company-owned table includes `company_id`, `created_at`, `updated_at`.
 - All timestamps are `timestamptz` and represented as `DateTime` (UTC) in
   C#.
 - Never use `DateTime.Now`. Use `TimeProvider`.
@@ -1726,6 +1666,8 @@ rules in methods on the entity when it improves readability:
 - Use `jsonb` only for genuinely flexible payloads (tool parameters,
   conversation state, channel metadata). Stable queryable fields are real
   columns.
+- JSONB payload classes owned by entities live in
+  `Infrastructure/Persistence/Entities/JsonDocuments/`.
 - Use `IEntityTypeConfiguration<T>` classes in
   `Infrastructure/Persistence/Configurations/`. The `CEOAgentDbContext` only
   declares `DbSet<T>` properties and applies all configurations via
@@ -1733,11 +1675,11 @@ rules in methods on the entity when it improves readability:
 
 ### Mandatory minimum indexes
 
-Every tenant-owned table has at minimum:
+Every company-owned table has at minimum:
 
-- `(tenant_id, created_at DESC)` — for tenant-scoped recent-first listings.
-- `(tenant_id, <natural_lookup_field>)` — when lookups by a business key
-  exist (e.g., `(tenant_id, provider_message_id)` on `message`).
+- `(company_id, created_at DESC)` — for company-scoped recent-first listings.
+- `(company_id, <natural_lookup_field>)` — when lookups by a business key
+  exist (e.g., `(company_id, provider_message_id)` on `message`).
 
 Add more indexes only based on observed query patterns.
 
@@ -1756,13 +1698,12 @@ Add more indexes only based on observed query patterns.
 public sealed class Conversation
 {
     public Guid Id { get; set; }
-    public Guid TenantId { get; set; }
+    public Guid CompanyId { get; set; }
     public ICollection<Message> Messages { get; set; } = new List<Message>();
 }
 ```
 
 ---
-
 
 methods where rules apply. Rules to enforce in handlers and entity methods:
 
@@ -1770,7 +1711,7 @@ methods where rules apply. Rules to enforce in handlers and entity methods:
   customerName, `ConfirmedByCustomer == true`).
 - Cannot double-book the same `external_calendar_event_id` (unique
   constraint in DB).
-- Party size respects tenant capacity.
+- Party size respects company capacity.
 
 aggregate.
 
@@ -1810,9 +1751,9 @@ Rules:
   controlled debugging.
 - Verify all public webhook signatures before processing.
 - Apply idempotency and replay protection to webhooks.
-- Tenant data must remain isolated via global query filters.
+- Company data must remain isolated via global query filters.
 - Deployed/shared secrets live in Azure Key Vault. Local development uses
-  Aspire parameters, user-secrets, or environment variables. Tenant
+  Aspire parameters, user-secrets, or environment variables. Company
   integration tables store only references to secrets, never raw secrets.
 
 ---
@@ -1824,7 +1765,7 @@ queues, and external integrations through a shared `traceparent`.
 
 ### Required log fields when relevant
 
-- `tenant_id`
+- `company_id`
 - `conversation_id`
 - `customer_id`
 - `correlation_id`
@@ -1836,10 +1777,10 @@ queues, and external integrations through a shared `traceparent`.
 
 ### Metrics worth tracking from day one
 
-- inbound messages per tenant
-- outbound messages per tenant (text, audio)
-- model invocation tokens per tenant
-- tool calls by `(tenant, tool_key, outcome)`
+- inbound messages per company
+- outbound messages per company (text, audio)
+- model invocation tokens per company
+- tool calls by `(company, tool_key, outcome)`
 - handoff rate (with reason breakdown)
 - queue lag (oldest pending message age)
 - dead-letter counts
@@ -1862,9 +1803,9 @@ libraries. Source-generated, zero-allocation, AOT-friendly.
     job dispatch)
   - `Warning` — recoverable issues, retries, validation failures
   - `Error` — unhandled exceptions, dead-letter, infrastructure failure
-  - `Critical` — startup failure, data corruption, tenant isolation breach
+  - `Critical` — startup failure, data corruption, company isolation breach
 - Every log emitted within a request includes the ambient `correlation_id`,
-  `tenant_id`, and `trace_id` via a logging scope.
+  `company_id`, and `trace_id` via a logging scope.
 
 ---
 
@@ -1957,7 +1898,7 @@ Avoid:
 - premature optimization
 - treating Native AOT as dogma
 - sending full conversation history to the model
-- tenant-owned queries without tenant isolation
+- company-owned queries without company isolation
 
 ---
 
@@ -1973,15 +1914,15 @@ Use:
 - **Testcontainers**
 
 Do not use live LLM calls in CI. Use deterministic recorded responses or a
-stubbed `IChatCompletionFactory`.
+stubbed Microsoft Agent Framework-backed AI runtime abstraction.
 
 ### Required tests
 
-- `ToolExecutionGateway` denial reasons (tool not enabled, unknown tool,
-  cross-tenant conversation).
-- `ITenantToolRegistry` enables only tenant's own tools.
+- Tool handler denial reasons (tool not enabled, unknown tool,
+  cross-company conversation).
+- `ICompanyToolRegistry` enables only company's own tools.
 - `PromptBuilder` snapshot tests (Verify).
-- Tenant isolation tests (cross-tenant access returns 404).
+- Company isolation tests (cross-company access returns 404).
 - Webhook signature verification (valid + invalid).
 - Webhook idempotency (duplicate `provider_message_id`).
 - Adapter contract tests (Refit clients against Testcontainers / WireMock).
@@ -2001,15 +1942,21 @@ Tests mirror the slice/module structure:
 tests/
   Api.Tests/
     Modules/
-      Tenancy/Features/CreateTenant/CreateTenantTests.cs
+      Companies/Features/CreateCompany/CreateCompanyTests.cs
   Worker.Tests/
     Pipelines/
       ProcessIncomingMessage/ProcessIncomingMessageTests.cs
   Application.Tests/
     Agents/PromptBuilderTests.cs
-    Tools/ToolExecutionGatewayTests.cs
   Integration.Tests/         // Aspire + Testcontainers
+    Infrastructure/CEOAgentDbContextTestFactory.cs
+    Infrastructure/PostgresTestDatabase.cs
+    Seed/CompanySeed.cs
 ```
+
+Database tests use PostgreSQL Testcontainers by default. Do not add SQLite
+test databases. Centralize DbContext creation under `tests/*/Infrastructure`
+and reusable seed data under `tests/*/Seed`.
 
 ---
 
@@ -2019,9 +1966,8 @@ When proposing or modifying code:
 
 1. Respect the slice layout: place files under
    `Modules/<Module>/Features/<UseCase>/Endpoints`,
-   `Modules/<Module>/Features/<UseCase>/Commands`, and
-   `Modules/<Module>/Features/<UseCase>/Models/Request` or
-   `Modules/<Module>/Features/<UseCase>/Models/Response` as appropriate.
+   `Modules/<Module>/Features/<UseCase>/Commands`, and shared DTO folders in
+   `CEOAgent.Shared/Request/<Domain>` or `CEOAgent.Shared/Response/<Domain>`.
 2. Use **Mediator** (martinothamar) for command/query dispatch in Worker,
    cross-module workflows, reusable workflows, and non-trivial API use cases.
    Never mix MediatR. Do not create commands for simple one-off endpoint
@@ -2033,38 +1979,51 @@ When proposing or modifying code:
    classes, endpoints, middleware, handlers, exceptions, and simple DTO
    initialization.
 6. Declare API DTOs as `class` types, not records or sealed records.
-7. Put every API request DTO in its own file under `Models/Request/`, and
-   every API response DTO in its own file under `Models/Response/`.
-8. Use **Mapperly** only when shapes diverge; otherwise instantiate
+7. Put every API request/response DTO in `CEOAgent.Shared`, one class per
+   file, following `Request/Company/CompanyToolRequest.cs` and
+   `Response/Company/CompanyResponse.cs` style paths.
+8. Keep entity JSONB document classes in
+   `CEOAgent.Infrastructure/Persistence/Entities/JsonDocuments/`; Shared DTOs
+   should not reference Infrastructure entity document types.
+9. Use **Mapperly** only when shapes diverge; otherwise instantiate
    commands directly when a command exists.
-9. Use EF Core directly. Use `AsNoTracking()` and DTO projection for reads.
+10. Use EF Core directly. Use the centralized no-tracking query helper by
+   default and DTO projection for reads; opt into tracking with the helper's
+   explicit flag only for update queries.
 10. Consider `ExecuteUpdateAsync()` / `ExecuteDeleteAsync()` for simple
-   writes.
+    writes.
 11. Prefer keyset pagination.
 12. Use `ProblemDetails` from a single global `IExceptionHandler`. Throw
-   exceptions for unexpected errors.
+    exceptions for unexpected errors.
 13. Health check at `/health` (not under `/v1/`).
 14. Keep `Program.cs` minimal. Use `<Module>ServiceRegistrations`.
-15. Enforce tenant isolation through global query filters.
+15. Enforce company isolation through global query filters.
 16. Use Ports and Adapters for external systems with the four MVP ports
     (`IMessageChannelIntegration`, `ICalendarIntegration`,
     `ITranscriptionIntegration`, `ISpeechSynthesisIntegration`) plus the
-    internal `IChatCompletionFactory`.
-17. Route every model-requested side effect through `ToolExecutionGateway`.
-18. Implement new tools as `IToolHandler` and register them per tenant via
-    `tenant_tool` rows. Do **not** add new code paths to the agent loop or
-    the gateway for new tool kinds.
+    internal Microsoft Agent Framework-backed AI runtime abstraction.
+17. Use Microsoft Agent Framework for all AI, LLM, agent, tool-calling, and
+    model-provider code. Do not call OpenAI clients directly outside an Agent
+    Framework adapter.
+18. Implement new tools as `IToolHandler` and register them per company via
+    `company_tool` rows. Do **not** add new code paths to the agent loop or
+    the tool-handler routing for new tool kinds.
 19. Native tools that mutate state should reuse the same business workflow as
     the API. Dispatch a Mediator command when that command exists; otherwise
     extract shared non-trivial logic to `Application/` instead of duplicating
     it.
 20. Keep webhook handlers fast (under ~500ms). Long work belongs in the
     Worker.
-21. Send the model only the system prompt, tenant context, and last 8
+21. Send the model only the system prompt, company context, and last 8
     turns (per _Definition of "turn"_).
-22. Validate model output with Structured Outputs + source-gen STJ + a
+22. Validate model output with Agent Framework/provider structured output +
+    source-gen STJ + a
     small set of inline checks.
 23. Never hardcode model names. Resolve from `agent_profile`.
+24. Do not add SQLite-based tests. Use centralized test DbContext factories
+    and Seed helpers.
+25. Avoid MA0007 diagnostics by including trailing commas in multi-line
+    initializer and collection expressions when the analyzer expects them.
 24. Pause autonomous replies during human handoff.
 25. Trigger handoff after **two consecutive failures of the same operation
     type** within the active turn (per _Failure Counting Rules_) or after
@@ -2076,11 +2035,11 @@ When proposing or modifying code:
 29. Database: **singular** `snake_case`. C# entity properties: PascalCase
     mapped via `EFCore.NamingConventions`.
 30. Enable nullable reference types and treat warnings as errors.
-28. All API routes go under `/v1/`, except `/health`.
-29. When the bot sends voice replies, do not block text replies on TTS
+31. All API routes go under `/v1/`, except `/health`.
+32. When the bot sends voice replies, do not block text replies on TTS
     failure.
-30. When adding a new channel, add a new `IMessageChannelIntegration`
-    implementation and a new `tenant_channel.provider` value. Do not
+33. When adding a new channel, add a new `IMessageChannelIntegration`
+    implementation and a new `company_channel.provider` value. Do not
     hardcode WhatsApp specifics outside the WhatsApp adapter.
 
 ---
@@ -2096,7 +2055,7 @@ This MVP backend must be:
 - multi-tenant by design
 - safe for AI-driven side effects
 - extensible through ports and adapters **and** through dynamic tool
-  registration per tenant
+  registration per company
 - consistent across PostgreSQL, queues, workers, and external systems
 
 This MVP backend must not become:
@@ -2106,12 +2065,12 @@ This MVP backend must not become:
 - obsessed with Native AOT
 - dependent on provider-managed AI memory
 - careless with model tool calls
-- careless with tenant isolation
+- careless with company isolation
 - expensive due to unnecessary model usage
 
 The real priorities for MVP:
 
-- strict tenant isolation
+- strict company isolation
 - predictable AI behavior
 - controlled tool execution through a single chokepoint
 - reliable background processing
@@ -2124,9 +2083,9 @@ The two extensibility seams that matter most:
 
 - **`IMessageChannelIntegration`** — new channels (Telegram, web, SMS) are
   new adapter implementations behind the same port.
-- **`IToolHandler` + `ITenantToolRegistry` + `IToolHandlerFactory`** — new
+- **`IToolHandler` + `ICompanyToolRegistry` + `IToolHandlerFactory`** — new
   business capabilities (REST APIs, Excel, SQL, POS) are new tool handler
-  kinds, registered per tenant, **without** modifying the agent loop, the
+  kinds, registered per company, **without** modifying the agent loop, the
   gateway, the prompt builder, or the canonical schemas.
 
 Patterns deliberately deferred to post-MVP (DDD aggregates, Outbox, customer
