@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -21,11 +21,11 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    working_hours_json = table.Column<string>(type: "jsonb", nullable: true),
                     time_zone_id = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
                     status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    working_hours_json = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -67,10 +67,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     provider = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
                     purpose = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
                     reference = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    metadata_json = table.Column<string>(type: "jsonb", nullable: true),
                     company_id = table.Column<Guid>(type: "uuid", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    metadata_json = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -126,10 +126,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     tool_key = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
                     is_enabled = table.Column<bool>(type: "boolean", nullable: false),
                     credential_reference_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    configuration_json = table.Column<string>(type: "jsonb", nullable: true),
                     company_id = table.Column<Guid>(type: "uuid", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    configuration_json = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -223,10 +223,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     conversation_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    state_json = table.Column<string>(type: "jsonb", nullable: false),
                     company_id = table.Column<Guid>(type: "uuid", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    state_json = table.Column<string>(type: "jsonb", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -248,13 +248,14 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     conversation_id = table.Column<Guid>(type: "uuid", nullable: false),
                     role = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    text = table.Column<string>(type: "text", nullable: true),
+                    type = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    message_text = table.Column<string>(type: "text", nullable: true),
                     provider_message_id = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    payload_json = table.Column<string>(type: "jsonb", nullable: true),
                     occurred_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     company_id = table.Column<Guid>(type: "uuid", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    payload_json = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -264,34 +265,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         column: x => x.conversation_id,
                         principalSchema: "public",
                         principalTable: "conversation",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "audio_asset",
-                schema: "public",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    message_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    direction = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    blob_uri = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
-                    content_type = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
-                    size_bytes = table.Column<long>(type: "bigint", nullable: false),
-                    transcript = table.Column<string>(type: "text", nullable: true),
-                    company_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_audio_asset", x => x.id);
-                    table.ForeignKey(
-                        name: "fk_audio_asset_messages_message_id",
-                        column: x => x.message_id,
-                        principalSchema: "public",
-                        principalTable: "message",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -309,12 +282,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     tool_key = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
                     idempotency_key = table.Column<string>(type: "character varying(240)", maxLength: 240, nullable: false),
                     status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    request_json = table.Column<string>(type: "jsonb", nullable: true),
-                    result_json = table.Column<string>(type: "jsonb", nullable: true),
                     failure_reason = table.Column<string>(type: "character varying(240)", maxLength: 240, nullable: true),
                     company_id = table.Column<Guid>(type: "uuid", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    request_json = table.Column<string>(type: "jsonb", nullable: true),
+                    result_json = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -355,12 +328,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                 table: "agent_profile",
                 column: "company_id",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_audio_asset_message_id",
-                schema: "public",
-                table: "audio_asset",
-                column: "message_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_company_channel_company_id",
@@ -496,10 +463,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "audio_asset",
-                schema: "public");
-
             migrationBuilder.DropTable(
                 name: "conversation_state",
                 schema: "public");

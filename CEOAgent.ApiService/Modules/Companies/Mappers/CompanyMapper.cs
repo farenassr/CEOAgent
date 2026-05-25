@@ -13,6 +13,8 @@ namespace CeoAgent.ApiService.Modules.Companies.Mappers;
 [Mapper(AutoUserMappings = false, RequiredMappingStrategy = RequiredMappingStrategy.Target)]
 public static partial class CompanyMapper
 {
+    private static readonly JsonSerializerOptions SerializerOptions = CreateOptions();
+
     public static Company ToEntity(CreateCompanyRequest request)
     {
         return new Company
@@ -130,6 +132,13 @@ public static partial class CompanyMapper
             return null;
         }
 
-        return JsonSerializer.SerializeToElement(document, document.GetType());
+        return JsonSerializer.SerializeToElement(document, document.GetType(), SerializerOptions);
+    }
+
+    private static JsonSerializerOptions CreateOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.MakeReadOnly(populateMissingResolver: true);
+        return options;
     }
 }

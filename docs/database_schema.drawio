@@ -1,6 +1,6 @@
 <mxfile host="Electron">
   <diagram id="database_schema" name="Database Schema">
-    <mxGraphModel dx="2385" dy="849" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1500" background="#f8fafc" math="0" shadow="0">
+    <mxGraphModel dx="2896" dy="1031" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3000" pageHeight="1500" background="#f8fafc" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -40,7 +40,7 @@
         <mxCell id="IntegrationCredentialReference" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="IntegrationCredentialReference" vertex="1">
           <mxGeometry height="250" width="310" x="1620" y="350" as="geometry" />
         </mxCell>
-        <mxCell id="IntegrationCredentialReference_Props" parent="IntegrationCredentialReference" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&#xa;CompanyId : Guid [FK]&#xa;Provider : string&#xa;Purpose : string&#xa;Reference : string&#xa;Metadata : CredentialMetadata (JSONB)&#xa;CreatedAt : DateTime&#xa;UpdatedAt : DateTime" vertex="1">
+        <mxCell id="IntegrationCredentialReference_Props" parent="IntegrationCredentialReference" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&#xa;CompanyId : Guid [FK]&#xa;Provider : IntegrationProvider&#xa;Purpose : string&#xa;Reference : string&#xa;Metadata : CredentialMetadata (JSONB)&#xa;CreatedAt : DateTime&#xa;UpdatedAt : DateTime" vertex="1">
           <mxGeometry height="210" width="310" y="38" as="geometry" />
         </mxCell>
         <mxCell id="Customer" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="Customer" vertex="1">
@@ -58,20 +58,14 @@
         <mxCell id="ConversationState" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fecaca;strokeColor=#dc2626;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="ConversationState" vertex="1">
           <mxGeometry height="210" width="320" x="1500" y="750" as="geometry" />
         </mxCell>
-        <mxCell id="ConversationState_Props" parent="ConversationState" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;ConversationId : Guid [FK]&lt;br&gt;Snapshot : ConversationStateSnapshot&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
+        <mxCell id="ConversationState_Props" parent="ConversationState" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;ConversationId : Guid [FK]&lt;br&gt;Snapshot : ConversationStateSnapshot (JSONB)&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
           <mxGeometry height="170" width="280" y="38" as="geometry" />
         </mxCell>
-        <mxCell id="AudioAsset" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fbcfe8;strokeColor=#db2777;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="AudioAsset" vertex="1">
-          <mxGeometry height="300" width="300" x="300" y="1140" as="geometry" />
-        </mxCell>
-        <mxCell id="AudioAsset_Props" parent="AudioAsset" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;MessageId : Guid [FK]&lt;br&gt;Direction : AudioAssetDirection (JSONB)&lt;br&gt;BlobUri : string&lt;br&gt;ContentType : string&lt;br&gt;SizeBytes : long&lt;br&gt;Transcript : string&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
-          <mxGeometry height="260" width="300" y="38" as="geometry" />
-        </mxCell>
         <mxCell id="Message" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fed7aa;strokeColor=#ea580c;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="Message" vertex="1">
-          <mxGeometry height="300" width="300" x="800" y="1140" as="geometry" />
+          <mxGeometry height="320" width="320" x="620" y="1140" as="geometry" />
         </mxCell>
-        <mxCell id="Message_Props" parent="Message" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;ConversationId : Guid [FK]&lt;br&gt;Role : MessageRole (JSONB)&lt;br&gt;Text : string&lt;br&gt;ProviderMessageId : string&lt;br&gt;Payload : MessagePayload (JSONB)&lt;br&gt;OccurredAt : DateTime&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
-          <mxGeometry height="260" width="300" y="38" as="geometry" />
+        <mxCell id="Message_Props" parent="Message" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&lt;br&gt;CompanyId : Guid [FK]&lt;br&gt;ConversationId : Guid [FK]&lt;br&gt;Role : MessageRole&lt;br&gt;Type : MessageType&lt;br&gt;MessageText : string&lt;br&gt;ProviderMessageId : string&lt;br&gt;Payload : MessagePayload (JSONB)&lt;br&gt;OccurredAt : DateTime&lt;br&gt;CreatedAt : DateTime&lt;br&gt;UpdatedAt : DateTime" vertex="1">
+          <mxGeometry height="280" width="320" y="38" as="geometry" />
         </mxCell>
         <mxCell id="ToolExecution" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fde68a;strokeColor=#ca8a04;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="ToolExecution" vertex="1">
           <mxGeometry height="300" width="330" x="1248" y="1140" as="geometry" />
@@ -140,9 +134,6 @@
               <mxPoint x="1413" y="1060" />
             </Array>
           </mxGeometry>
-        </mxCell>
-        <mxCell id="E12" edge="1" parent="1" source="Message" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=ERmany;startArrow=ERone;strokeColor=#db2777;strokeWidth=2;fontColor=#831843;labelBackgroundColor=#f8fafc;" target="AudioAsset" value="attached to">
-          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="E13" edge="1" parent="1" source="Message" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=ERmany;startArrow=ERone;strokeColor=#ca8a04;strokeWidth=2;fontColor=#713f12;labelBackgroundColor=#f8fafc;" target="ToolExecution" value="triggers/result">
           <mxGeometry relative="1" as="geometry" />

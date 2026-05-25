@@ -1,6 +1,7 @@
 using CeoAgent.ApiService.Modules.Companies.Mappers;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Shared.Enums;
 using Shouldly;
 
 namespace CeoAgent.ApiService.Tests;
@@ -89,13 +90,13 @@ public sealed class CompanyMapperTests
             ToolKey = "check_availability",
             IsEnabled = true,
             CredentialReferenceId = credentialReferenceId,
-            Configuration = new CheckAvailabilityConfig
+            Configuration = ToolConfiguration.ForCheckAvailability(new CheckAvailabilityConfig
             {
                 MinPartySize = 1,
                 MaxPartySize = 8,
                 SlotMinutes = 30,
                 AdvanceBookingDays = 14,
-            },
+            }),
         };
 
         var response = CompanyMapper.ToResponse(tool);
@@ -106,7 +107,8 @@ public sealed class CompanyMapperTests
         response.IsEnabled.ShouldBeTrue();
         response.CredentialReferenceId.ShouldBe(credentialReferenceId);
         response.Configuration.ShouldNotBeNull();
-        response.Configuration.Value.GetProperty("MaxPartySize").GetInt32().ShouldBe(8);
+        response.Configuration.Value.GetProperty("toolKey").GetString().ShouldBe("check_availability");
+        response.Configuration.Value.GetProperty("check_availability").GetProperty("maxPartySize").GetInt32().ShouldBe(8);
     }
 
     [Test]
@@ -116,14 +118,14 @@ public sealed class CompanyMapperTests
         {
             Id = Guid.CreateVersion7(),
             CompanyId = Guid.CreateVersion7(),
-            Provider = "google_calendar",
+            Provider = IntegrationProvider.GoogleCalendar,
             Purpose = "calendar",
             Reference = "kv://company/google-calendar",
-            Metadata = new GoogleCalendarCredentialMetadata
+            Metadata = CredentialMetadata.ForGoogleCalendar(new GoogleCalendarCredentialMetadata
             {
                 CalendarId = "primary",
                 Scope = "calendar.events",
-            },
+            }),
         };
 
         var response = CompanyMapper.ToResponse(credential);
@@ -134,6 +136,7 @@ public sealed class CompanyMapperTests
         response.Purpose.ShouldBe(credential.Purpose);
         response.Reference.ShouldBe(credential.Reference);
         response.Metadata.ShouldNotBeNull();
-        response.Metadata.Value.GetProperty("CalendarId").GetString().ShouldBe("primary");
+        response.Metadata.Value.GetProperty("provider").GetString().ShouldBe("google_calendar");
+        response.Metadata.Value.GetProperty("google_calendar").GetProperty("calendarId").GetString().ShouldBe("primary");
     }
 }

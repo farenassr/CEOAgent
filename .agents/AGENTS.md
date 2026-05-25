@@ -5,6 +5,9 @@
 > with intuition, this document wins. When in doubt, choose the simpler
 > option that is consistent with the rules.
 
+Ignore `docs/Ideas.txt`; it is local scratch material and should not be used
+as project context.
+
 ---
 
 ## Project Summary
@@ -1679,6 +1682,9 @@ rules in methods on the entity when it improves readability:
   columns.
 - JSONB payload classes owned by entities live in
   `Infrastructure/Persistence/Entities/JsonDocuments/`.
+- Every public property on EF Core entities and EF-mapped JSONB complex
+  types must have a concise XML documentation `/// <summary>` explaining
+  what the property represents in the data model.
 - Use `IEntityTypeConfiguration<T>` classes in
   `Infrastructure/Persistence/Configurations/`. The `CeoAgentDbContext` only
   declares `DbSet<T>` properties and applies all configurations via

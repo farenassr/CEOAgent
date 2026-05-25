@@ -1,6 +1,8 @@
+using CeoAgent.Infrastructure.Entities.Filters;
+
 namespace CeoAgent.Infrastructure.Entities;
 
-public abstract class CompanyOwnedEntity
+public abstract class CompanyOwnedEntity : ICompanyOwned
 {
     /// <summary>
     /// Company that owns this row. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30.

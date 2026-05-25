@@ -21,9 +21,14 @@ public sealed class Message : AuditableCompanyOwnedEntity
     public MessageRole Role { get; set; }
 
     /// <summary>
-    /// Text content or transcribed audio content. Example: I need a table for four tonight.
+    /// Message content type. Example: Text.
     /// </summary>
-    public string? Text { get; set; }
+    public MessageType Type { get; set; }
+
+    /// <summary>
+    /// Canonical textual message content, including normal text, STT transcript, or TTS source text. Example: I need a table for four tonight.
+    /// </summary>
+    public string? MessageText { get; set; }
 
     /// <summary>
     /// Provider-side message identifier used for idempotency. Example: wamid.HBgMNTczMDAxMTEyMjMz.

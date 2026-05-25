@@ -361,3 +361,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Local notes
+docs/Ideas.txt
+
+docs/CODE_REVIEW
+
+.$database_schema.drawio.bkp
