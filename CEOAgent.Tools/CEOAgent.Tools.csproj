@@ -4,4 +4,8 @@
     <ProjectReference Include="..\CeoAgent.Application\CeoAgent.Application.csproj" />
     <ProjectReference Include="..\CeoAgent.Integrations\CeoAgent.Integrations.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+  </ItemGroup>
 </Project>
