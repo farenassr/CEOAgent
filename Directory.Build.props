@@ -10,7 +10,7 @@
     <NoWarn>$(NoWarn);1591;EXTEXP0001</NoWarn>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <AnalysisMode>Recommended</AnalysisMode>
-    <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CEOAgent.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CeoAgent.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Meziantou.Analyzer" Version="3.0.93" PrivateAssets="all" />

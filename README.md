@@ -1,14 +1,14 @@
-# 🤖 CEOAgent
+# 🤖 CeoAgent
 
 > Backend SaaS multi-tenant en .NET para conversaciones empresariales asistidas por IA.
 
-CEOAgent está pensado para que restaurantes puedan atender conversaciones de negocio por WhatsApp, procesar texto o audio, ejecutar herramientas aprobadas y sincronizar acciones con sistemas externos como Google Calendar. El diseño del MVP empieza por WhatsApp, pero el núcleo está preparado para sumar otros canales como Telegram, Instagram DM o web chat sin reescribir el motor conversacional.
+CeoAgent está pensado para que restaurantes puedan atender conversaciones de negocio por WhatsApp, procesar texto o audio, ejecutar herramientas aprobadas y sincronizar acciones con sistemas externos como Google Calendar. El diseño del MVP empieza por WhatsApp, pero el núcleo está preparado para sumar otros canales como Telegram, Instagram DM o web chat sin reescribir el motor conversacional.
 
 ---
 
 ## ✨ Qué construye este proyecto
 
-CEOAgent recibe mensajes entrantes, identifica la empresa por el canal, persiste la conversación, ejecuta un agente basado en Microsoft Agent Framework, valida cualquier acción solicitada por el modelo y responde por el canal correspondiente.
+CeoAgent recibe mensajes entrantes, identifica la empresa por el canal, persiste la conversación, ejecuta un agente basado en Microsoft Agent Framework, valida cualquier acción solicitada por el modelo y responde por el canal correspondiente.
 
 Capacidades principales del MVP:
 
@@ -28,19 +28,19 @@ Capacidades principales del MVP:
 
 ## 🧱 Arquitectura
 
-CEOAgent es un **modular monolith**. No es un sistema de microservicios. La API y el Worker corren como procesos separados, pero comparten modelo, base de datos y contratos internos.
+CeoAgent es un **modular monolith**. No es un sistema de microservicios. La API y el Worker corren como procesos separados, pero comparten modelo, base de datos y contratos internos.
 
 ```text
 WhatsApp Cloud
   |
   v
-CEOAgent.ApiService
+CeoAgent.ApiService
   |  valida webhook, resuelve empresa, persiste mensaje y encola trabajo
   v
 Azure Storage Queue
   |
   v
-CEOAgent.Worker
+CeoAgent.Worker
   |  ejecuta agente, valida herramientas, llama adaptadores y responde
   v
 PostgreSQL + Blob Storage + Integraciones externas
@@ -61,17 +61,17 @@ Principios arquitectónicos:
 
 | Proyecto                   | Rol                                                                                       |
 | -------------------------- | ----------------------------------------------------------------------------------------- |
-| `CEOAgent.AppHost`         | Orquestación local con .NET Aspire: API, Worker, PostgreSQL, queues, blobs y Key Vault.   |
-| `CEOAgent.ApiService`      | Superficie HTTP con FastEndpoints, endpoints admin, middleware, errores y OpenAPI/Scalar. |
-| `CEOAgent.Worker`          | Procesamiento background: jobs, agente, herramientas e integraciones.                     |
-| `CEOAgent.ServiceDefaults` | Health checks, OpenTelemetry, service discovery y resiliencia base.                       |
-| `CEOAgent.Application`     | Lógica de aplicación compartida y contratos internos de negocio.                          |
-| `CEOAgent.Infrastructure`  | EF Core, entidades, DbContext, persistencia y configuración de infraestructura.           |
-| `CEOAgent.Integrations`    | Puertos/contratos de integración. No contiene implementaciones.                           |
-| `CEOAgent.Adapters`        | Implementaciones de puertos: WhatsApp, calendarios, proveedores AI, HTTP externo.         |
-| `CEOAgent.Tools`           | Tool handlers nativos del MVP.                                                            |
-| `CEOAgent.Shared`          | DTOs públicos de request/response y enums compartidos.                                    |
-| `CEOAgent.Web`             | Proyecto web template; no es parte central del MVP backend por ahora.                     |
+| `CeoAgent.AppHost`         | Orquestación local con .NET Aspire: API, Worker, PostgreSQL, queues, blobs y Key Vault.   |
+| `CeoAgent.ApiService`      | Superficie HTTP con FastEndpoints, endpoints admin, middleware, errores y OpenAPI/Scalar. |
+| `CeoAgent.Worker`          | Procesamiento background: jobs, agente, herramientas e integraciones.                     |
+| `CeoAgent.ServiceDefaults` | Health checks, OpenTelemetry, service discovery y resiliencia base.                       |
+| `CeoAgent.Application`     | Lógica de aplicación compartida y contratos internos de negocio.                          |
+| `CeoAgent.Infrastructure`  | EF Core, entidades, DbContext, persistencia y configuración de infraestructura.           |
+| `CeoAgent.Integrations`    | Puertos/contratos de integración. No contiene implementaciones.                           |
+| `CeoAgent.Adapters`        | Implementaciones de puertos: WhatsApp, calendarios, proveedores AI, HTTP externo.         |
+| `CeoAgent.Tools`           | Tool handlers nativos del MVP.                                                            |
+| `CeoAgent.Shared`          | DTOs públicos de request/response y enums compartidos.                                    |
+| `CeoAgent.Web`             | Proyecto web template; no es parte central del MVP backend por ahora.                     |
 | `tests/*`                  | Tests API, integración y Worker.                                                          |
 
 ---
@@ -123,7 +123,7 @@ Principios arquitectónicos:
 Estas reglas están detalladas en [AGENTS.md](./AGENTS.md), que es la fuente normativa del proyecto.
 
 - ✅ Usar nombres descriptivos. Nada de `req`, `ct`, `ctx` en código escrito a mano.
-- ✅ Usar DTOs de API en `CEOAgent.Shared`.
+- ✅ Usar DTOs de API en `CeoAgent.Shared`.
 - ✅ Usar Mapperly por módulo, no un mapper global.
 - ✅ Mapear request → entity con mapper cuando el mapeo sea no trivial o cruce tipos de frontera.
 - ✅ Usar `Guid.CreateVersion7()` para identificadores.
@@ -166,7 +166,7 @@ Ejemplo de configuración local:
   },
   "Persistence": {
     "UseInMemoryDatabase": false,
-    "InMemoryDatabaseName": "CEOAgent"
+    "InMemoryDatabaseName": "CeoAgent"
   }
 }
 ```
@@ -184,20 +184,20 @@ Ejemplo de configuración local:
 ### Restaurar y compilar
 
 ```powershell
-dotnet restore CEOAgent.slnx
-dotnet build CEOAgent.slnx
+dotnet restore CeoAgent.slnx
+dotnet build CeoAgent.slnx
 ```
 
 ### Ejecutar tests
 
 ```powershell
-dotnet test CEOAgent.slnx
+dotnet test CeoAgent.slnx
 ```
 
 ### Ejecutar con Aspire
 
 ```powershell
-dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
+dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
 ```
 
 El API expone:
@@ -212,27 +212,83 @@ En desarrollo, la referencia OpenAPI está disponible en:
 /scalar
 ```
 
+### 🔑 Secretos y base de datos local
+
+Para desarrollo local, primero levanta Aspire. El AppHost crea PostgreSQL,
+queues, blobs y expone el puerto PostgreSQL local configurado para el MVP.
+
+```powershell
+dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
+```
+
+Secretos/parámetros usados actualmente:
+
+| Proyecto | Clave | Uso |
+| -------- | ----- | --- |
+| `CeoAgent.AppHost` | `Parameters:postgres-password` | Password local leído por Aspire para el contenedor PostgreSQL. |
+| `CeoAgent.AppHost` | `Parameters:langfuse-host` | Host de Langfuse, por ejemplo `https://cloud.langfuse.com`. |
+| `CeoAgent.AppHost` | `Parameters:langfuse-public-key` | Public key de Langfuse para trazas GenAI. |
+| `CeoAgent.AppHost` | `Parameters:langfuse-secret-key` | Secret key de Langfuse para trazas GenAI. |
+| `CeoAgent.Infrastructure` | `ConnectionStrings:CeoAgent` | Connection string de diseño para comandos `dotnet ef`. |
+
+Configurar el password local de PostgreSQL para Aspire:
+
+```powershell
+dotnet user-secrets set "Parameters:postgres-password" "postgres" --project CeoAgent.AppHost
+```
+
+Configurar la conexión local para EF Core:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:CeoAgent" "Host=localhost;Port=5432;Database=CeoAgent;Username=postgres;Password=postgres" --project CeoAgent.Infrastructure
+```
+
+Configurar Langfuse para Aspire:
+
+```powershell
+dotnet user-secrets set "Parameters:langfuse-host" "https://cloud.langfuse.com" --project CeoAgent.AppHost
+dotnet user-secrets set "Parameters:langfuse-public-key" "<langfuse-public-key>" --project CeoAgent.AppHost
+dotnet user-secrets set "Parameters:langfuse-secret-key" "<langfuse-secret-key>" --project CeoAgent.AppHost
+```
+
+Con Aspire levantado y el connection string configurado, aplicar las
+migraciones es una acción manual:
+
+```powershell
+dotnet ef database update --project CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj
+```
+
+Si PostgreSQL usa otro puerto, copia el puerto real desde el Aspire Dashboard
+y reemplaza `Port=5432` en `ConnectionStrings:CeoAgent`.
+
+En publicación, el runtime no debe depender de estos user-secrets locales.
+API y Worker reciben sus connection strings desde Aspire/Azure mediante
+`.WithReference(...)`. Azure Key Vault queda reservado para secretos
+compartidos como claves de proveedores, Langfuse y API keys, no para el
+connection string local de desarrollo. Para comandos `dotnet ef`, el
+connection string manual vive solo en `CeoAgent.Infrastructure` user-secrets.
+
 ---
 
 ## 🧪 Testing
 
 El repo incluye:
 
-- 🧩 `tests/Api.Tests`: endpoints, errores, mappers y contratos HTTP.
-- 🗄️ `tests/Integration.Tests`: EF Core, modelo relacional, JSONB, aislamiento multi-tenant.
-- ⚙️ `tests/Worker.Tests`: base para pruebas del Worker.
+- 🧩 `tests/CeoAgent.ApiService.Tests`: endpoints, errores, mappers y contratos HTTP.
+- 🗄️ `tests/CeoAgent.IntegrationTests`: EF Core, modelo relacional, JSONB, aislamiento multi-tenant.
+- ⚙️ `tests/CeoAgent.Worker.Tests`: base para pruebas del Worker.
 
 Comando recomendado:
 
 ```powershell
-dotnet test CEOAgent.slnx --no-build
+dotnet test CeoAgent.slnx --no-build
 ```
 
 ---
 
 ## 📊 Observabilidad
 
-CEOAgent separa observabilidad general y observabilidad LLM:
+CeoAgent separa observabilidad general y observabilidad LLM:
 
 - OpenTelemetry para trazas, métricas e instrumentación estándar.
 - ZLogger para logs estructurados.
@@ -299,6 +355,7 @@ Antes de tocar código:
 3. Usa nombres descriptivos.
 4. Añade tests proporcionales al riesgo.
 5. Ejecuta build y tests antes de cerrar el cambio.
+6. Antes de dar una tarea por terminada, abre [docs/reviewer.md](./docs/reviewer.md) y usa el prompt que contiene para pedirle a la AI que revise los cambios actuales contra el proyecto. Esta revisión es una ayuda para detectar problemas serios, no una camisa de fuerza: algunos warnings pueden no ser relevantes y se pueden ignorar con criterio.
 
 ### 📝 Mensajes de commit
 
@@ -326,6 +383,6 @@ ApiService/AppHost/Infrastructure/Worker/tests/docs: [#6] Add MVP persistence, a
 ```
 
 ```powershell
-dotnet build CEOAgent.slnx
-dotnet test CEOAgent.slnx --no-build
+dotnet build CeoAgent.slnx
+dotnet test CeoAgent.slnx --no-build
 ```

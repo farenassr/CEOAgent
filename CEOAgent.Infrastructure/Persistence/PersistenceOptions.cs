@@ -1,4 +1,4 @@
-namespace CEOAgent.Infrastructure.Persistence;
+namespace CeoAgent.Infrastructure.Persistence;
 
 public sealed class PersistenceOptions
 {
@@ -6,7 +6,7 @@ public sealed class PersistenceOptions
 
     public bool UseInMemoryDatabase { get; set; }
 
-    public string InMemoryDatabaseName { get; set; } = "CEOAgent";
+    public string InMemoryDatabaseName { get; set; } = "CeoAgent";
 
     public static bool IsValid(PersistenceOptions options)
     {

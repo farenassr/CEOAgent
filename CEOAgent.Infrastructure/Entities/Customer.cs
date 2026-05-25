@@ -1,4 +1,4 @@
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class Customer : AuditableCompanyOwnedEntity
 {
@@ -30,5 +30,5 @@ public sealed class Customer : AuditableCompanyOwnedEntity
     /// <summary>
     /// Conversations associated with this customer. Example: the current open WhatsApp conversation.
     /// </summary>
-    public ICollection<Conversation> Conversations { get; } = new List<Conversation>();
+    public ICollection<Conversation> Conversations { get; } = [];
 }

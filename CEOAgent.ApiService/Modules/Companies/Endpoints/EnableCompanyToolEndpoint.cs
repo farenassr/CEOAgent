@@ -1,21 +1,21 @@
-using CEOAgent.Application.Errors;
-using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Shared.Request.Company;
-using CEOAgent.Shared.Response.Company;
+using CeoAgent.Application.Errors;
+using CeoAgent.Application.Company;
+using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.Shared.Request.Company;
+using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
-using CEOAgent.Infrastructure;
-using CEOAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Infrastructure;
+using CeoAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
+namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Enables or disables a tool for a company.
 /// </summary>
 public sealed class EnableCompanyToolEndpoint(
-    CEOAgentDbContext dbContext,
+    CeoAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<CompanyToolRequest, CompanyToolResponse>
 {
     public override void Configure()
@@ -49,7 +49,7 @@ public sealed class EnableCompanyToolEndpoint(
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
-        CEOAgentDbContext dbContext,
+        CeoAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)
@@ -64,7 +64,7 @@ public sealed class EnableCompanyToolEndpoint(
     }
 
     private static async Task EnsureCredentialReferenceIsAccessibleAsync(
-        CEOAgentDbContext dbContext,
+        CeoAgentDbContext dbContext,
         Guid? credentialReferenceId,
         CancellationToken cancellationToken)
     {

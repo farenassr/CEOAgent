@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CEOAgent.Infrastructure.Entities.JsonDocuments;
+namespace CeoAgent.Infrastructure.Entities.JsonDocuments;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$provider")]
 [JsonDerivedType(typeof(GoogleCalendarCredentialMetadata), "google_calendar")]

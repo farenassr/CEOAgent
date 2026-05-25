@@ -1,7 +1,7 @@
 using System.Text.Json;
-using CEOAgent.Shared.Enums;
+using CeoAgent.Shared.Enums;
 
-namespace CEOAgent.Shared.Response.Company;
+namespace CeoAgent.Shared.Response.Company;
 
 public sealed class CompanyChannelResponse
 {

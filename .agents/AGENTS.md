@@ -35,15 +35,15 @@ The solution lives at the repository root with a flat project layout (no
 
 | Project                    | Type        | Purpose                                                                 |
 | -------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `CEOAgent.AppHost`         | Aspire host | Local orchestration. References `Api` and `Worker`.                     |
-| `CEOAgent.ServiceDefaults` | classlib    | OTel, health checks, resilience defaults. Referenced by `Api`/`Worker`. |
-| `CEOAgent.ApiService`      | webapi      | HTTP surface (FastEndpoints). Webhook receiver and admin endpoints.     |
-| `CEOAgent.Worker`          | worker      | Background processing. Queue-driven jobs, agent loop, integrations.     |
-| `CEOAgent.Application`     | classlib    | Cross-slice business logic (`AgentRunner`, `PromptBuilder`, AI runtime). |
-| `CEOAgent.Infrastructure`  | classlib    | Persistence (EF Core), queues, blob storage, observability glue.        |
-| `CEOAgent.Integrations`    | classlib    | **Port contracts only**. No implementations.                            |
-| `CEOAgent.Adapters`        | classlib    | Port implementations (WhatsApp, Google Calendar, Agent Framework providers, etc.). |
-| `CEOAgent.Tools`           | classlib    | `IToolHandler` implementations (native MVP tools).                      |
+| `CeoAgent.AppHost`         | Aspire host | Local orchestration. References `Api` and `Worker`.                     |
+| `CeoAgent.ServiceDefaults` | classlib    | OTel, health checks, resilience defaults. Referenced by `Api`/`Worker`. |
+| `CeoAgent.ApiService`      | webapi      | HTTP surface (FastEndpoints). Webhook receiver and admin endpoints.     |
+| `CeoAgent.Worker`          | worker      | Background processing. Queue-driven jobs, agent loop, integrations.     |
+| `CeoAgent.Application`     | classlib    | Cross-slice business logic (`AgentRunner`, `PromptBuilder`, AI runtime). |
+| `CeoAgent.Infrastructure`  | classlib    | Persistence (EF Core), queues, blob storage, observability glue.        |
+| `CeoAgent.Integrations`    | classlib    | **Port contracts only**. No implementations.                            |
+| `CeoAgent.Adapters`        | classlib    | Port implementations (WhatsApp, Google Calendar, Agent Framework providers, etc.). |
+| `CeoAgent.Tools`           | classlib    | `IToolHandler` implementations (native MVP tools).                      |
 
 ---
 
@@ -130,7 +130,7 @@ this list wins.
 8. Use `ProblemDetails` for all error responses, populated by a single global
    `IExceptionHandler`. Throw exceptions for unexpected errors. Do not invest
    in `Result<T, Error>` plumbing for MVP.
-9. Use **PostgreSQL** as the primary database with one `CEOAgentDbContext`.
+9. Use **PostgreSQL** as the primary database with one `CeoAgentDbContext`.
 10. Use **Azure Blob Storage** for audio and other media.
 11. Use **Azure Storage Queues** for background jobs.
 12. Use **ZLogger** for structured logging.
@@ -200,7 +200,7 @@ this list wins.
     `HasConversion<string>()`; never persist enum ordinals.
 31. Entity Framework property names use **PascalCase** in C#. Apply
     `EFCore.NamingConventions` with `UseSnakeCaseNamingConvention()` once at
-    `CEOAgentDbContext` configuration to map automatically.
+    `CeoAgentDbContext` configuration to map automatically.
 32. All timestamps stored as `timestamptz` and represented in C# as
     `DateTime` with `DateTimeKind.Utc`. Never use `DateTime.Now`. Always use
     `TimeProvider`.
@@ -214,14 +214,14 @@ this list wins.
     parameterless constructor is required by a framework, when object
     initializer binding is clearer, or when the constructor body contains
     meaningful setup logic.
-36. API request/response DTOs live in `CEOAgent.Shared`, not
-    `CEOAgent.ApiService`. Request DTOs go under
+36. API request/response DTOs live in `CeoAgent.Shared`, not
+    `CeoAgent.ApiService`. Request DTOs go under
     `Request/<Domain>/<Name>Request.cs` and response DTOs go under
     `Response/<Domain>/<Name>Response.cs`, with one `public sealed class` per
     file. Example: `Request/Company/CompanyToolRequest.cs`.
 37. JSONB document types used by Infrastructure entities live under
-    `CEOAgent.Infrastructure/Persistence/Entities/JsonDocuments/`, not in
-    `CEOAgent.Shared`. Shared API DTOs that accept flexible JSON payloads use
+    `CeoAgent.Infrastructure/Persistence/Entities/JsonDocuments/`, not in
+    `CeoAgent.Shared`. Shared API DTOs that accept flexible JSON payloads use
     boundary-safe JSON types such as `JsonElement`, then map to entity JSONB
     document classes inside API/Application code.
 38. Generated code and hand-written initializers must not produce MA0007
@@ -341,8 +341,8 @@ builder.Build().Run();
   environment variables. Do not commit local secret values.
 - Do not use `RunAsExisting`/`AsExisting` for MVP unless the explicit goal is
   to require Azure access during local development.
-- `CEOAgentDbContextFactory` is design-time only and reads
-  `ConnectionStrings:CEOAgent` from `appsettings.json`,
+- `CeoAgentDbContextFactory` is design-time only and reads
+  `ConnectionStrings:CeoAgent` from `appsettings.json`,
   `appsettings.Development.json`, user-secrets, or environment variables.
   It must throw a clear `InvalidOperationException` if the value is missing.
 - Company integration credential rows store references such as
@@ -499,8 +499,8 @@ Adapters live outside the modules under `Adapters/`.
   - `Endpoints/` for FastEndpoints endpoint classes and endpoint validators.
   - `Commands/` for Mediator commands/queries and handlers, only when the
     use case actually needs Mediator.
-  - Shared DTOs are referenced from `CEOAgent.Shared/Request/<Domain>` and
-    `CEOAgent.Shared/Response/<Domain>`.
+  - Shared DTOs are referenced from `CeoAgent.Shared/Request/<Domain>` and
+    `CeoAgent.Shared/Response/<Domain>`.
     This is "controller-like" code that orchestrates business logic.
 - **`Application/<X>/`** holds **stateful or non-trivial business logic**
   shared across slices and used by the Worker. `AgentRunner`,
@@ -520,11 +520,11 @@ Rules:
 
 - Endpoint files use the suffix `Endpoint` and live under the slice's
   `Endpoints/` folder.
-- Request DTO files live under `CEOAgent.Shared/Request/<Domain>/`.
-- Response DTO files live under `CEOAgent.Shared/Response/<Domain>/`.
+- Request DTO files live under `CeoAgent.Shared/Request/<Domain>/`.
+- Response DTO files live under `CeoAgent.Shared/Response/<Domain>/`.
 - Entity-owned JSONB document classes live under
-  `CEOAgent.Infrastructure/Persistence/Entities/JsonDocuments/`; do not place
-  them in `CEOAgent.Shared`.
+  `CeoAgent.Infrastructure/Persistence/Entities/JsonDocuments/`; do not place
+  them in `CeoAgent.Shared`.
 - Every API request/response DTO is declared in its own independent class
   file. Do not group multiple DTO classes in one file.
 - DTOs are declared as `class`, not `record` and not `sealed record`. Use
@@ -550,7 +550,7 @@ The endpoint:
 2. Lets FastEndpoints + FluentValidation validate it (status `400` on
    failure).
 3. For simple single-endpoint operations, runs the logic directly using
-   injected services such as `CEOAgentDbContext`, ports, and `TimeProvider`.
+   injected services such as `CeoAgentDbContext`, ports, and `TimeProvider`.
 4. For non-trivial or reusable operations, maps to a Mediator command/query
    (direct construction; Mapperly only when shapes diverge) and sends it.
 5. Maps the response back if needed.
@@ -742,7 +742,7 @@ Steps:
 1. Create the `company` row.
 2. Register the channel: `company_channel` row with `provider`,
    `provider_channel_id`, `metadata` (jsonb for provider-specific extras like
-   `phone_number_id`, `business_account_id`, …), and a credentials reference.
+   `phone_number_id`, `business_account_id`, etc.), and a credentials reference.
 3. Configure the agent profile (model, prompt overrides, language, timezone,
    working hours, capacity).
 4. Configure the calendar integration credentials reference.
@@ -912,7 +912,7 @@ Use **Microsoft Agent Framework** for all AI, LLM, agent orchestration, tool
 calling, model interaction, and provider integration work. Do not introduce
 direct OpenAI client usage in API, Worker, Application, or Infrastructure.
 If an OpenAI-compatible model is used, it is accessed through the Agent
-Framework provider packages from `CEOAgent.Adapters`.
+Framework provider packages from `CeoAgent.Adapters`.
 
 Agent tool calls are not authorization to mutate state. Tool requests are
 validated against the enabled company tool catalog and then routed into
@@ -944,7 +944,7 @@ stays put.
 ### Agent loop (multi-step turn handling)
 
 A single inbound user message can require multiple model invocations
-(model → tool call → model → tool call → … → final assistant message).
+(model ? tool call ? model ? tool call ? — ? final assistant message).
 The Worker orchestrates this loop inside `ProcessIncomingMessageJob`:
 
 ```text
@@ -974,7 +974,7 @@ loop iteration:
 (`max_loop_iterations`), default `5`.
 
 This loop is **inside** the `ProcessIncomingMessageJob` handler (single
-queue message → single agent loop). Tool execution stays inside validated
+queue message ? single agent loop). Tool execution stays inside validated
 application-owned handlers/workflows. `ExecuteToolCallJob` and
 `SynthesizeAudioJob` exist as separate pipelines for **out-of-band**
 operations (e.g., long-running tools or post-message audio generation), not
@@ -1175,7 +1175,7 @@ A model requesting a tool call is **not** authorization to execute it. Each
 handler enforces its own business rules (capacity, working hours,
 confirmation required, etc.).
 
-### Tool ↔ Mediator command relationship
+### Tool ? Mediator command relationship
 
 **must dispatch a Mediator command** internally rather than duplicate
 business rules:
@@ -1370,10 +1370,10 @@ public interface ISpeechSynthesisIntegration
 
 One implementation per port for MVP:
 
-- `WhatsAppCloudAdapter` → `IMessageChannelIntegration`.
-- `GoogleCalendarAdapter` → `ICalendarIntegration`.
-- `OpenAITranscriptionAdapter` (Whisper) → `ITranscriptionIntegration`.
-- `OpenAISpeechAdapter` (TTS) → `ISpeechSynthesisIntegration`.
+- `WhatsAppCloudAdapter` ? `IMessageChannelIntegration`.
+- `GoogleCalendarAdapter` ? `ICalendarIntegration`.
+- `OpenAITranscriptionAdapter` (Whisper) ? `ITranscriptionIntegration`.
+- `OpenAISpeechAdapter` (TTS) ? `ISpeechSynthesisIntegration`.
 
 Inject directly. **No keyed DI for ports yet.** When a second provider
 arrives for the same capability (e.g., Outlook Calendar), introduce keyed
@@ -1559,8 +1559,8 @@ operations) are deferred until needed.
   folder, only when a command/query is justified by reuse, Worker execution,
   cross-module dispatch, or meaningful complexity.
 - FastEndpoints endpoints live in `Endpoints/` inside their slice folder.
-- API request DTO classes live in `CEOAgent.Shared/Request/<Domain>/`.
-- API response DTO classes live in `CEOAgent.Shared/Response/<Domain>/`.
+- API request DTO classes live in `CeoAgent.Shared/Request/<Domain>/`.
+- API response DTO classes live in `CeoAgent.Shared/Response/<Domain>/`.
 - Each API DTO class gets its own file named after the class.
 - Jobs live in `Worker/Pipelines/<Pipeline>/<JobName>.cs`.
 - Tool handlers live in `Tools/<Area>/<ToolKey>ToolHandler.cs`.
@@ -1573,7 +1573,7 @@ Commit messages use this project-specific format:
 <ProjectOrArea>/<ProjectOrArea>/...: [<GitHubIssueId>] <Changes performed>
 ```
 
-Use the project name after `CEOAgent.` only, or the major non-project area.
+Use the project name after `CeoAgent.` only, or the major non-project area.
 Keep touched areas short but explicit. Use `[#0]` when no GitHub issue exists.
 
 Example:
@@ -1637,13 +1637,13 @@ rules in methods on the entity when it improves readability:
 
 ## EF Core Migrations
 
-- **One** `CEOAgentDbContext` for the whole solution.
+- **One** `CeoAgentDbContext` for the whole solution.
 - Code-first migrations stored in `Infrastructure/Persistence/Migrations/`.
 - Migrations must **never** run automatically on application startup in any
   environment.
-- AI coding agents may scaffold migration files only when a schema change
-  requires them, but they must **not** apply or run migrations against any
-  database.
+- AI coding agents must **not** scaffold, create, remove, apply, or run EF
+  Core migrations. Migration creation and execution are manual
+  human/operator-controlled steps.
 - Applying migrations is a human/operator-controlled step. The project owner
   chooses when to run `dotnet ef database update` locally, in staging, or in
   production.
@@ -1680,7 +1680,7 @@ rules in methods on the entity when it improves readability:
 - JSONB payload classes owned by entities live in
   `Infrastructure/Persistence/Entities/JsonDocuments/`.
 - Use `IEntityTypeConfiguration<T>` classes in
-  `Infrastructure/Persistence/Configurations/`. The `CEOAgentDbContext` only
+  `Infrastructure/Persistence/Configurations/`. The `CeoAgentDbContext` only
   declares `DbSet<T>` properties and applies all configurations via
   `modelBuilder.ApplyConfigurationsFromAssembly(...)`.
 
@@ -1969,13 +1969,13 @@ stubbed Microsoft Agent Framework-backed AI runtime abstraction.
 - Webhook signature verification (valid + invalid).
 - Webhook idempotency (duplicate `provider_message_id`).
 - Adapter contract tests (Refit clients against Testcontainers / WireMock).
-- Conversation state patch application (date/time string → `DateOnly` /
+- Conversation state patch application (date/time string ? `DateOnly` /
   `TimeOnly` conversion).
 - Schema-validation rejection of malformed model output.
 - Two-failure handoff trigger (per-operation-type counter).
 - Agent loop iteration cap triggers handoff.
 - TTS failure does not block text reply.
-- Inbound voice note → transcription → agent loop end-to-end.
+- Inbound voice note ? transcription ? agent loop end-to-end.
 
 ### Test layout
 
@@ -1991,8 +1991,8 @@ tests/
       ProcessIncomingMessage/ProcessIncomingMessageTests.cs
   Application.Tests/
     Agents/PromptBuilderTests.cs
-  Integration.Tests/         // Aspire + Testcontainers
-    Infrastructure/CEOAgentDbContextTestFactory.cs
+  CeoAgent.IntegrationTests/         // Aspire + Testcontainers
+    Infrastructure/CeoAgentDbContextTestFactory.cs
     Infrastructure/PostgresTestDatabase.cs
     Seed/CompanySeed.cs
 ```
@@ -2010,7 +2010,7 @@ When proposing or modifying code:
 1. Respect the slice layout: place files under
    `Modules/<Module>/Features/<UseCase>/Endpoints`,
    `Modules/<Module>/Features/<UseCase>/Commands`, and shared DTO folders in
-   `CEOAgent.Shared/Request/<Domain>` or `CEOAgent.Shared/Response/<Domain>`.
+   `CeoAgent.Shared/Request/<Domain>` or `CeoAgent.Shared/Response/<Domain>`.
 2. Use **Mediator** (martinothamar) for command/query dispatch in Worker,
    cross-module workflows, reusable workflows, and non-trivial API use cases.
    Never mix MediatR. Do not create commands for simple one-off endpoint
@@ -2022,11 +2022,11 @@ When proposing or modifying code:
    classes, endpoints, middleware, handlers, exceptions, and simple DTO
    initialization.
 6. Declare API DTOs as `class` types, not records or sealed records.
-7. Put every API request/response DTO in `CEOAgent.Shared`, one class per
+7. Put every API request/response DTO in `CeoAgent.Shared`, one class per
    file, following `Request/Company/CompanyToolRequest.cs` and
    `Response/Company/CompanyResponse.cs` style paths.
 8. Keep entity JSONB document classes in
-   `CEOAgent.Infrastructure/Persistence/Entities/JsonDocuments/`; Shared DTOs
+   `CeoAgent.Infrastructure/Persistence/Entities/JsonDocuments/`; Shared DTOs
    should not reference Infrastructure entity document types.
 9. Use **Mapperly** only when shapes diverge; otherwise instantiate
    commands directly when a command exists.

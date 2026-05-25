@@ -1,6 +1,6 @@
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class ConversationState : AuditableCompanyOwnedEntity
 {

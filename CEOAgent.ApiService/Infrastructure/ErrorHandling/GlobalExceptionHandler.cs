@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using CEOAgent.ApiService.Infrastructure.Correlation;
-using CEOAgent.Application.Errors;
+using CeoAgent.ApiService.Infrastructure.Correlation;
+using CeoAgent.Application.Errors;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace CEOAgent.ApiService.Infrastructure.ErrorHandling;
+namespace CeoAgent.ApiService.Infrastructure.ErrorHandling;
 
 public sealed class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
@@ -30,7 +30,6 @@ public sealed class GlobalExceptionHandler(
         if (Activity.Current is { } activity)
         {
             activity.SetStatus(ActivityStatusCode.Error, title);
-            activity.AddException(exception);
             activity.SetTag("http.response.status_code", status);
             activity.SetTag("error.type", type);
         }
@@ -57,7 +56,7 @@ public sealed class GlobalExceptionHandler(
             Status = status,
             Title = title,
             Type = type,
-            Detail = exception is BusinessRuleException or NotFoundException ? exception.Message : null,
+            Detail = exception is BusinessRuleException ? exception.Message : null,
         };
 
         problemDetails.Extensions["traceId"] = Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier;

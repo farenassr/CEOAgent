@@ -1,4 +1,4 @@
-namespace CEOAgent.ApiService.Infrastructure.Correlation;
+namespace CeoAgent.ApiService.Infrastructure.Correlation;
 
 public sealed class CorrelationIdAccessor
 {

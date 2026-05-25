@@ -1,4 +1,4 @@
-namespace CEOAgent.Application.Company;
+namespace CeoAgent.Application.Company;
 
 public interface ICompanyContext
 {

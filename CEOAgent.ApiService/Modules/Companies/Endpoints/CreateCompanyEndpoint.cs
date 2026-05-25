@@ -1,16 +1,16 @@
-using CEOAgent.Shared.Request.Company;
-using CEOAgent.Shared.Response.Company;
+using CeoAgent.Shared.Request.Company;
+using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
-using CEOAgent.Infrastructure;
-using CEOAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Infrastructure;
+using CeoAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
+namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Creates a company for manual platform onboarding.
 /// </summary>
-public sealed class CreateCompanyEndpoint(CEOAgentDbContext dbContext) : Endpoint<CreateCompanyRequest, CompanyResponse>
+public sealed class CreateCompanyEndpoint(CeoAgentDbContext dbContext) : Endpoint<CreateCompanyRequest, CompanyResponse>
 {
     public override void Configure()
     {

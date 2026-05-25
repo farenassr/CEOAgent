@@ -1,7 +1,7 @@
-using CEOAgent.Shared.Enums;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Shared.Enums;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class Message : AuditableCompanyOwnedEntity
 {
@@ -48,10 +48,10 @@ public sealed class Message : AuditableCompanyOwnedEntity
     /// <summary>
     /// Tool executions triggered by this assistant message. Example: check_availability call.
     /// </summary>
-    public ICollection<ToolExecution> TriggeredToolExecutions { get; } = new List<ToolExecution>();
+    public ICollection<ToolExecution> TriggeredToolExecutions { get; } = [];
 
     /// <summary>
     /// Tool executions whose result was recorded by this message. Example: tool result message.
     /// </summary>
-    public ICollection<ToolExecution> ResultToolExecutions { get; } = new List<ToolExecution>();
+    public ICollection<ToolExecution> ResultToolExecutions { get; } = [];
 }

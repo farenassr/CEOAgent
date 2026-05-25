@@ -1,14 +1,14 @@
 using System.Text.Json;
-using CEOAgent.ApiService.Infrastructure.Json;
-using CEOAgent.ApiService.Modules.Companies.Commands;
-using CEOAgent.Infrastructure.Entities;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
-using CEOAgent.Shared.Enums;
-using CEOAgent.Shared.Request.Company;
-using CEOAgent.Shared.Response.Company;
+using CeoAgent.ApiService.Infrastructure.Json;
+using CeoAgent.ApiService.Modules.Companies.Commands;
+using CeoAgent.Infrastructure.Entities;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Shared.Enums;
+using CeoAgent.Shared.Request.Company;
+using CeoAgent.Shared.Response.Company;
 using Riok.Mapperly.Abstractions;
 
-namespace CEOAgent.ApiService.Modules.Companies.Mappers;
+namespace CeoAgent.ApiService.Modules.Companies.Mappers;
 
 [Mapper(AutoUserMappings = false, RequiredMappingStrategy = RequiredMappingStrategy.Target)]
 public static partial class CompanyMapper

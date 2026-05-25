@@ -1,16 +1,16 @@
 using System.Text.Json;
-using CEOAgent.ApiService.Infrastructure.Json;
-using CEOAgent.Application.Company;
-using CEOAgent.Application.Errors;
-using CEOAgent.Infrastructure;
-using CEOAgent.Infrastructure.Entities;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Shared.Enums;
+using CeoAgent.ApiService.Infrastructure.Json;
+using CeoAgent.Application.Company;
+using CeoAgent.Application.Errors;
+using CeoAgent.Infrastructure;
+using CeoAgent.Infrastructure.Entities;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.Shared.Enums;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
-namespace CEOAgent.ApiService.Modules.Companies.Commands;
+namespace CeoAgent.ApiService.Modules.Companies.Commands;
 
 public sealed record RegisterCompanyChannelCommand(
     Guid CompanyId,
@@ -20,7 +20,7 @@ public sealed record RegisterCompanyChannelCommand(
     Guid? CredentialReferenceId) : ICommand<CompanyChannel>;
 
 public sealed class RegisterCompanyChannelCommandHandler(
-    CEOAgentDbContext dbContext,
+    CeoAgentDbContext dbContext,
     ICompanyContext companyContext) : ICommandHandler<RegisterCompanyChannelCommand, CompanyChannel>
 {
     public async ValueTask<CompanyChannel> Handle(RegisterCompanyChannelCommand command, CancellationToken cancellationToken)

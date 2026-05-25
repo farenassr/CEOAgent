@@ -1,7 +1,7 @@
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
-using CEOAgent.Shared.Enums;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Shared.Enums;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class CompanyChannel : AuditableCompanyOwnedEntity
 {
@@ -47,12 +47,12 @@ public sealed class CompanyChannel : AuditableCompanyOwnedEntity
     /// <summary>
     /// Customers whose identities were observed through this channel. Example: WhatsApp customers.
     /// </summary>
-    public ICollection<Customer> Customers { get; } = new List<Customer>();
+    public ICollection<Customer> Customers { get; } = [];
 
     /// <summary>
     /// Conversations started through this channel. Example: active WhatsApp conversations.
     /// </summary>
-    public ICollection<Conversation> Conversations { get; } = new List<Conversation>();
+    public ICollection<Conversation> Conversations { get; } = [];
 
     public static CompanyChannel ForWhatsAppCloud(
         Guid companyId,

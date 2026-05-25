@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <UserSecretsId>dotnet-CEOAgent.Worker-dc360349-44d6-4061-b1d5-c4930babab77</UserSecretsId>
+    <UserSecretsId>dotnet-CeoAgent.Worker-dc360349-44d6-4061-b1d5-c4930babab77</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,11 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CEOAgent.ServiceDefaults\CEOAgent.ServiceDefaults.csproj" />
-    <ProjectReference Include="..\CEOAgent.Application\CEOAgent.Application.csproj" />
-    <ProjectReference Include="..\CEOAgent.Infrastructure\CEOAgent.Infrastructure.csproj" />
-    <ProjectReference Include="..\CEOAgent.Integrations\CEOAgent.Integrations.csproj" />
-    <ProjectReference Include="..\CEOAgent.Adapters\CEOAgent.Adapters.csproj" />
-    <ProjectReference Include="..\CEOAgent.Tools\CEOAgent.Tools.csproj" />
+    <ProjectReference Include="..\CeoAgent.ServiceDefaults\CeoAgent.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CeoAgent.Application\CeoAgent.Application.csproj" />
+    <ProjectReference Include="..\CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj" />
+    <ProjectReference Include="..\CeoAgent.Integrations\CeoAgent.Integrations.csproj" />
+    <ProjectReference Include="..\CeoAgent.Adapters\CeoAgent.Adapters.csproj" />
+    <ProjectReference Include="..\CeoAgent.Tools\CeoAgent.Tools.csproj" />
   </ItemGroup>
 </Project>

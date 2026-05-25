@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CEOAgent.ApiService\CEOAgent.ApiService.csproj" />
-    <ProjectReference Include="..\CEOAgent.Worker\CEOAgent.Worker.csproj" />
+    <ProjectReference Include="..\CeoAgent.ApiService\CeoAgent.ApiService.csproj" />
+    <ProjectReference Include="..\CeoAgent.Worker\CeoAgent.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

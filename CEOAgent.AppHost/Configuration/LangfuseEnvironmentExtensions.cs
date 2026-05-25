@@ -1,4 +1,4 @@
-namespace CEOAgent.AppHost.Configuration;
+namespace CeoAgent.AppHost.Configuration;
 
 internal static class LangfuseEnvironmentExtensions
 {

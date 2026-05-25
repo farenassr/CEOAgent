@@ -1,4 +1,4 @@
-namespace CEOAgent.Application.Errors;
+namespace CeoAgent.Application.Errors;
 
 public sealed class BusinessRuleException(string code, string message) : Exception(message)
 {

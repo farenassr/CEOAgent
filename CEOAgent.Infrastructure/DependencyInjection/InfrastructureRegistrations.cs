@@ -1,12 +1,12 @@
-using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Persistence;
+using CeoAgent.Application.Company;
+using CeoAgent.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-namespace CEOAgent.Infrastructure.DependencyInjection;
+namespace CeoAgent.Infrastructure.DependencyInjection;
 
 public static class InfrastructureRegistrations
 {
@@ -22,13 +22,15 @@ public static class InfrastructureRegistrations
             .ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<PersistenceOptions>>().Value);
 
-        services.AddSingleton<ICompanyContextAccessor, CompanyContextAccessor>();
-        services.AddSingleton<ICompanyContext>(provider => provider.GetRequiredService<ICompanyContextAccessor>());
+        services.AddScoped<ICompanyContextAccessor, CompanyContextAccessor>();
+        services.AddScoped<ICompanyContext>(provider => provider.GetRequiredService<ICompanyContextAccessor>());
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ConversationAgentProfileImmutabilityInterceptor>();
 
-        services.AddDbContextPool<CEOAgentDbContext>((provider, options) =>
+        services.AddDbContext<CeoAgentDbContext>((provider, options) =>
         {
             var persistenceOptions = provider.GetRequiredService<IOptions<PersistenceOptions>>().Value;
+            options.AddInterceptors(provider.GetRequiredService<ConversationAgentProfileImmutabilityInterceptor>());
 
             if (persistenceOptions.UseInMemoryDatabase)
             {
@@ -37,7 +39,7 @@ public static class InfrastructureRegistrations
             }
 
             var configuration = provider.GetRequiredService<IConfiguration>();
-            var connectionString = configuration.GetConnectionString("CEOAgent") ?? configuration.GetConnectionString("DefaultConnection");
+            var connectionString = configuration.GetConnectionString("CeoAgent") ?? configuration.GetConnectionString("DefaultConnection");
 
             options.UseNpgsql(connectionString)
                 .UseSnakeCaseNamingConvention();

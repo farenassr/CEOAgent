@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace CEOAgent.Shared.Request.Company;
+namespace CeoAgent.Shared.Request.Company;
 
 public sealed class CreateCompanyRequest
 {

@@ -1,6 +1,6 @@
-using CEOAgent.ServiceDefaults;
-using CEOAgent.Web;
-using CEOAgent.Web.Components;
+using CeoAgent.ServiceDefaults;
+using CeoAgent.Web;
+using CeoAgent.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 

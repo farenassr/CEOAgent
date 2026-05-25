@@ -1,10 +1,10 @@
-using CEOAgent.ApiService.Dependencies;
-using CEOAgent.ApiService.Infrastructure.Company;
-using CEOAgent.ApiService.Infrastructure.Correlation;
-using CEOAgent.ApiService.Infrastructure.ErrorHandling;
-using CEOAgent.Application.Errors;
-using CEOAgent.Infrastructure.DependencyInjection;
-using CEOAgent.ServiceDefaults;
+using CeoAgent.ApiService.Dependencies;
+using CeoAgent.ApiService.Infrastructure.Company;
+using CeoAgent.ApiService.Infrastructure.Correlation;
+using CeoAgent.ApiService.Infrastructure.ErrorHandling;
+using CeoAgent.Application.Errors;
+using CeoAgent.Infrastructure.DependencyInjection;
+using CeoAgent.ServiceDefaults;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -32,7 +32,7 @@ builder.Logging.AddOpenTelemetry(logging =>
 
 if (!builder.Environment.IsEnvironment("Testing"))
 {
-    if (builder.Configuration.GetConnectionString("CEOAgent") is { Length: > 0 } postgresConnectionString)
+    if (builder.Configuration.GetConnectionString("CeoAgent") is { Length: > 0 } postgresConnectionString)
     {
         builder.Services
             .AddHealthChecks()

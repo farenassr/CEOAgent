@@ -1,3 +1,3 @@
-namespace CEOAgent.Application;
+namespace CeoAgent.Application;
 
 public static class ApplicationAssembly;

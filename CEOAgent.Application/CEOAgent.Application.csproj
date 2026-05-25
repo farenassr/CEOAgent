@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\CEOAgent.Integrations\CEOAgent.Integrations.csproj" />
+    <ProjectReference Include="..\CeoAgent.Integrations\CeoAgent.Integrations.csproj" />
   </ItemGroup>
 
   <ItemGroup>

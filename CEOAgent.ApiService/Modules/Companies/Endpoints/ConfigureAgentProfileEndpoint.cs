@@ -1,21 +1,21 @@
-using CEOAgent.Application.Errors;
-using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Shared.Request.Company;
-using CEOAgent.Shared.Response.Company;
+using CeoAgent.Application.Errors;
+using CeoAgent.Application.Company;
+using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.Shared.Request.Company;
+using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
-using CEOAgent.Infrastructure;
-using CEOAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Infrastructure;
+using CeoAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
+namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Creates or updates the company's agent profile.
 /// </summary>
 public sealed class ConfigureAgentProfileEndpoint(
-    CEOAgentDbContext dbContext,
+    CeoAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<AgentProfileRequest, AgentProfileResponse>
 {
     public override void Configure()
@@ -47,8 +47,8 @@ public sealed class ConfigureAgentProfileEndpoint(
         await Send.OkAsync(CompanyMapper.ToResponse(profile), cancellationToken);
     }
 
-    private static async Task<CEOAgent.Infrastructure.Entities.Company> GetAccessibleCompanyAsync(
-        CEOAgentDbContext dbContext,
+    private static async Task<CeoAgent.Infrastructure.Entities.Company> GetAccessibleCompanyAsync(
+        CeoAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)

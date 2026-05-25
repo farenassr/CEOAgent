@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
-    <ProjectReference Include="..\CEOAgent.ServiceDefaults\CEOAgent.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CeoAgent.ServiceDefaults\CeoAgent.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

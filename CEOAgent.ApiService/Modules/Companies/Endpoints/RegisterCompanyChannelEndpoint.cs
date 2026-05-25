@@ -1,11 +1,11 @@
-using CEOAgent.ApiService.Modules.Companies.Mappers;
-using CEOAgent.Shared.Request.Company;
-using CEOAgent.Shared.Response.Company;
+using CeoAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Shared.Request.Company;
+using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Mediator;
 
-namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
+namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Registers a provider channel for company resolution.

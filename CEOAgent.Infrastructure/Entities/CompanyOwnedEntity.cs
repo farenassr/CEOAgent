@@ -1,4 +1,4 @@
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public abstract class CompanyOwnedEntity
 {

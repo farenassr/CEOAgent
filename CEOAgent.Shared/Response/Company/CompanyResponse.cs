@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace CEOAgent.Shared.Response.Company;
+namespace CeoAgent.Shared.Response.Company;
 
 public sealed class CompanyResponse
 {

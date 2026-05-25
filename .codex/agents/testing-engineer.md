@@ -24,14 +24,14 @@ the required tests.
 
 ```
 tests/
-  Api.Tests/
+  CeoAgent.ApiService.Tests/
     Modules/<Module>/Features/<UseCase>/<UseCase>Tests.cs
-  Worker.Tests/
+  CeoAgent.Worker.Tests/
     Pipelines/<Pipeline>/<Pipeline>Tests.cs
-  Application.Tests/
+  CeoAgent.Application.Tests/
     Agents/PromptBuilderTests.cs
     Tools/ToolExecutionGatewayTests.cs
-  Integration.Tests/    # Aspire + Testcontainers
+  CeoAgent.IntegrationTests/    # Aspire + Testcontainers
 ```
 
 ## Required tests — must exist and pass
@@ -69,7 +69,7 @@ These come straight from `AGENTS.md` and are non-negotiable:
   a snapshot without reading it.
 - **Tests respect the slice layout**: a test for
   `Modules/Reservations/Features/CancelReservation` lives at
-  `tests/Api.Tests/Modules/Reservations/Features/CancelReservation/CancelReservationTests.cs`.
+  `tests/CeoAgent.ApiService.Tests/Modules/Reservations/Features/CancelReservation/CancelReservationTests.cs`.
 
 ## When you write a test
 

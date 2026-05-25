@@ -1,6 +1,6 @@
-using CEOAgent.Shared.Enums;
+using CeoAgent.Shared.Enums;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class AudioAsset : AuditableCompanyOwnedEntity
 {
