@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Text.Json;
-using CEOAgent.Shared.Enums;
+using CeoAgent.Shared.Enums;
 
-namespace CEOAgent.Shared.Request.Company;
+namespace CeoAgent.Shared.Request.Company;
 
 public sealed class CompanyChannelRequest
 {

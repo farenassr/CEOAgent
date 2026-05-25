@@ -3,7 +3,7 @@ using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Refit;
 
-namespace CEOAgent.Adapters;
+namespace CeoAgent.Adapters;
 
 /// <summary>
 /// Provides Refit HTTP client registration helpers for external provider

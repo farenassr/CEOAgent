@@ -1,14 +1,18 @@
-using CEOAgent.Infrastructure.DependencyInjection;
-using CEOAgent.ServiceDefaults;
-using CEOAgent.Worker;
+using CeoAgent.Infrastructure.DependencyInjection;
+using CeoAgent.ServiceDefaults;
+using CeoAgent.Worker;
 using ZLogger;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.ClearProviders();
-builder.Logging.AddZLoggerConsole();
+builder.Logging.AddZLoggerConsole(options =>
+{
+    options.IncludeScopes = true;
+    options.UseJsonFormatter();
+});
 builder.AddServiceDefaults();
 
-if (builder.Configuration.GetConnectionString("CEOAgent") is { Length: > 0 } postgresConnectionString)
+if (builder.Configuration.GetConnectionString("CeoAgent") is { Length: > 0 } postgresConnectionString)
 {
     builder.Services
         .AddHealthChecks()

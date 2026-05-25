@@ -1,11 +1,13 @@
-using CEOAgent.AppHost.Configuration;
+using CeoAgent.AppHost.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var postgres = builder.AddPostgres("postgres", port: 5432)
+var postgresPassword = builder.AddParameter("postgres-password", "postgres", secret: true);
+
+var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: 5432)
     .WithDataVolume()
     .WithPgAdmin()
-    .AddDatabase("CEOAgent");
+    .AddDatabase("CeoAgent");
 
 var storage = builder.AddAzureStorage("storage").RunAsEmulator();
 var queues = storage.AddQueues("queues");
@@ -13,7 +15,7 @@ var blobs = storage.AddBlobs("blobs");
 
 var langfuseHost = builder.AddParameter("langfuse-host");
 
-var apiService = builder.AddProject<Projects.CEOAgent_ApiService>("api")
+var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
     .WithReference(postgres)
     .WithReference(queues)
     .WithReference(blobs)
@@ -25,7 +27,7 @@ var apiService = builder.AddProject<Projects.CEOAgent_ApiService>("api")
     })
     .WithHttpHealthCheck("/health");
 
-var worker = builder.AddProject<Projects.CEOAgent_Worker>("worker")
+var worker = builder.AddProject<Projects.CeoAgent_Worker>("worker")
     .WithReference(postgres)
     .WithReference(queues)
     .WithReference(blobs)

@@ -1,6 +1,6 @@
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class IntegrationCredentialReference : AuditableCompanyOwnedEntity
 {
@@ -37,10 +37,10 @@ public sealed class IntegrationCredentialReference : AuditableCompanyOwnedEntity
     /// <summary>
     /// Channels using this credential reference. Example: WhatsApp Cloud channels.
     /// </summary>
-    public ICollection<CompanyChannel> CompanyChannels { get; } = new List<CompanyChannel>();
+    public ICollection<CompanyChannel> CompanyChannels { get; } = [];
 
     /// <summary>
     /// Tools using this credential reference. Example: Google Calendar tools.
     /// </summary>
-    public ICollection<CompanyTool> CompanyTools { get; } = new List<CompanyTool>();
+    public ICollection<CompanyTool> CompanyTools { get; } = [];
 }

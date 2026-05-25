@@ -1,6 +1,6 @@
-using CEOAgent.Shared.Enums;
+using CeoAgent.Shared.Enums;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class Conversation : AuditableCompanyOwnedEntity
 {
@@ -57,5 +57,5 @@ public sealed class Conversation : AuditableCompanyOwnedEntity
     /// <summary>
     /// Messages recorded for this conversation. Example: the last inbound user message.
     /// </summary>
-    public ICollection<Message> Messages { get; } = new List<Message>();
+    public ICollection<Message> Messages { get; } = [];
 }

@@ -1,4 +1,4 @@
-namespace CEOAgent.ApiService.Dependencies;
+namespace CeoAgent.ApiService.Dependencies;
 
 public sealed class ApiOptions
 {

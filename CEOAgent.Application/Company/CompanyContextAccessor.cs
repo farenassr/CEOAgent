@@ -1,18 +1,16 @@
-namespace CEOAgent.Application.Company;
+namespace CeoAgent.Application.Company;
 
 public sealed class CompanyContextAccessor : ICompanyContextAccessor
 {
-    private static readonly AsyncLocal<Guid?> CurrentCompany = new();
-
-    public Guid? CompanyId => CurrentCompany.Value;
+    public Guid? CompanyId { get; private set; }
 
     public void SetCompany(Guid companyId)
     {
-        CurrentCompany.Value = companyId;
+        CompanyId = companyId;
     }
 
     public void Clear()
     {
-        CurrentCompany.Value = null;
+        CompanyId = null;
     }
 }

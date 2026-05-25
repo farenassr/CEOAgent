@@ -1,4 +1,4 @@
-namespace CEOAgent.Application.Errors;
+namespace CeoAgent.Application.Errors;
 
 public sealed class IntegrationException(string provider, string message, Exception? inner = null)
     : Exception(message, inner)

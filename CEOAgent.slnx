@@ -1,18 +1,19 @@
 <Solution>
   <Folder Name="/tests/">
-    <Project Path="tests/Api.Tests/CEOAgent.Tests.csproj" />
-    <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
-    <Project Path="tests/Worker.Tests/Worker.Tests.csproj" />
+    <Project Path="tests/CeoAgent.ApiService.Tests/CeoAgent.ApiService.Tests.csproj" />
+    <Project Path="tests/CeoAgent.Application.Tests/CeoAgent.Application.Tests.csproj" />
+    <Project Path="tests/CeoAgent.IntegrationTests/CeoAgent.IntegrationTests.csproj" />
+    <Project Path="tests/CeoAgent.Worker.Tests/CeoAgent.Worker.Tests.csproj" />
   </Folder>
-  <Project Path="CEOAgent.Adapters/CEOAgent.Adapters.csproj" />
-  <Project Path="CEOAgent.ApiService/CEOAgent.ApiService.csproj" />
-  <Project Path="CEOAgent.AppHost/CEOAgent.AppHost.csproj" />
-  <Project Path="CEOAgent.Application/CEOAgent.Application.csproj" />
-  <Project Path="CEOAgent.Infrastructure/CEOAgent.Infrastructure.csproj" />
-  <Project Path="CEOAgent.Integrations/CEOAgent.Integrations.csproj" />
-  <Project Path="CEOAgent.ServiceDefaults/CEOAgent.ServiceDefaults.csproj" />
-  <Project Path="CEOAgent.Shared/CEOAgent.Shared.csproj" Id="1f78a91d-65cc-479c-9c09-b2f6c3c5e365" />
-  <Project Path="CEOAgent.Tools/CEOAgent.Tools.csproj" />
-  <Project Path="CEOAgent.Web/CEOAgent.Web.csproj" />
-  <Project Path="CEOAgent.Worker/CEOAgent.Worker.csproj" />
+  <Project Path="CeoAgent.Adapters/CeoAgent.Adapters.csproj" />
+  <Project Path="CeoAgent.ApiService/CeoAgent.ApiService.csproj" />
+  <Project Path="CeoAgent.AppHost/CeoAgent.AppHost.csproj" />
+  <Project Path="CeoAgent.Application/CeoAgent.Application.csproj" />
+  <Project Path="CeoAgent.Infrastructure/CeoAgent.Infrastructure.csproj" />
+  <Project Path="CeoAgent.Integrations/CeoAgent.Integrations.csproj" />
+  <Project Path="CeoAgent.ServiceDefaults/CeoAgent.ServiceDefaults.csproj" />
+  <Project Path="CeoAgent.Shared/CeoAgent.Shared.csproj" Id="1f78a91d-65cc-479c-9c09-b2f6c3c5e365" />
+  <Project Path="CeoAgent.Tools/CeoAgent.Tools.csproj" />
+  <Project Path="CeoAgent.Web/CeoAgent.Web.csproj" />
+  <Project Path="CeoAgent.Worker/CeoAgent.Worker.csproj" />
 </Solution>

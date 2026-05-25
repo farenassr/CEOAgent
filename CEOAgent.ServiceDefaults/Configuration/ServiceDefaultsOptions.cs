@@ -1,4 +1,4 @@
-namespace CEOAgent.ServiceDefaults.Configuration;
+namespace CeoAgent.ServiceDefaults.Configuration;
 
 public sealed class ServiceDefaultsOptions
 {

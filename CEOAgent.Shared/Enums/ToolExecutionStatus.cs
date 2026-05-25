@@ -1,4 +1,4 @@
-namespace CEOAgent.Shared.Enums;
+namespace CeoAgent.Shared.Enums;
 
 public enum ToolExecutionStatus
 {

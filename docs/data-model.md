@@ -1,4 +1,4 @@
-# CEOAgent Data Model 📚
+# CeoAgent Data Model 📚
 
 Guia explicativa del modelo de datos actual del backend. Este documento describe para que sirve cada tabla, que representa cada propiedad, ejemplos de valores reales y las decisiones importantes de diseño.
 
@@ -39,11 +39,11 @@ Las tablas company-owned heredan los campos:
 | `CreatedAt` | Fecha UTC en la que se creo el registro.                                                   | `2026-05-22T10:15:30Z`                 |
 | `UpdatedAt` | Fecha UTC de la ultima modificacion.                                                       | `2026-05-22T10:45:00Z`                 |
 
-`CreatedAt` y `UpdatedAt` los estampa `CEOAgentDbContext` automaticamente al guardar cambios.
+`CreatedAt` y `UpdatedAt` los estampa `CeoAgentDbContext` automaticamente al guardar cambios.
 
 ### JSON
 
-Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como objetos tipados bajo `CEOAgent.Infrastructure.Persistence.Entities.JsonDocuments`, no como strings crudos. Se usan cuando la estructura puede variar por proveedor o configuracion:
+Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como objetos tipados bajo `CeoAgent.Infrastructure.Persistence.Entities.JsonDocuments`, no como strings crudos. Se usan cuando la estructura puede variar por proveedor o configuracion:
 
 - `WorkingHours`
 - `Metadata`
@@ -59,7 +59,7 @@ Las columnas fisicas siguen usando nombres `snake_case` historicos como `working
 
 ### Tipos JSON
 
-Estos objetos viven en `CEOAgent.Infrastructure.Persistence.Entities.JsonDocuments` y se serializan en columnas `jsonb`.
+Estos objetos viven en `CeoAgent.Infrastructure.Persistence.Entities.JsonDocuments` y se serializan en columnas `jsonb`.
 
 | Entidad | Propiedad C# | Columna | Tipo C# |
 | ------- | ------------ | ------- | ------- |
@@ -154,7 +154,7 @@ Todo `MessagePayload` incluye `ProviderType : string` y `ProviderMessageId : str
 
 ### Migraciones
 
-Las migraciones se guardan en `CEOAgent.Infrastructure/Persistence/Migrations/`, pero no se aplican automaticamente. Los agentes de IA pueden crear archivos de migracion cuando cambie el modelo, pero no deben ejecutar `dotnet ef database update` ni aplicar migraciones contra ninguna base de datos. La ejecucion de migraciones es una decision manual del propietario del proyecto.
+Las migraciones se guardan en `CeoAgent.Infrastructure/Persistence/Migrations/`, pero no se crean ni se aplican automaticamente. Los agentes de IA no deben crear, eliminar, aplicar ni ejecutar migraciones de EF Core. La creacion y ejecucion de migraciones, incluido `dotnet ef database update`, es una decision manual del propietario del proyecto.
 
 ---
 

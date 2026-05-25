@@ -1,4 +1,4 @@
-namespace CEOAgent.Web;
+namespace CeoAgent.Web;
 
 public class WeatherApiClient(HttpClient httpClient)
 {

@@ -1,6 +1,6 @@
 using FastEndpoints;
 
-namespace CEOAgent.ApiService.Dependencies;
+namespace CeoAgent.ApiService.Dependencies;
 
 public static class ApiRegistrations
 {

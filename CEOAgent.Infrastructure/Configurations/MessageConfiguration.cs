@@ -1,8 +1,8 @@
-using CEOAgent.Infrastructure.Entities;
+using CeoAgent.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace CEOAgent.Infrastructure.Configurations;
+namespace CeoAgent.Infrastructure.Configurations;
 
 public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
 {

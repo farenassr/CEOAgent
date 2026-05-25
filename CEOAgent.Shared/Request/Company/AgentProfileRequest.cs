@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 
-namespace CEOAgent.Shared.Request.Company;
+namespace CeoAgent.Shared.Request.Company;
 
 public sealed class AgentProfileRequest
 {

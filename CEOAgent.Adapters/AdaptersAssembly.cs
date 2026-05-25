@@ -1,3 +1,3 @@
-namespace CEOAgent.Adapters;
+namespace CeoAgent.Adapters;
 
 public static class AdaptersAssembly;

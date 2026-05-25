@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\CEOAgent.Application\CEOAgent.Application.csproj" />
-    <ProjectReference Include="..\CEOAgent.Shared\CEOAgent.Shared.csproj" />
+    <ProjectReference Include="..\CeoAgent.Application\CeoAgent.Application.csproj" />
+    <ProjectReference Include="..\CeoAgent.Shared\CeoAgent.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <UserSecretsId>dotnet-CEOAgent.Infrastructure-92d2a6cb-3528-4541-af89-a4f34f01e67c</UserSecretsId>
+    <UserSecretsId>dotnet-CeoAgent.Infrastructure-92d2a6cb-3528-4541-af89-a4f34f01e67c</UserSecretsId>
   </PropertyGroup>
 
 </Project>

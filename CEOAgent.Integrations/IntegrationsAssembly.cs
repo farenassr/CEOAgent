@@ -1,3 +1,3 @@
-namespace CEOAgent.Integrations;
+namespace CeoAgent.Integrations;
 
 public static class IntegrationsAssembly;

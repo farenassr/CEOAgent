@@ -1,4 +1,4 @@
-# CEOAgent MVP Phased Implementation Plan
+# CeoAgent MVP Phased Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,25 +13,25 @@
 
 The repository currently has the default Aspire-style starter projects:
 
-- `CEOAgent.AppHost`
-- `CEOAgent.ApiService`
-- `CEOAgent.ServiceDefaults`
-- `CEOAgent.Web`
+- `CeoAgent.AppHost`
+- `CeoAgent.ApiService`
+- `CeoAgent.ServiceDefaults`
+- `CeoAgent.Web`
 
 The target MVP layout from `AGENTS.md` is:
 
-- `CEOAgent.AppHost`
-- `CEOAgent.ServiceDefaults`
-- `CEOAgent.ApiService`
-- `CEOAgent.Worker`
-- `CEOAgent.Application`
-- `CEOAgent.Infrastructure`
-- `CEOAgent.Integrations`
-- `CEOAgent.Adapters`
-- `CEOAgent.Tools`
+- `CeoAgent.AppHost`
+- `CeoAgent.ServiceDefaults`
+- `CeoAgent.ApiService`
+- `CeoAgent.Worker`
+- `CeoAgent.Application`
+- `CeoAgent.Infrastructure`
+- `CeoAgent.Integrations`
+- `CeoAgent.Adapters`
+- `CeoAgent.Tools`
 - `tests/*`
 
-The first phase must therefore convert the starter shape into the target backend shape before feature work begins. `CEOAgent.Web` is not part of the MVP backend unless a separate admin UI is later requested.
+The first phase must therefore convert the starter shape into the target backend shape before feature work begins. `CeoAgent.Web` is not part of the MVP backend unless a separate admin UI is later requested.
 
 ## Phase Principles
 
@@ -53,21 +53,21 @@ The first phase must therefore convert the starter shape into the target backend
 **Deliverables:**
 
 - Add class library projects:
-  - `CEOAgent.Application`
-  - `CEOAgent.Infrastructure`
-  - `CEOAgent.Integrations`
-  - `CEOAgent.Adapters`
-  - `CEOAgent.Tools`
+  - `CeoAgent.Application`
+  - `CeoAgent.Infrastructure`
+  - `CeoAgent.Integrations`
+  - `CeoAgent.Adapters`
+  - `CeoAgent.Tools`
 - Add worker project:
-  - `CEOAgent.Worker`
+  - `CeoAgent.Worker`
 - Add test projects under `tests/`:
-  - `tests/Api.Tests`
-  - `tests/Worker.Tests`
-  - `tests/Application.Tests`
-  - `tests/Integration.Tests`
+  - `tests/CeoAgent.ApiService.Tests`
+  - `tests/CeoAgent.Worker.Tests`
+  - `tests/CeoAgent.Application.Tests`
+  - `tests/CeoAgent.IntegrationTests`
 - Add root `Directory.Build.props`.
 - Add root `.editorconfig`.
-- Update `CEOAgent.slnx` to reference the target projects.
+- Update `CeoAgent.slnx` to reference the target projects.
 
 **Required packages by area:**
 
@@ -93,7 +93,7 @@ The first phase must therefore convert the starter shape into the target backend
 **Verification:**
 
 ```powershell
-dotnet build CEOAgent.slnx
+dotnet build CeoAgent.slnx
 ```
 
 Expected: build succeeds with zero warnings.
@@ -106,7 +106,7 @@ Expected: build succeeds with zero warnings.
 
 **Deliverables:**
 
-- `CEOAgent.AppHost/AppHost.cs` references PostgreSQL, Azurite queues/blobs, OpenAI connection string, API, and Worker (If they are already there ignore).
+- `CeoAgent.AppHost/AppHost.cs` references PostgreSQL, Azurite queues/blobs, OpenAI connection string, API, and Worker (If they are already there ignore).
 - API exposes `/health`.
 - Worker exposes `/health` if hosted with an HTTP surface; otherwise health is verified through Aspire resource status and logs.
 - API has a single global `IExceptionHandler` producing `ProblemDetails`.
@@ -133,9 +133,9 @@ Expected: build succeeds with zero warnings.
 **Verification:**
 
 ```powershell
-dotnet build CEOAgent.slnx
-dotnet test CEOAgent.slnx
-dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
+dotnet build CeoAgent.slnx
+dotnet test CeoAgent.slnx
+dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
 ```
 
 Expected: solution builds, tests pass, Aspire starts API and Worker, `/health` returns healthy when dependencies are available.
@@ -152,14 +152,14 @@ variables.
 
 **Deliverables:**
 
-- `CEOAgent.AppHost` includes the Aspire Azure Key Vault hosting package.
+- `CeoAgent.AppHost` includes the Aspire Azure Key Vault hosting package.
 - AppHost defines a Key Vault resource for deployed/shared secrets.
 - AppHost passes selected secrets/config values to API and Worker:
   - API receives `Authentication:AdminApiKey`.
   - API and Worker receive Langfuse keys.
 - Aspire-managed PostgreSQL, queue, and blob connection strings continue to
   flow through existing `.WithReference(...)` calls.
-- `CEOAgentDbContextFactory` reads `ConnectionStrings:CEOAgent` from configuration
+- `CeoAgentDbContextFactory` reads `ConnectionStrings:CeoAgent` from configuration
   instead of hardcoding a local PostgreSQL connection string.
 - Company integration credential tables store references such as `kv://...`
   only. They never store raw provider secrets.
@@ -171,7 +171,7 @@ variables.
   strings for PostgreSQL, Azure Storage Queues, and Azure Blob Storage.
 - Azure Key Vault is the target store for deployed/shared secrets.
 - User-secrets and environment variables are local development inputs only.
-- `CEOAgentDbContextFactory` reads `ConnectionStrings:CEOAgent` from
+- `CeoAgentDbContextFactory` reads `ConnectionStrings:CeoAgent` from
   `appsettings.json`, `appsettings.Development.json`, user-secrets, or
   environment variables, and fails fast when the value is missing.
 - Company integration credential rows store references only, for example
@@ -182,7 +182,7 @@ variables.
 
 **Tasks:**
 
-- [x] Add `Aspire.Hosting.Azure.KeyVault` to `CEOAgent.AppHost`.
+- [x] Add `Aspire.Hosting.Azure.KeyVault` to `CeoAgent.AppHost`.
 - [x] Add a Key Vault resource in AppHost for publish/deployed mode.
 - [x] Pass selected Key Vault secrets to API and Worker as environment/config
   values.
@@ -190,7 +190,7 @@ variables.
   `.WithReference(postgres)`.
 - [x] Keep Aspire-managed queue/blob wiring via `.WithReference(queues)` and
   `.WithReference(blobs)`.
-- [x] Update `CEOAgentDbContextFactory` to read `ConnectionStrings:CEOAgent` from
+- [x] Update `CeoAgentDbContextFactory` to read `ConnectionStrings:CeoAgent` from
   configuration.
 - [x] Add focused tests for design-time factory configuration behavior.
 - [x] Add documentation for local user-secrets setup.
@@ -198,11 +198,11 @@ variables.
 ### Local EF design-time connection string
 
 For local `dotnet ef` and other design-time EF commands, set the
-`ConnectionStrings:CEOAgent` value in user-secrets for the Infrastructure
+`ConnectionStrings:CeoAgent` value in user-secrets for the Infrastructure
 project:
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:CEOAgent" "<postgres-connection-string>" --project CEOAgent.Infrastructure
+dotnet user-secrets set "ConnectionStrings:CeoAgent" "<postgres-connection-string>" --project CeoAgent.Infrastructure
 ```
 
 This setting is only for local design-time EF usage. Runtime local connection
@@ -218,9 +218,9 @@ production.
 **Verification:**
 
 ```powershell
-dotnet build CEOAgent.slnx
-dotnet test tests/Integration.Tests/Integration.Tests.csproj
-dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
+dotnet build CeoAgent.slnx
+dotnet test tests/CeoAgent.IntegrationTests/CeoAgent.IntegrationTests.csproj
+dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
 ```
 
 Expected: solution builds, design-time factory tests pass, AppHost starts
@@ -236,7 +236,7 @@ live Key Vault behavior is not verified by local tests.
 
 **Deliverables:**
 
-- One `CEOAgentDbContext`.
+- One `CeoAgentDbContext`.
 - EF Core snake_case naming convention.
 - Company context abstraction and middleware.
 - EF global query filters for company-owned entities.
@@ -256,7 +256,7 @@ live Key Vault behavior is not verified by local tests.
   - `ConversationState`
   - `ToolExecution`
   - `AudioAsset`
-- Initial migration in `CEOAgent.Infrastructure/Persistence/Migrations/`.
+- Initial migration in `CeoAgent.Infrastructure/Persistence/Migrations/`.
 
 **Admin endpoint slices:**
 
@@ -278,26 +278,98 @@ live Key Vault behavior is not verified by local tests.
 - [x] Add company isolation tests proving cross-company access returns 404.
 - [x] Add migration file. Applying it remains a manual operator step.
 
-Implementation comment: Phase 2 added the shared company context, `CEOAgentDbContext`, company-owned entities and EF configurations, scoped company query filters, static `AdminApiKey` authentication, MVP secret wiring with local Aspire parameters/user-secrets and publish-mode Azure Key Vault, FastEndpoints/Mediator admin onboarding routes, focused admin-auth and company-isolation tests, and the initial persistence migration under `CEOAgent.Infrastructure/Persistence/Migrations/`.
+Implementation comment: Phase 2 added the shared company context, `CeoAgentDbContext`, company-owned entities and EF configurations, scoped company query filters, static `AdminApiKey` authentication, MVP secret wiring with local Aspire parameters/user-secrets and publish-mode Azure Key Vault, FastEndpoints/Mediator admin onboarding routes, focused admin-auth and company-isolation tests, and the initial persistence migration under `CeoAgent.Infrastructure/Persistence/Migrations/`.
 
 **Verification:**
 
 ```powershell
-dotnet build CEOAgent.slnx
-dotnet test CEOAgent.slnx --filter "Company|Admin|Persistence"
+dotnet build CeoAgent.slnx
+dotnet test CeoAgent.slnx --filter "Company|Admin|Persistence"
 ```
 
 Expected: company-owned queries are filtered by ambient company context; admin endpoints require `X-Admin-Api-Key`.
 
 ---
 
-## Phase 3: Integration Ports, Queue, Blob, and Job Contracts
+## Phase 3: Azure Infrastructure Configuration Foundation
+
+**Purpose:** Prepare the Azure-facing infrastructure configuration for the MVP before implementing durable queue/blob abstractions, job contracts, and provider-specific behavior.
+
+**Deliverables:**
+
+- `CeoAgent.AppHost` keeps local development on Aspire + Azurite:
+  - `AddAzureStorage("storage").RunAsEmulator()`
+  - `storage.AddQueues("queues")`
+  - `storage.AddBlobs("blobs")`
+- API and Worker continue receiving PostgreSQL, Queue, and Blob references through `.WithReference(...)`.
+- Dev Azure resource expectations are documented:
+  - resource group: `rg-ceo-agent-dev`
+  - Key Vault: `kv-ceo-agent-dev`
+  - Azure Storage account for queue/blob services
+  - PostgreSQL database/resource for deployed dev runs
+  - Azure Monitor/Application Insights or OTLP endpoint for production telemetry later
+  - managed identity expectation for API/Worker once deployed
+  - Langfuse host/public key/secret key
+  - admin API key secret
+- Required queue names are defined:
+  - `process-incoming-message`
+  - `transcribe-audio`
+  - `synthesize-audio`
+  - `send-outbound-message`
+  - `close-inactive-conversations`
+  - poison/dead-letter queues named `<queue-name>-poison`
+- Required Blob Storage layout is defined:
+  - container: `media`
+  - prefixes:
+    - `audio/inbound/`
+    - `audio/outbound/`
+    - `attachments/`
+- Health expectations are documented for:
+  - PostgreSQL
+  - Azure Storage Queues metadata
+  - Azure Blob Storage metadata
+- No raw connection strings, API keys, tokens, or provider secrets are committed.
+
+**Rules:**
+
+- Local development must not require Azure access.
+- Aspire `.WithReference(...)` remains the runtime source for PostgreSQL, Queue, and Blob connection strings.
+- Azure Key Vault stores deployed/shared secrets only. Do not move PostgreSQL, Queue, or Blob runtime connection strings into Key Vault.
+- This phase does not add Bicep, Terraform, Azure DevOps pipelines, production hosting topology, queue workers, job handlers, blob storage services, or integration ports.
+
+**Tasks:**
+
+- [ ] Align AppHost resource naming in the document with the current resource names: `postgres`, `storage`, `queues`, `blobs`, `keyvault`, `api`, and `worker`.
+- [ ] Document the dev Azure resource naming convention and required configuration values.
+- [ ] Document the required queue names and poison queue naming convention.
+- [ ] Document the required Blob container and prefix layout.
+- [ ] Document which values come from Aspire parameters, user-secrets, environment variables, and Azure Key Vault.
+- [ ] Confirm README local setup still matches the AppHost configuration.
+- [ ] Add an operator verification checklist for AppHost startup, Aspire dashboard resources, and `/health`.
+
+**Verification:**
+
+```powershell
+dotnet build CeoAgent.slnx
+dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
+```
+
+Expected: solution builds, AppHost starts locally with PostgreSQL and Azurite-backed queue/blob resources, API and Worker receive their references, and `/health` can validate configured dependencies.
+
+Reference docs:
+
+- [Aspire Azure Blob Storage integration](https://learn.microsoft.com/en-us/dotnet/aspire/storage/azure-storage-blobs-integration)
+- [Aspire Azure Key Vault integration](https://learn.microsoft.com/en-us/dotnet/aspire/security/azure-security-key-vault-integration)
+
+---
+
+## Phase 4: Integration Ports, Queue, Blob, and Job Contracts
 
 **Purpose:** Define the durable async processing contracts and external integration seams before implementing provider-specific behavior.
 
 **Deliverables:**
 
-- Port contracts in `CEOAgent.Integrations`:
+- Port contracts in `CeoAgent.Integrations`:
   - `IMessageChannelIntegration`
   - `ICalendarIntegration`
   - `ITranscriptionIntegration`
@@ -327,15 +399,15 @@ Expected: company-owned queries are filtered by ambient company context; admin e
 **Verification:**
 
 ```powershell
-dotnet build CEOAgent.slnx
-dotnet test CEOAgent.slnx --filter "Queue|Blob|Job"
+dotnet build CeoAgent.slnx
+dotnet test CeoAgent.slnx --filter "Queue|Blob|Job"
 ```
 
 Expected: queue payloads serialize deterministically and Worker can receive known job types.
 
 ---
 
-## Phase 4: WhatsApp Webhook Ingestion
+## Phase 5: WhatsApp Webhook Ingestion
 
 **Purpose:** Receive WhatsApp Cloud messages securely, resolve companies by channel, persist inbound messages, enqueue processing, and return quickly.
 
@@ -367,21 +439,21 @@ Expected: queue payloads serialize deterministically and Worker can receive know
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "WhatsApp|Webhook"
+dotnet test CeoAgent.slnx --filter "WhatsApp|Webhook"
 ```
 
 Expected: invalid signatures return 401; duplicate provider messages return 200 and do not enqueue again.
 
 ---
 
-## Phase 5: Conversation, Prompt, and Agent Runtime
+## Phase 6: Conversation, Prompt, and Agent Runtime
 
 **Purpose:** Build the AI turn orchestration without enabling side effects directly from the model.
 
 **Deliverables:**
 
-- `PromptBuilder` in `CEOAgent.Application`.
-- `AgentRunner` in `CEOAgent.Application`.
+- `PromptBuilder` in `CeoAgent.Application`.
+- `AgentRunner` in `CeoAgent.Application`.
 - Structured output contract:
   - assistant message
   - optional tool call request
@@ -412,14 +484,14 @@ Expected: invalid signatures return 401; duplicate provider messages return 200 
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "Agent|Prompt|StructuredOutput"
+dotnet test CeoAgent.slnx --filter "Agent|Prompt|StructuredOutput"
 ```
 
 Expected: prompt snapshots are stable; no full transcript is sent; malformed model output triggers retry then handoff.
 
 ---
 
-## Phase 6: Tool Registry and Tool Execution Gateway
+## Phase 7: Tool Registry and Tool Execution Gateway
 
 **Purpose:** Add the single chokepoint for every model-requested side effect.
 
@@ -456,17 +528,20 @@ Expected: prompt snapshots are stable; no full transcript is sent; malformed mod
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "CompanyToolRegistry"
+dotnet test CeoAgent.slnx --filter "CompanyToolRegistry"
 ```
 
 Expected: the gateway denies unsafe calls before invoking handlers and triggers handoff after repeated same-operation failures.
 
 ---
 
+## Phase 8: Google Calendar Availability and Reservation Rules
 
+**Purpose:** Implement the Google Calendar-backed availability workflow and reservation business rules behind approved tool handlers.
 
 **Deliverables:**
 
+- Native reservation rules for:
   - check availability
   - close conversation manually if needed by staff
   - cannot create outside working hours
@@ -487,12 +562,14 @@ Expected: the gateway denies unsafe calls before invoking handlers and triggers 
 **Verification:**
 
 ```powershell
+dotnet test CeoAgent.slnx --filter "Calendar|Availability"
 ```
 
+Expected: reservation business rules are enforced before calling Google Calendar, and adapter failures map to recoverable integration errors.
 
 ---
 
-## Phase 8: Audio Inbound, Transcription, TTS, and Outbound Messaging
+## Phase 9: Audio Inbound, Transcription, TTS, and Outbound Messaging
 
 **Purpose:** Complete the WhatsApp text/audio loop, including voice-note transcription and optional voice replies.
 
@@ -526,14 +603,14 @@ Expected: the gateway denies unsafe calls before invoking handlers and triggers 
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "Audio|Transcription|Speech|Outbound"
+dotnet test CeoAgent.slnx --filter "Audio|Transcription|Speech|Outbound"
 ```
 
 Expected: inbound audio can become an agent turn; failed transcription hands off; failed TTS still sends text.
 
 ---
 
-## Phase 9: Worker Pipelines and Conversation Lifecycle
+## Phase 10: Worker Pipelines and Conversation Lifecycle
 
 **Purpose:** Connect webhook ingestion, agent execution, tool execution, outbound sending, and conversation lifecycle into reliable background flows.
 
@@ -559,14 +636,14 @@ Expected: inbound audio can become an agent turn; failed transcription hands off
 **Verification:**
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "ProcessIncomingMessage|Conversation|CloseInactive"
+dotnet test CeoAgent.slnx --filter "ProcessIncomingMessage|Conversation|CloseInactive"
 ```
 
 Expected: full text message flow runs through Worker without API doing long-running work; conversation lifecycle rules match `AGENTS.md`.
 
 ---
 
-## Phase 10: End-to-End Integration, Hardening, and MVP Acceptance
+## Phase 11: End-to-End Integration, Hardening, and MVP Acceptance
 
 **Purpose:** Prove the MVP path works end to end and close reliability, security, and observability gaps.
 
@@ -610,9 +687,9 @@ Expected: full text message flow runs through Worker without API doing long-runn
 **Verification:**
 
 ```powershell
-dotnet build CEOAgent.slnx
-dotnet test CEOAgent.slnx
-dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
+dotnet build CeoAgent.slnx
+dotnet test CeoAgent.slnx
+dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
 ```
 
 
@@ -647,7 +724,7 @@ dotnet run --project CEOAgent.AppHost/CEOAgent.AppHost.csproj
 
 ## Suggested Commit Sequence
 
-1. `CEOAgent.ApiService/CEOAgent.Tools/..etc.. :[{githubIssueId}] establish mvp solution structure`
+1. `CeoAgent.ApiService/CeoAgent.Tools/..etc.. :[{githubIssueId}] establish mvp solution structure`
 
 ## Deferred Until After MVP
 

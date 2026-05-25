@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CEOAgent.Shared.Enums;
+namespace CeoAgent.Shared.Enums;
 
 [JsonConverter(typeof(JsonStringEnumConverter<CompanyChannelProvider>))]
 public enum CompanyChannelProvider

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace CEOAgent.ApiService.Infrastructure.Json;
+namespace CeoAgent.ApiService.Infrastructure.Json;
 
 internal static class JsonElementMappingExtensions
 {

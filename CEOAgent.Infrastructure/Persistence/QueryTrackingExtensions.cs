@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace CEOAgent.Infrastructure.Persistence;
+namespace CeoAgent.Infrastructure.Persistence;
 
 public static class QueryTrackingExtensions
 {

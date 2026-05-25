@@ -1,4 +1,4 @@
-namespace CEOAgent.Infrastructure.Entities.JsonDocuments;
+namespace CeoAgent.Infrastructure.Entities.JsonDocuments;
 
 public sealed class ConversationStateSnapshot
 {

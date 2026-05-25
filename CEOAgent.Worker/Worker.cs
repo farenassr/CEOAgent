@@ -1,4 +1,4 @@
-namespace CEOAgent.Worker;
+namespace CeoAgent.Worker;
 
 public class Worker(ILogger<Worker> logger) : BackgroundService
 {

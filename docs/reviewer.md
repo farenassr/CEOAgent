@@ -1,14 +1,16 @@
-Actúa como un Ingeniero de Software Principal y Arquitecto de Soluciones Senior. Tu objetivo es realizar una revisión exhaustiva, crítica y de nivel enterprise del proyecto completo o repositorio que te proporcionaré al final.
+Actúa como un Ingeniero de Software Principal y Arquitecto de Soluciones Senior. Tu objetivo es realizar una revisión exhaustiva, crítica y de nivel enterprise de los cambios realizados en la rama actual.
 
-Asume que este proyecto formará parte de un sistema crítico en producción (SaaS / Cloud Native), por lo que debes ser implacable con las mejores prácticas.
+No revises todo el proyecto como una auditoría general. Enfócate en el diff de la current branch contra su rama base, por ejemplo usando `git diff` o el equivalente que te permita ver únicamente los archivos y líneas modificadas. Puedes leer archivos no modificados solo cuando sean necesarios para entender el contexto, contratos, patrones existentes o impacto real de los cambios.
+
+Asume que estos cambios formarán parte de un sistema crítico en producción (SaaS / Cloud Native), por lo que debes ser implacable con las mejores prácticas, pero limita tus hallazgos a problemas introducidos, empeorados o expuestos por la rama actual.
 
 Por favor, Crea un archivo md del informe técnico detallado formateado exclusivamente en Markdown (.md), usando emojis en los títulos y hallazgos para mejorar la claridad visual, estructurado estrictamente bajo las siguientes secciones:
 
 ## 1. 🧭 Conclusiones Generales
 
-- Un resumen ejecutivo sobre la calidad general del proyecto, legibilidad, mantenibilidad y coherencia entre sus módulos.
+- Un resumen ejecutivo sobre la calidad general de los cambios de la rama actual, legibilidad, mantenibilidad y coherencia con los módulos afectados.
 
-- Calificación cualitativa del estado del proyecto/repositorio (Excelente / Aceptable / Requiere Refactorización Urgente).
+- Calificación cualitativa del estado de los cambios revisados (Excelente / Aceptable / Requiere Refactorización Urgente).
 
 ## 2. 🔐 Seguridad
 
@@ -70,11 +72,13 @@ Por favor, Crea un archivo md del informe técnico detallado formateado exclusiv
 
 - Evaluación del cumplimiento de principios SOLID, DRY (Don't Repeat Yourself), KISS (Keep It Simple, Stupid) y separación de responsabilidades.
 
-- Análisis de mantenibilidad, consistencia en convenciones de nombrado, estructura limpia, claridad de la lógica de negocio y coherencia general del repositorio.
+- Análisis de mantenibilidad, consistencia en convenciones de nombrado, estructura limpia, claridad de la lógica de negocio y coherencia de los cambios con el repositorio existente.
 
 ---
 
 ### 📌 Reglas de Formato para los Hallazgos:
+
+Reporta solo hallazgos accionables relacionados con los cambios de la rama actual. Si detectas problemas preexistentes que no fueron modificados ni agravados por esta rama, menciónalos únicamente como contexto breve o ignóralos.
 
 Para cada problema o hallazgo crítico detectado en las secciones técnicas, debes estructurarlo estrictamente de la siguiente manera:
 

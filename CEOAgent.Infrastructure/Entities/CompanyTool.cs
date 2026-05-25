@@ -1,6 +1,6 @@
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class CompanyTool : AuditableCompanyOwnedEntity
 {
@@ -42,5 +42,5 @@ public sealed class CompanyTool : AuditableCompanyOwnedEntity
     /// <summary>
     /// Executions recorded for this enabled tool. Example: check_availability calls.
     /// </summary>
-    public ICollection<ToolExecution> ToolExecutions { get; } = new List<ToolExecution>();
+    public ICollection<ToolExecution> ToolExecutions { get; } = [];
 }

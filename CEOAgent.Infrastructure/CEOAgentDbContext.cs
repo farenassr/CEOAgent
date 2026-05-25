@@ -1,11 +1,11 @@
-using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Entities;
+using CeoAgent.Application.Company;
+using CeoAgent.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace CEOAgent.Infrastructure;
+namespace CeoAgent.Infrastructure;
 
-public sealed class CEOAgentDbContext(
-    DbContextOptions<CEOAgentDbContext> options,
+public sealed class CeoAgentDbContext(
+    DbContextOptions<CeoAgentDbContext> options,
     ICompanyContext companyContext,
     TimeProvider timeProvider) : DbContext(options)
 {
@@ -34,7 +34,7 @@ public sealed class CEOAgentDbContext(
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CEOAgentDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CeoAgentDbContext).Assembly);
 
         modelBuilder.Entity<CompanyChannel>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
         modelBuilder.Entity<AgentProfile>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
@@ -64,21 +64,14 @@ public sealed class CEOAgentDbContext(
     {
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
-        foreach (var entry in ChangeTracker.Entries().ToArray())
+        foreach (var entry in ChangeTracker.Entries())
         {
-            if (entry.Entity is Conversation
-                && entry.State == EntityState.Modified
-                && entry.Property(nameof(Conversation.AgentProfileId)).IsModified)
-            {
-                throw new InvalidOperationException("Conversation.AgentProfileId is immutable after conversation creation.");
-            }
-
             if (entry.Entity is AuditableCompanyOwnedEntity companyOwned
                 && entry.State is EntityState.Added or EntityState.Modified)
             {
-                if (companyOwned.CompanyId == Guid.Empty && companyContext.CompanyId is { } companyId)
+                if (companyOwned.CompanyId == Guid.Empty)
                 {
-                    companyOwned.CompanyId = companyId;
+                    throw new InvalidOperationException("Company-owned entity requires a non-empty CompanyId.");
                 }
 
                 companyOwned.UpdatedAt = now;

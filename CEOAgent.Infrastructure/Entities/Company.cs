@@ -1,7 +1,7 @@
-using CEOAgent.Shared.Enums;
-using CEOAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Shared.Enums;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
 
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class Company
 {
@@ -43,7 +43,7 @@ public sealed class Company
     /// <summary>
     /// Channel registrations that resolve inbound messages to this company. Example: one WhatsApp Cloud channel.
     /// </summary>
-    public ICollection<CompanyChannel> Channels { get; } = new List<CompanyChannel>();
+    public ICollection<CompanyChannel> Channels { get; } = [];
 
     /// <summary>
     /// Agent configuration used for this company's conversations. Example: a Spanish support assistant profile.
@@ -53,10 +53,10 @@ public sealed class Company
     /// <summary>
     /// Tools enabled for this company. Example: request_human_handoff.
     /// </summary>
-    public ICollection<CompanyTool> Tools { get; } = new List<CompanyTool>();
+    public ICollection<CompanyTool> Tools { get; } = [];
 
     /// <summary>
     /// External integration credential references owned by this company. Example: google_calendar primary credential.
     /// </summary>
-    public ICollection<IntegrationCredentialReference> IntegrationCredentials { get; } = new List<IntegrationCredentialReference>();
+    public ICollection<IntegrationCredentialReference> IntegrationCredentials { get; } = [];
 }

@@ -1,21 +1,21 @@
-using CEOAgent.Application.Errors;
-using CEOAgent.Application.Company;
-using CEOAgent.Infrastructure.Persistence;
-using CEOAgent.Shared.Request.Company;
-using CEOAgent.Shared.Response.Company;
+using CeoAgent.Application.Errors;
+using CeoAgent.Application.Company;
+using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.Shared.Request.Company;
+using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
-using CEOAgent.Infrastructure;
-using CEOAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Infrastructure;
+using CeoAgent.ApiService.Modules.Companies.Mappers;
 
-namespace CEOAgent.ApiService.Modules.Companies.Endpoints;
+namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Registers an external integration credential reference for a company.
 /// </summary>
 public sealed class RegisterIntegrationCredentialEndpoint(
-    CEOAgentDbContext dbContext,
+    CeoAgentDbContext dbContext,
     ICompanyContext companyContext) : Endpoint<IntegrationCredentialRequest, IntegrationCredentialResponse>
 {
     public override void Configure()
@@ -37,7 +37,7 @@ public sealed class RegisterIntegrationCredentialEndpoint(
     }
 
     private static async Task EnsureCompanyIsAccessibleAsync(
-        CEOAgentDbContext dbContext,
+        CeoAgentDbContext dbContext,
         ICompanyContext companyContext,
         Guid companyId,
         CancellationToken cancellationToken)

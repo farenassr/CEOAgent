@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using System.Threading.RateLimiting;
 
-namespace CEOAgent.ApiService.Dependencies;
+namespace CeoAgent.ApiService.Dependencies;
 
 internal sealed class ConfigureCorsOptions(IOptions<ApiOptions> apiOptions) : IConfigureOptions<CorsOptions>
 {

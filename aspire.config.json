@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "CEOAgent.AppHost/CEOAgent.AppHost.csproj"
+    "path": "CeoAgent.AppHost/CeoAgent.AppHost.csproj"
   }
 }

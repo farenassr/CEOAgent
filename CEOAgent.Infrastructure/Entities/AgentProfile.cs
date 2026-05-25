@@ -1,4 +1,4 @@
-namespace CEOAgent.Infrastructure.Entities;
+namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class AgentProfile : AuditableCompanyOwnedEntity
 {
@@ -35,5 +35,5 @@ public sealed class AgentProfile : AuditableCompanyOwnedEntity
     /// <summary>
     /// Conversations created with this profile snapshot. Example: Spanish support conversations.
     /// </summary>
-    public ICollection<Conversation> Conversations { get; } = new List<Conversation>();
+    public ICollection<Conversation> Conversations { get; } = [];
 }
