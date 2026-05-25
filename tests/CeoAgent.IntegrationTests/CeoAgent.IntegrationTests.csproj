@@ -19,4 +19,8 @@
     <PackageReference Include="TUnit" Version="1.45.29" />
     <PackageReference Include="Verify.TUnit" Version="31.17.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+  </ItemGroup>
 </Project>

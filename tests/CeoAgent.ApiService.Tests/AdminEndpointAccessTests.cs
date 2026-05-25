@@ -16,6 +16,7 @@ public sealed class AdminEndpointAccessTests
     public async Task AdminEndpoint_WithoutAuthentication_AllowsRequest()
     {
         await using var factory = new ApiFactory();
+
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsJsonAsync("/v1/admin/companies", new { name = "Company A" });
@@ -30,6 +31,7 @@ public sealed class AdminEndpointAccessTests
     public async Task CompanyScopedEndpoint_WhenRouteCompanyDiffersFromHeaderCompany_Returns404()
     {
         await using var factory = new ApiFactory();
+
         using var client = factory.CreateClient();
         var companyId = await CreateCompanyAsync(client, "Company A");
         var otherCompanyId = await CreateCompanyAsync(client, "Company B");
@@ -53,6 +55,7 @@ public sealed class AdminEndpointAccessTests
     public async Task RegisterCompanyChannel_WithWhatsAppCloudProvider_ReturnsCompanyChannelResponse()
     {
         await using var factory = new ApiFactory();
+
         using var client = factory.CreateClient();
         var companyId = await CreateCompanyAsync(client, "Company A");
 

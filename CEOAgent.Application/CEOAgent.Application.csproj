@@ -7,4 +7,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.6.2" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+  </ItemGroup>
 </Project>

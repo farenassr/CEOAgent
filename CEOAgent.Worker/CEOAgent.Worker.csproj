@@ -28,4 +28,8 @@
     <ProjectReference Include="..\CeoAgent.Adapters\CeoAgent.Adapters.csproj" />
     <ProjectReference Include="..\CeoAgent.Tools\CeoAgent.Tools.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+  </ItemGroup>
 </Project>

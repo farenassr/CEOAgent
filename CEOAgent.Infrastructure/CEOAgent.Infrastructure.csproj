@@ -26,6 +26,10 @@
     <Folder Include="Persistence\Migrations\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+  </ItemGroup>
+
   <PropertyGroup>
     <UserSecretsId>dotnet-CeoAgent.Infrastructure-92d2a6cb-3528-4541-af89-a4f34f01e67c</UserSecretsId>
   </PropertyGroup>
