@@ -255,7 +255,6 @@ live Key Vault behavior is not verified by local tests.
   - `Message`
   - `ConversationState`
   - `ToolExecution`
-  - `AudioAsset`
 - Initial migration in `CeoAgent.Infrastructure/Persistence/Migrations/`.
 
 **Admin endpoint slices:**
@@ -270,7 +269,7 @@ live Key Vault behavior is not verified by local tests.
 
 - [x] Create company context interfaces and middleware.
 - [x] Create entities with `Guid.CreateVersion7()`, `company_id`, `created_at`, and `updated_at` where required.
-- [x] Configure singular table names and enum-as-string conversions.
+- [x] Configure singular table names and enum-as-string conversions, including `IntegrationProvider` snake_case values.
 - [x] Add global query filters for company-owned entities.
 - [x] Add admin API key authentication handler.
 - [x] Add Key Vault publish-mode wiring while keeping local secrets in Aspire parameters/user-secrets.
@@ -580,7 +579,7 @@ Expected: reservation business rules are enforced before calling Google Calendar
 - Speech synthesis adapter implements `ISpeechSynthesisIntegration`.
 - Inbound voice notes:
   - download media to Blob Storage
-  - persist `AudioAsset`
+  - persist audio metadata in `Message.Payload.Audio`
   - transcribe once
   - on transcription failure, trigger human handoff
   - on success, continue agent processing as user turn

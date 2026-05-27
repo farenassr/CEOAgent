@@ -1,5 +1,6 @@
 using CeoAgent.Application.Company;
 using CeoAgent.Infrastructure.Entities;
+using CeoAgent.Infrastructure.Entities.Filters;
 using Microsoft.EntityFrameworkCore;
 
 namespace CeoAgent.Infrastructure;
@@ -9,6 +10,8 @@ public sealed class CeoAgentDbContext(
     ICompanyContext companyContext,
     TimeProvider timeProvider) : DbContext(options)
 {
+    internal Guid? CurrentCompanyId => companyContext.CompanyId;
+
     public DbSet<Company> Companies => Set<Company>();
 
     public DbSet<CompanyChannel> CompanyChannels => Set<CompanyChannel>();
@@ -29,23 +32,12 @@ public sealed class CeoAgentDbContext(
 
     public DbSet<ToolExecution> ToolExecutions => Set<ToolExecution>();
 
-    public DbSet<AudioAsset> AudioAssets => Set<AudioAsset>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("public");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CeoAgentDbContext).Assembly);
 
-        modelBuilder.Entity<CompanyChannel>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<AgentProfile>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<CompanyTool>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<IntegrationCredentialReference>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<Customer>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<Conversation>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<Message>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<ConversationState>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<ToolExecution>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
-        modelBuilder.Entity<AudioAsset>().HasQueryFilter(entity => companyContext.CompanyId.HasValue && entity.CompanyId == companyContext.CompanyId);
+        CompanyQueryFilterApplier.ApplyCompanyFilters(modelBuilder, this);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

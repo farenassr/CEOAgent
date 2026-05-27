@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Shared.Request.Company;
 
@@ -9,8 +10,8 @@ public sealed class IntegrationCredentialRequest
     /// Integration provider key.
     /// </summary>
     [Description("Integration provider key.")]
-    [DefaultValue("google_calendar")]
-    public string Provider { get; set; } = string.Empty;
+    [DefaultValue(IntegrationProvider.GoogleCalendar)]
+    public IntegrationProvider Provider { get; set; } = IntegrationProvider.GoogleCalendar;
 
     /// <summary>
     /// Purpose for the credential reference.

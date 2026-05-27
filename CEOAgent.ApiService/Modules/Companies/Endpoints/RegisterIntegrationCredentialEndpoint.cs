@@ -56,7 +56,7 @@ public sealed class IntegrationCredentialValidator : Validator<IntegrationCreden
 {
     public IntegrationCredentialValidator()
     {
-        RuleFor(request => request.Provider).NotEmpty().MaximumLength(80);
+        RuleFor(request => request.Provider).IsInEnum();
         RuleFor(request => request.Purpose).NotEmpty().MaximumLength(80);
         RuleFor(request => request.Reference).NotEmpty().MaximumLength(300);
     }

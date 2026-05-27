@@ -4,7 +4,7 @@ namespace CeoAgent.ApiService.Infrastructure.Json;
 
 internal static class JsonElementMappingExtensions
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = CreateOptions();
 
     public static TDocument? DeserializeOptional<TDocument>(this JsonElement? element)
     {
@@ -14,5 +14,12 @@ internal static class JsonElementMappingExtensions
         }
 
         return value.Deserialize<TDocument>(SerializerOptions);
+    }
+
+    private static JsonSerializerOptions CreateOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.MakeReadOnly(populateMissingResolver: true);
+        return options;
     }
 }

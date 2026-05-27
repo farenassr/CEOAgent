@@ -15,9 +15,9 @@ public sealed class CompanyChannelConfiguration : IEntityTypeConfiguration<Compa
         builder.ComplexProperty(entity => entity.Metadata, metadata =>
         {
             metadata.ToJson("metadata_json");
-            metadata.ComplexProperty(entity => entity.WhatsAppCloud);
-            metadata.ComplexProperty(entity => entity.Instagram);
-            metadata.ComplexProperty(entity => entity.Telegram);
+            metadata.ComplexProperty(entity => entity.WhatsAppCloud).HasJsonPropertyName("whatsapp_cloud");
+            metadata.ComplexProperty(entity => entity.Instagram).HasJsonPropertyName("instagram");
+            metadata.ComplexProperty(entity => entity.Telegram).HasJsonPropertyName("telegram");
         });
         builder.HasIndex(entity => entity.Provider);
         builder.HasIndex(entity => new { entity.Provider, entity.ProviderChannelId }).IsUnique();

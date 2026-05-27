@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Shared.Response.Company;
 
@@ -17,7 +18,7 @@ public sealed class IntegrationCredentialResponse
     /// <summary>
     /// Integration provider key. Example: google_calendar.
     /// </summary>
-    public string Provider { get; set; } = string.Empty;
+    public IntegrationProvider Provider { get; set; }
 
     /// <summary>
     /// Purpose for the credential reference. Example: whatsapp_cloud.

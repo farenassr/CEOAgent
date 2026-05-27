@@ -2,6 +2,7 @@ using CeoAgent.Application.Company;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.IntegrationTests.Infrastructure;
+using CeoAgent.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using CompanyEntity = CeoAgent.Infrastructure.Entities.Company;
@@ -22,66 +23,149 @@ public sealed class JsonEntityMappingTests
             new CompanyContextAccessor());
         var model = dbContext.Model;
 
-        AssertJsonProperty<CompanyEntity, WorkingHoursEntity>(model, nameof(CompanyEntity.WorkingHours), "working_hours_json");
+        AssertJsonComplexProperty<CompanyEntity, WorkingHoursEntity>(model, nameof(CompanyEntity.WorkingHours), "working_hours_json");
         AssertJsonComplexProperty<CompanyChannel, ChannelMetadata>(model, nameof(CompanyChannel.Metadata), "metadata_json");
-        AssertJsonProperty<CompanyTool, ToolConfiguration>(model, nameof(CompanyTool.Configuration), "configuration_json");
-        AssertJsonProperty<ConversationState, ConversationStateSnapshot>(model, nameof(ConversationState.Snapshot), "state_json");
-        AssertJsonProperty<IntegrationCredentialReference, CredentialMetadata>(model, nameof(IntegrationCredentialReference.Metadata), "metadata_json");
-        AssertJsonProperty<Message, MessagePayload>(model, nameof(Message.Payload), "payload_json");
-        AssertJsonProperty<ToolExecution, ToolExecutionRequest>(model, nameof(ToolExecution.Request), "request_json");
-        AssertJsonProperty<ToolExecution, ToolExecutionResult>(model, nameof(ToolExecution.Result), "result_json");
+        AssertJsonComplexProperty<CompanyTool, ToolConfiguration>(model, nameof(CompanyTool.Configuration), "configuration_json");
+        AssertJsonComplexProperty<ConversationState, ConversationStateSnapshot>(model, nameof(ConversationState.Snapshot), "state_json");
+        AssertJsonComplexProperty<IntegrationCredentialReference, CredentialMetadata>(model, nameof(IntegrationCredentialReference.Metadata), "metadata_json");
+        AssertJsonComplexProperty<Message, MessagePayload>(model, nameof(Message.Payload), "payload_json");
+        AssertJsonComplexProperty<ToolExecution, ToolExecutionRequest>(model, nameof(ToolExecution.Request), "request_json");
+        AssertJsonComplexProperty<ToolExecution, ToolExecutionResult>(model, nameof(ToolExecution.Result), "result_json");
     }
 
     /// <summary>
-    /// Verifies that JSON entity base types expose the expected polymorphic derived types, except channels which use wrapper metadata.
+    /// Verifies that JSON documents use concrete wrapper types instead of inheritance-based polymorphism.
     /// </summary>
     [Test]
-    public void JsonEntityTypes_ExposeExpectedPolymorphicDerivedTypes()
+    public void JsonEntityTypes_UseConcreteComplexPropertyWrappers()
     {
         typeof(ChannelMetadata).IsAssignableFrom(typeof(WhatsAppCloudMetadata)).ShouldBeFalse();
         typeof(ChannelMetadata).IsAssignableFrom(typeof(InstagramMetadata)).ShouldBeFalse();
         typeof(ChannelMetadata).IsAssignableFrom(typeof(TelegramMetadata)).ShouldBeFalse();
 
-        AssertAssignableTo<ToolConfiguration, CheckAvailabilityConfig>();
-        AssertAssignableTo<ToolConfiguration, RequestHumanHandoffConfig>();
-        AssertAssignableTo<ToolConfiguration, GoogleCalendarConfig>();
+        typeof(ToolConfiguration).IsAbstract.ShouldBeFalse();
+        typeof(CredentialMetadata).IsAbstract.ShouldBeFalse();
+        typeof(MessagePayload).IsAbstract.ShouldBeFalse();
+        typeof(ToolExecutionRequest).IsAbstract.ShouldBeFalse();
+        typeof(ToolExecutionResult).IsAbstract.ShouldBeFalse();
 
-        AssertAssignableTo<CredentialMetadata, GoogleCalendarCredentialMetadata>();
-        AssertAssignableTo<CredentialMetadata, WhatsAppCloudCredentialMetadata>();
-        AssertAssignableTo<CredentialMetadata, GenericOAuthCredentialMetadata>();
-
-        AssertAssignableTo<MessagePayload, TextPayload>();
-        AssertAssignableTo<MessagePayload, MediaPayload>();
-        AssertAssignableTo<MessagePayload, InteractivePayload>();
-        AssertAssignableTo<MessagePayload, LocationPayload>();
-
-        AssertAssignableTo<ToolExecutionRequest, CheckAvailabilityRequest>();
-        AssertAssignableTo<ToolExecutionRequest, RequestHumanHandoffRequest>();
-        AssertAssignableTo<ToolExecutionRequest, CreateCalendarEventRequest>();
-
-        AssertAssignableTo<ToolExecutionResult, CheckAvailabilityResult>();
-        AssertAssignableTo<ToolExecutionResult, RequestHumanHandoffResult>();
-        AssertAssignableTo<ToolExecutionResult, CreateCalendarEventResult>();
+        typeof(CheckAvailabilityConfig).IsAssignableTo(typeof(ToolConfiguration)).ShouldBeFalse();
+        typeof(GoogleCalendarCredentialMetadata).IsAssignableTo(typeof(CredentialMetadata)).ShouldBeFalse();
+        typeof(AudioPayload).IsAssignableTo(typeof(BlobPayload)).ShouldBeTrue();
+        typeof(BlobPayload).IsAbstract.ShouldBeTrue();
+        typeof(CheckAvailabilityRequest).IsAssignableTo(typeof(ToolExecutionRequest)).ShouldBeFalse();
+        typeof(CheckAvailabilityResult).IsAssignableTo(typeof(ToolExecutionResult)).ShouldBeFalse();
     }
 
-    private static void AssertAssignableTo<TBase, TDerived>()
+    [Test]
+    public void MessageModel_UsesMessageTextForCanonicalTextContent()
     {
-        typeof(TBase).IsAssignableFrom(typeof(TDerived)).ShouldBeTrue();
-    }
-
-    private static void AssertJsonProperty<TEntity, TProperty>(
-        Microsoft.EntityFrameworkCore.Metadata.IModel model,
-        string propertyName,
-        string columnName)
-    {
-        var entityType = model.FindEntityType(typeof(TEntity));
+        using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
+            new CompanyContextAccessor());
+        var entityType = dbContext.Model.FindEntityType(typeof(Message));
         entityType.ShouldNotBeNull();
 
-        var property = entityType.FindProperty(propertyName);
-        property.ShouldNotBeNull();
-        property.ClrType.ShouldBe(typeof(TProperty));
-        property.GetColumnType().ShouldBe("jsonb");
-        property.GetColumnName().ShouldBe(columnName);
+        entityType.FindProperty(nameof(Message.MessageText)).ShouldNotBeNull();
+        entityType.FindProperty("Text").ShouldBeNull();
+    }
+
+    [Test]
+    public void Model_DoesNotMapAudioAssetAsASeparateTable()
+    {
+        using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
+            new CompanyContextAccessor());
+
+        dbContext.Model.GetEntityTypes()
+            .Any(entityType => entityType.ClrType.Name == "AudioAsset")
+            .ShouldBeFalse();
+
+        dbContext.Model.GetRelationalModel()
+            .Tables
+            .Any(table => table.Name == "audio_asset")
+            .ShouldBeFalse();
+    }
+
+    [Test]
+    public void MessagePayload_UsesAudioComplexTypeWithSharedBlobFieldsAndEnumStatuses()
+    {
+        typeof(BlobPayload).GetProperty(nameof(BlobPayload.BlobUri))!.PropertyType.ShouldBe(typeof(string));
+        typeof(BlobPayload).GetProperty(nameof(BlobPayload.ContentType))!.PropertyType.ShouldBe(typeof(string));
+        typeof(BlobPayload).GetProperty(nameof(BlobPayload.SizeBytes))!.PropertyType.ShouldBe(typeof(long));
+        typeof(AudioPayload).GetProperty(nameof(AudioPayload.Language))!.PropertyType.ShouldBe(typeof(string));
+        typeof(AudioPayload).GetProperty(nameof(AudioPayload.DurationMs))!.PropertyType.ShouldBe(typeof(int?));
+        typeof(AudioPayload).GetProperty(nameof(AudioPayload.SttStatus))!.PropertyType.ShouldBe(typeof(SpeechProcessingStatus?));
+        typeof(AudioPayload).GetProperty(nameof(AudioPayload.TtsStatus))!.PropertyType.ShouldBe(typeof(SpeechProcessingStatus?));
+    }
+
+    [Test]
+    public async Task JsonbComplexWrappers_RoundTripPreviouslyPolymorphicDocuments()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        database.CompanyContext.SetCompany(companyId);
+
+        var company = new CompanyEntity
+        {
+            Id = companyId,
+            Name = "Contoso Bistro",
+            TimeZoneId = "America/Bogota",
+        };
+        var tool = new CompanyTool
+        {
+            CompanyId = companyId,
+            ToolKey = "check_availability",
+            Configuration = ToolConfiguration.ForCheckAvailability(new CheckAvailabilityConfig
+            {
+                MinPartySize = 1,
+                MaxPartySize = 8,
+                SlotMinutes = 30,
+                AdvanceBookingDays = 14,
+            }),
+        };
+
+        database.Context.Companies.Add(company);
+        database.Context.CompanyTools.Add(tool);
+        await database.Context.SaveChangesAsync();
+        database.Context.ChangeTracker.Clear();
+
+        var loaded = await database.Context.CompanyTools.SingleAsync(entity => entity.Id == tool.Id);
+
+        loaded.Configuration.ShouldNotBeNull();
+        loaded.Configuration.ToolKey.ShouldBe("check_availability");
+        loaded.Configuration.CheckAvailability.ShouldNotBeNull();
+        loaded.Configuration.CheckAvailability.MaxPartySize.ShouldBe(8);
+    }
+
+    [Test]
+    public async Task IntegrationCredentialReference_StoresProviderUsingSnakeCaseEnumMemberName()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        database.CompanyContext.SetCompany(companyId);
+
+        database.Context.Companies.Add(new CompanyEntity
+        {
+            Id = companyId,
+            Name = "Contoso Bistro",
+            TimeZoneId = "America/Bogota",
+        });
+        database.Context.IntegrationCredentialReferences.Add(new IntegrationCredentialReference
+        {
+            CompanyId = companyId,
+            Provider = IntegrationProvider.WhatsAppCloud,
+            Purpose = "message_send",
+            Reference = "kv://whatsapp/contoso/access-token",
+        });
+
+        await database.Context.SaveChangesAsync();
+
+        var provider = await database.Context.Database
+            .SqlQueryRaw<string>("SELECT provider AS \"Value\" FROM integration_credential_reference")
+            .SingleAsync();
+
+        provider.ShouldBe("whatsapp_cloud");
     }
 
     private static void AssertJsonComplexProperty<TEntity, TProperty>(

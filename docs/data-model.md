@@ -2,19 +2,18 @@
 
 Guia explicativa del modelo de datos actual del backend. Este documento describe para que sirve cada tabla, que representa cada propiedad, ejemplos de valores reales y las decisiones importantes de diseño.
 
-> Estado actual: el MVP ya no incluye reservas. El modelo esta enfocado en compañias, canales, clientes, conversaciones, mensajes, media de audio, herramientas e integraciones externas.
+> Estado actual: el MVP ya no incluye reservas. El modelo esta enfocado en compañias, canales, clientes, conversaciones, mensajes con texto/audio, herramientas e integraciones externas.
 
 ## Vista General 🧭
 
-El modelo esta pensado para un backend SaaS multi-company. Cada compañia configura sus canales, su agente, sus credenciales externas y sus herramientas disponibles. A partir de ahi, el sistema registra clientes, conversaciones, mensajes, archivos de audio y ejecuciones de herramientas.
+El modelo esta pensado para un backend SaaS multi-company. Cada compañia configura sus canales, su agente, sus credenciales externas y sus herramientas disponibles. A partir de ahi, el sistema registra clientes, conversaciones, mensajes y ejecuciones de herramientas.
 
 La regla central es simple: casi todo lo que pertenece a una compañia lleva `CompanyId`. Ese campo permite aislar datos por compañia y aplicar filtros globales desde Entity Framework Core.
 
 | Area                         | Tablas                                                                                            | Proposito                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 🏢 Configuracion de compañia | `company`, `company_channel`, `agent_profile`, `company_tool`, `integration_credential_reference` | Define quien es la compañia, por donde habla, como se comporta su agente, que herramientas tiene y que credenciales externas usa. |
-| 👤 Conversaciones            | `customer`, `conversation`, `conversation_state`, `message`                                       | Guarda identidades de clientes, conversaciones abiertas/cerradas, estado temporal y mensajes crudos.                              |
-| 🎧 Media                     | `audio_asset`                                                                                     | Registra audios de entrada o salida, su ubicacion en blob storage y transcripciones.                                              |
+| 👤 Conversaciones            | `customer`, `conversation`, `conversation_state`, `message`                                       | Guarda identidades de clientes, conversaciones abiertas/cerradas, estado temporal y mensajes de texto/audio.                      |
 | 🛠️ Ejecucion de herramientas | `tool_execution`                                                                                  | Audita cada accion solicitada por el agente y su resultado.                                                                       |
 
 ## Convenciones Del Modelo 🧱
@@ -43,7 +42,7 @@ Las tablas company-owned heredan los campos:
 
 ### JSON
 
-Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como objetos tipados bajo `CeoAgent.Infrastructure.Persistence.Entities.JsonDocuments`, no como strings crudos. Se usan cuando la estructura puede variar por proveedor o configuracion:
+Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como complex types tipados bajo `CeoAgent.Infrastructure.Entities.JsonDocuments`, no como strings crudos ni diccionarios dinamicos. EF Core/Npgsql los mapea con `ComplexProperty(...).ToJson(...)` para que el modelo conozca su estructura interna.
 
 - `WorkingHours`
 - `Metadata`
@@ -53,13 +52,24 @@ Algunas propiedades se guardan como `jsonb` en PostgreSQL. En C# se modelan como
 - `Request`
 - `Result`
 
-La idea es mantener flexibilidad sin crear tablas prematuras para datos que todavia no tienen reglas relacionales fuertes.
+La idea es mantener flexibilidad sin crear tablas prematuras para datos que todavia no tienen reglas relacionales fuertes, pero evitando documentos opacos que EF no pueda validar o mapear.
 
 Las columnas fisicas siguen usando nombres `snake_case` historicos como `working_hours_json`, `metadata_json`, `state_json`, `payload_json`, `request_json` y `result_json`.
 
+### Enums con nombres externos
+
+Algunos enums se exponen o persisten con nombres externos `snake_case`, no con el nombre C# del miembro. Esto mantiene estable el contrato de API, JSON y base de datos.
+
+| Enum | Miembro C# | Nombre externo |
+| ---- | ---------- | -------------- |
+| `IntegrationProvider` | `WhatsAppCloud` | `whatsapp_cloud` |
+| `IntegrationProvider` | `GoogleCalendar` | `google_calendar` |
+
+`IntegrationCredentialReference.Provider` usa `IntegrationProvider` en C# y se guarda en PostgreSQL con el nombre externo.
+
 ### Tipos JSON
 
-Estos objetos viven en `CeoAgent.Infrastructure.Persistence.Entities.JsonDocuments` y se serializan en columnas `jsonb`.
+Estos objetos viven en `CeoAgent.Infrastructure.Entities.JsonDocuments` y se guardan embebidos dentro de columnas `jsonb`.
 
 | Entidad | Propiedad C# | Columna | Tipo C# |
 | ------- | ------------ | ------- | ------- |
@@ -72,18 +82,20 @@ Estos objetos viven en `CeoAgent.Infrastructure.Persistence.Entities.JsonDocumen
 | `ToolExecution` | `Request` | `request_json` | `ToolExecutionRequest?` |
 | `ToolExecution` | `Result` | `result_json` | `ToolExecutionResult?` |
 
+En los diagramas, estos tipos aparecen como `CT_*` o cajas punteadas para distinguirlos de tablas reales. No tienen PK, FK ni filas propias; viven dentro del documento `jsonb` de la entidad dueña.
+
 #### `WorkingHours`
 
 | Campo | Tipo | Uso |
 | ----- | ---- | --- |
-| `Schedule` | `Dictionary<DayOfWeek, List<TimeSlot>>` | Horarios semanales por dia. |
+| `Schedule` | `WeeklySchedule` | Horarios semanales con propiedades explicitas por dia. |
 | `Holidays` | `List<SpecialDay>` | Fechas especificas que sobreescriben el horario normal. |
 
-`TimeSlot` contiene `Start : TimeOnly` y `End : TimeOnly`. `SpecialDay` contiene `Date : DateOnly`, `IsClosed : bool`, `TimeSlots : List<TimeSlot>` y `Reason : string?`.
+`WeeklySchedule` contiene `Monday`, `Tuesday`, `Wednesday`, `Thursday`, `Friday`, `Saturday` y `Sunday`, todos como `List<TimeSlot>`. `TimeSlot` contiene `Start : TimeOnly` y `End : TimeOnly`. `SpecialDay` contiene `Date : DateOnly`, `IsClosed : bool`, `TimeSlots : List<TimeSlot>` y `Reason : string?`.
 
 #### `ChannelMetadata`
 
-`ChannelMetadata` es polimorfico por proveedor:
+`ChannelMetadata` es un wrapper concreto. La variante activa se identifica por la propiedad no null:
 
 | Tipo | Campos |
 | ---- | ------ |
@@ -93,7 +105,7 @@ Estos objetos viven en `CeoAgent.Infrastructure.Persistence.Entities.JsonDocumen
 
 #### `ToolConfiguration`
 
-`ToolConfiguration` es polimorfico por `ToolKey`:
+`ToolConfiguration` es un wrapper concreto. Siempre incluye `ToolKey : string` y la variante activa se guarda en una propiedad nullable:
 
 | Tipo | Campos |
 | ---- | ------ |
@@ -107,34 +119,34 @@ Estos objetos viven en `CeoAgent.Infrastructure.Persistence.Entities.JsonDocumen
 | ----- | ---- | --- |
 | `CurrentIntent` | `string?` | Intencion activa detectada, por ejemplo `human_handoff_request`. |
 | `PendingAction` | `string?` | Proximo paso o herramienta esperada. |
-| `Slots` | `Dictionary<string, object>` | Valores parciales capturados, como fecha o cantidad de personas. |
+| `Slots` | `List<ConversationSlot>` | Valores parciales capturados de forma tipada. |
 | `ConversationFlags` | `List<string>` | Flags de estado, como `awaiting_confirmation` o `human_requested`. |
 | `TurnCount` | `int` | Conteo de turnos usados por el flujo actual. |
 
+`ConversationSlot` contiene `Name : string`, `TextValue : string?`, `NumberValue : decimal?`, `BooleanValue : bool?`, `DateValue : DateOnly?` y `TimeValue : TimeOnly?`.
+
 #### `CredentialMetadata`
 
-`CredentialMetadata` es polimorfico por provider:
+`CredentialMetadata` es un wrapper concreto. Siempre incluye `Provider : string` con el nombre externo del `IntegrationProvider`; la variante activa se guarda en una propiedad nullable:
 
 | Tipo | Campos |
 | ---- | ------ |
 | `GoogleCalendarCredentialMetadata` | `CalendarId : string`, `Scope : string`, `ExpiresAt : DateTimeOffset?` |
 | `WhatsAppCloudCredentialMetadata` | `AppId : string`, `TokenVersion : string` |
-| `GenericOAuthCredentialMetadata` | `Scope : string`, `ExpiresAt : DateTimeOffset?` |
 
 #### `MessagePayload`
 
-Todo `MessagePayload` incluye `ProviderType : string` y `ProviderMessageId : string?`.
+`MessagePayload` guarda metadatos variables del mensaje dentro de `payload_json`. El texto canonico siempre vive en `Message.MessageText`, ya sea texto normal, transcript STT o texto fuente TTS. Para el MVP solo existe la variante de audio.
 
-| Tipo | Campos adicionales |
-| ---- | ------------------ |
-| `TextPayload` | `Body : string` |
-| `MediaPayload` | `MediaUrl : string`, `MimeType : string`, `SizeBytes : long?`, `Caption : string?` |
-| `InteractivePayload` | `InteractionType : string`, `SelectedId : string?`, `SelectedTitle : string?` |
-| `LocationPayload` | `Latitude : double`, `Longitude : double` |
+| Tipo | Campos |
+| ---- | ------ |
+| `MessagePayload` | `ProviderType : string?`, `ProviderMessageId : string?`, `Audio : AudioPayload?` |
+| `BlobPayload` | `BlobUri : string`, `ContentType : string`, `SizeBytes : long` |
+| `AudioPayload : BlobPayload` | `Language : string?`, `DurationMs : int?`, `SttStatus : SpeechProcessingStatus?`, `TtsStatus : SpeechProcessingStatus?` |
 
 #### `ToolExecutionRequest`
 
-`ToolExecutionRequest` es polimorfico por `ToolKey`:
+`ToolExecutionRequest` es un wrapper concreto. Siempre incluye `ToolKey : string` y la variante activa se guarda en una propiedad nullable:
 
 | Tipo | Campos |
 | ---- | ------ |
@@ -144,7 +156,7 @@ Todo `MessagePayload` incluye `ProviderType : string` y `ProviderMessageId : str
 
 #### `ToolExecutionResult`
 
-`ToolExecutionResult` es polimorfico por `ToolKey`:
+`ToolExecutionResult` es un wrapper concreto. Siempre incluye `ToolKey : string` y la variante activa se guarda en una propiedad nullable:
 
 | Tipo | Campos |
 | ---- | ------ |
@@ -210,7 +222,7 @@ Cuando entra un webhook, el sistema no debe identificar la compañia por el nume
 | `CompanyId`           | `Guid`              | Compañia propietaria del canal.                                                                  | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
 | `Provider`            | `string`            | Nombre tecnico del proveedor de canal.                                                           | `whatsapp_cloud`                       |
 | `ProviderChannelId`   | `string`            | Identificador estable del canal dentro del proveedor. Para WhatsApp suele ser `phone_number_id`. | `123456789012345`                      |
-| `Metadata`            | `ChannelMetadata?` / `jsonb` | Datos adicionales del proveedor.                                                                 | `{"$provider":"whatsapp_cloud","businessAccountId":"987654321"}` |
+| `Metadata`            | `ChannelMetadata?` / `jsonb` | Datos adicionales del proveedor.                                                                 | `{"whatsapp_cloud":{"business_account_id":"987654321","phone_number_id":"123456789012345"}}` |
 | `CredentialReferenceId` | `Guid?`           | FK opcional a `integration_credential_reference`. Nullable porque algunos canales pueden no necesitar credencial local. | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42` |
 | `CreatedAt`           | `DateTime`          | Fecha UTC de creacion.                                                                           | `2026-05-22T10:15:30Z`                 |
 | `UpdatedAt`           | `DateTime`          | Fecha UTC de ultima actualizacion.                                                               | `2026-05-22T10:45:00Z`                 |
@@ -276,7 +288,7 @@ El modelo nunca ejecuta efectos secundarios directamente. Cuando quiere realizar
 | `ToolKey`           | `string`            | Clave tecnica de la herramienta.                            | `request_human_handoff`                |
 | `IsEnabled`         | `bool`              | Indica si la herramienta esta disponible para esa compañia. | `true`                                 |
 | `CredentialReferenceId` | `Guid?`          | FK opcional a la credencial externa que usa la herramienta. Nullable para herramientas internas. | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42` |
-| `Configuration`     | `ToolConfiguration?` / `jsonb` | Configuracion especifica de la herramienta.                 | `{"toolKey":"request_human_handoff","escalationChannel":"front-desk"}` |
+| `Configuration`     | `ToolConfiguration?` / `jsonb` | Configuracion especifica de la herramienta.                 | `{"toolKey":"request_human_handoff","request_human_handoff":{"escalationChannel":"front-desk"}}` |
 | `CreatedAt`         | `DateTime`          | Fecha UTC de creacion.                                      | `2026-05-22T10:15:30Z`                 |
 | `UpdatedAt`         | `DateTime`          | Fecha UTC de ultima actualizacion.                          | `2026-05-22T10:45:00Z`                 |
 
@@ -303,16 +315,23 @@ El sistema necesita integrarse con servicios externos, pero la base de datos no 
 | -------------- | ------------------- | --------------------------------------------- | -------------------------------------- |
 | `Id`           | `Guid`              | Identificador unico de la referencia.         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42` |
 | `CompanyId`    | `Guid`              | Compañia propietaria.                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
-| `Provider`     | `string`            | Proveedor externo.                            | `whatsapp_cloud`                       |
+| `Provider`     | `IntegrationProvider` | Proveedor externo tipado; se persiste con nombre snake_case. | `whatsapp_cloud`                       |
 | `Purpose`      | `string`            | Uso de esa credencial dentro del sistema.     | `message_send`                         |
 | `Reference`    | `string`            | Ubicacion logica del secreto.                 | `kv://whatsapp/contoso/access-token`   |
-| `Metadata`     | `CredentialMetadata?` / `jsonb` | Datos no secretos para operar la integracion. | `{"$provider":"whatsapp_cloud","appId":"12345","tokenVersion":"v20.0"}` |
+| `Metadata`     | `CredentialMetadata?` / `jsonb` | Datos no secretos para operar la integracion. | `{"provider":"whatsapp_cloud","whatsapp_cloud":{"appId":"12345","tokenVersion":"v20.0"}}` |
 | `CreatedAt`    | `DateTime`          | Fecha UTC de creacion.                        | `2026-05-22T10:15:30Z`                 |
 | `UpdatedAt`    | `DateTime`          | Fecha UTC de ultima actualizacion.            | `2026-05-22T10:45:00Z`                 |
 
 ### Regla de seguridad
 
 `Reference` no debe contener tokens, passwords ni API keys. Debe contener una referencia resoluble por infraestructura segura.
+
+### Proveedores soportados
+
+| Valor C# | Valor persistido/API | Uso principal |
+| -------- | -------------------- | ------------- |
+| `IntegrationProvider.WhatsAppCloud` | `whatsapp_cloud` | Credenciales de WhatsApp Cloud para envio y recepcion de mensajes. |
+| `IntegrationProvider.GoogleCalendar` | `google_calendar` | Credenciales de Google Calendar para herramientas de calendario. |
 
 ---
 
@@ -391,7 +410,7 @@ No todo estado debe vivir como mensajes. A veces el sistema necesita recordar un
 | `Id`             | `Guid`             | Identificador unico del estado.        | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b35`                                    |
 | `CompanyId`      | `Guid`             | Compañia propietaria.                  | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30`                                    |
 | `ConversationId` | `Guid`             | Conversacion asociada.                 | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34`                                    |
-| `Snapshot`       | `ConversationStateSnapshot` / `jsonb` | Estado serializado de la conversacion. | `{"currentIntent":"human_handoff_request","conversationFlags":["human_requested"]}` |
+| `Snapshot`       | `ConversationStateSnapshot` / `jsonb` | Estado serializado de la conversacion. | `{"currentIntent":"human_handoff_request","slots":[{"name":"handoff_reason","textValue":"support"}],"conversationFlags":["human_requested"]}` |
 | `CreatedAt`      | `DateTime`         | Fecha UTC de creacion.                 | `2026-05-22T10:15:30Z`                                                    |
 | `UpdatedAt`      | `DateTime`         | Fecha UTC de ultima actualizacion.     | `2026-05-22T10:45:00Z`                                                    |
 
@@ -431,9 +450,10 @@ Esta tabla es el historial principal. Contiene lo que dijo el usuario, lo que re
 | `CompanyId`         | `Guid`              | Compañia propietaria.                            | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
 | `ConversationId`    | `Guid`              | Conversacion donde vive el mensaje.              | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34` |
 | `Role`              | `MessageRole`       | Rol del mensaje dentro del flujo conversacional. | `User`                                 |
-| `Text`              | `string?`           | Texto del mensaje o transcripcion de audio.      | `Necesito hablar con una persona.`     |
+| `Type`              | `MessageType`       | Tipo principal del mensaje. Por ahora `Text` o `Audio`. | `Audio`                         |
+| `MessageText`       | `string?`           | Texto canonico del mensaje: texto normal, transcript STT o texto fuente TTS. | `Necesito hablar con una persona.` |
 | `ProviderMessageId` | `string?`           | ID del proveedor usado para idempotencia.        | `wamid.HBgMNTczMDAxMTEyMjMz`           |
-| `Payload`           | `MessagePayload?` / `jsonb` | Payload original o normalizado del proveedor.    | `{"$messageType":"text","providerType":"text","providerMessageId":"wamid..."}` |
+| `Payload`           | `MessagePayload?` / `jsonb` | Metadatos variables del mensaje, especialmente audio. | `{"providerType":"whatsapp","audio":{"blobUri":"","contentType":"audio/ogg","sizeBytes":184320,"language":"es","durationMs":12300,"sttStatus":"Completed","ttsStatus":null}}` |
 | `OccurredAt`        | `DateTime`          | Momento UTC en que ocurrio el mensaje.           | `2026-05-22T10:15:30Z`                 |
 | `CreatedAt`         | `DateTime`          | Fecha UTC de insercion en la base.               | `2026-05-22T10:15:31Z`                 |
 | `UpdatedAt`         | `DateTime`          | Fecha UTC de ultima modificacion.                | `2026-05-22T10:15:31Z`                 |
@@ -451,38 +471,6 @@ Esta tabla es el historial principal. Contiene lo que dijo el usuario, lo que re
 ### Idempotencia
 
 Hay un indice unico sobre `CompanyId + ProviderMessageId`, filtrado para cuando `ProviderMessageId` no es null. El canal se deriva por `Message -> Conversation -> CompanyChannel`. Esto evita guardar dos veces el mismo webhook entrante sin duplicar el canal en `message`.
-
----
-
-## 🎧 `audio_asset`
-
-Registra archivos de audio asociados a mensajes o conversaciones.
-
-### Para que sirve
-
-El audio en si no vive en PostgreSQL. Vive en blob storage. Esta tabla guarda la referencia al archivo, metadatos utiles y transcripcion cuando aplica.
-
-### Propiedades
-
-| Propiedad        | Tipo                  | Explicacion                                                                                     | Ejemplo                                           |
-| ---------------- | --------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `Id`             | `Guid`                | Identificador unico del asset de audio.                                                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b41`            |
-| `CompanyId`      | `Guid`                | Compañia propietaria.                                                                           | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30`            |
-| `MessageId`      | `Guid?`               | Mensaje asociado, si existe. Puede ser null para assets generados antes de persistir mensaje.   | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36`            |
-| `Direction`      | `AudioAssetDirection` | Indica si el audio entro desde el cliente o salio desde el sistema.                             | `Inbound`                                         |
-| `BlobUri`        | `string`              | Ubicacion del archivo en blob storage.                                                          | `https://storage.example/audio/inbound/voice.ogg` |
-| `ContentType`    | `string`              | MIME type del archivo.                                                                          | `audio/ogg`                                       |
-| `SizeBytes`      | `long`                | Peso del archivo en bytes.                                                                      | `184320`                                          |
-| `Transcript`     | `string?`             | Texto transcrito para audio entrante, si hubo transcripcion.                                    | `Necesito hablar con soporte.`                    |
-| `CreatedAt`      | `DateTime`            | Fecha UTC de creacion.                                                                          | `2026-05-22T10:15:30Z`                            |
-| `UpdatedAt`      | `DateTime`            | Fecha UTC de ultima actualizacion.                                                              | `2026-05-22T10:45:00Z`                            |
-
-### Direcciones posibles
-
-| Direccion  | Significado                            |
-| ---------- | -------------------------------------- |
-| `Inbound`  | Audio recibido desde el cliente.       |
-| `Outbound` | Audio generado/enviado por el sistema. |
 
 ---
 
@@ -507,8 +495,8 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 | `ToolKey`        | `string`              | Snapshot de la clave tecnica ejecutada. Se conserva aunque `company_tool` cambie luego.        | `request_human_handoff`                    |
 | `IdempotencyKey` | `string`              | Clave estable para evitar ejecutar dos veces la misma accion logica. | `conversation-123:request_human_handoff:1` |
 | `Status`         | `ToolExecutionStatus` | Resultado final de la ejecucion.                                     | `Succeeded`                                |
-| `Request`        | `ToolExecutionRequest?` / `jsonb` | Parametros enviados a la herramienta.                                | `{"toolKey":"request_human_handoff","reason":"customer_asked_for_person"}` |
-| `Result`         | `ToolExecutionResult?` / `jsonb`  | Resultado estructurado de la herramienta.                            | `{"toolKey":"request_human_handoff","handoffRequested":true}` |
+| `Request`        | `ToolExecutionRequest?` / `jsonb` | Parametros enviados a la herramienta.                                | `{"toolKey":"request_human_handoff","request_human_handoff":{"reason":"customer_asked_for_person"}}` |
+| `Result`         | `ToolExecutionResult?` / `jsonb`  | Resultado estructurado de la herramienta.                            | `{"toolKey":"request_human_handoff","request_human_handoff":{"handoffRequested":true}}` |
 | `FailureReason`  | `string?`             | Motivo corto de falla o denegacion.                                  | `tool_not_enabled`                         |
 | `CreatedAt`      | `DateTime`            | Fecha UTC de creacion.                                               | `2026-05-22T10:15:30Z`                     |
 | `UpdatedAt`      | `DateTime`            | Fecha UTC de ultima actualizacion.                                   | `2026-05-22T10:45:00Z`                     |
@@ -536,7 +524,7 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 4. Busca o crea un `customer` usando `CompanyChannelId + ExternalCustomerId`.
 5. Busca o crea una `conversation` abierta para ese cliente y ese canal, guardando el `AgentProfileId` vigente al crearla.
 6. Guarda el `message` entrante con `ProviderMessageId` para evitar duplicados.
-7. Si el mensaje trae audio, registra un `audio_asset`.
+7. Si el mensaje trae audio, guarda sus metadatos en `message.payload_json.audio`.
 8. El agente procesa el turno usando `agent_profile`, ultimos mensajes y herramientas habilitadas en `company_tool`.
 9. Si el agente pide una herramienta, se registra un `tool_execution`.
 

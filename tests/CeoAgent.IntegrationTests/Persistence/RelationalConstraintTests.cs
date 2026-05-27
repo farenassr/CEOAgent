@@ -196,7 +196,7 @@ public sealed class RelationalConstraintTests
             CompanyId = companyId,
             ConversationId = conversationId,
             Role = role,
-            Text = "hello",
+            MessageText = "hello",
             ProviderMessageId = providerMessageId,
             OccurredAt = TimeProvider.System.GetUtcNow().UtcDateTime
         };

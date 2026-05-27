@@ -46,12 +46,19 @@ erDiagram
     IntegrationCredentialReference {
         Guid Id PK
         Guid CompanyId FK
-        string Provider
+        IntegrationProvider Provider
         string Purpose
         string Reference
         CredentialMetadata Metadata "(JSONB)"
         DateTime CreatedAt
         DateTime UpdatedAt
+    }
+
+    %% Enum value documentation; not a database table.
+    IntegrationProvider {
+        string kind "ENUM"
+        string WhatsAppCloud "whatsapp_cloud"
+        string GoogleCalendar "google_calendar"
     }
 
     %% Messaging and Interaction Entities
@@ -91,23 +98,11 @@ erDiagram
         Guid CompanyId FK
         Guid ConversationId FK
         MessageRole Role
-        string Text
+        MessageType Type
+        string MessageText
         string ProviderMessageId
         MessagePayload Payload "(JSONB)"
         DateTime OccurredAt
-        DateTime CreatedAt
-        DateTime UpdatedAt
-    }
-
-    AudioAsset {
-        Guid Id PK
-        Guid CompanyId FK
-        Guid MessageId FK
-        AudioAssetDirection Direction
-        string BlobUri
-        string ContentType
-        long SizeBytes
-        string Transcript
         DateTime CreatedAt
         DateTime UpdatedAt
     }
@@ -130,6 +125,213 @@ erDiagram
         DateTime UpdatedAt
     }
 
+    %% Complex types stored inside JSONB columns.
+    %% CT_* nodes are not database tables.
+    CT_WorkingHours {
+        string kind "COMPLEX_TYPE"
+        WeeklySchedule schedule
+        List_SpecialDay holidays
+    }
+
+    CT_WeeklySchedule {
+        string kind "COMPLEX_TYPE"
+        List_TimeSlot monday
+        List_TimeSlot tuesday
+        List_TimeSlot wednesday
+        List_TimeSlot thursday
+        List_TimeSlot friday
+        List_TimeSlot saturday
+        List_TimeSlot sunday
+    }
+
+    CT_TimeSlot {
+        string kind "COMPLEX_TYPE"
+        TimeOnly start
+        TimeOnly end
+    }
+
+    CT_SpecialDay {
+        string kind "COMPLEX_TYPE"
+        DateOnly date
+        bool isClosed
+        List_TimeSlot timeSlots
+        string reason
+    }
+
+    CT_ChannelMetadata {
+        string kind "COMPLEX_TYPE"
+        WhatsAppCloudMetadata whatsapp_cloud
+        InstagramMetadata instagram
+        TelegramMetadata telegram
+    }
+
+    CT_WhatsAppCloudMetadata {
+        string kind "COMPLEX_TYPE"
+        string business_account_id
+        string phone_number_id
+        string display_phone_number
+        string verified_name
+    }
+
+    CT_InstagramMetadata {
+        string kind "COMPLEX_TYPE"
+        string ig_user_id
+        string page_id
+    }
+
+    CT_TelegramMetadata {
+        string kind "COMPLEX_TYPE"
+        string bot_username
+        long chat_id
+    }
+
+    CT_ToolConfiguration {
+        string kind "COMPLEX_TYPE"
+        string toolKey
+        CheckAvailabilityConfig check_availability
+        RequestHumanHandoffConfig request_human_handoff
+        GoogleCalendarConfig google_calendar
+    }
+
+    CT_CheckAvailabilityConfig {
+        string kind "COMPLEX_TYPE"
+        int maxPartySize
+        int minPartySize
+        int slotMinutes
+        int advanceBookingDays
+    }
+
+    CT_RequestHumanHandoffConfig {
+        string kind "COMPLEX_TYPE"
+        string escalationChannel
+        List_string notifyUsers
+        int timeoutMinutes
+    }
+
+    CT_GoogleCalendarConfig {
+        string kind "COMPLEX_TYPE"
+        string calendarId
+        string timeZoneId
+        int bufferMinutes
+    }
+
+    CT_ConversationStateSnapshot {
+        string kind "COMPLEX_TYPE"
+        string currentIntent
+        string pendingAction
+        List_ConversationSlot slots
+        List_string conversationFlags
+        int turnCount
+    }
+
+    CT_ConversationSlot {
+        string kind "COMPLEX_TYPE"
+        string name
+        string textValue
+        decimal numberValue
+        bool booleanValue
+        DateOnly dateValue
+        TimeOnly timeValue
+    }
+
+    CT_CredentialMetadata {
+        string kind "COMPLEX_TYPE"
+        string provider
+        GoogleCalendarCredentialMetadata google_calendar
+        WhatsAppCloudCredentialMetadata whatsapp_cloud
+    }
+
+    CT_GoogleCalendarCredentialMetadata {
+        string kind "COMPLEX_TYPE"
+        string calendarId
+        string scope
+        DateTimeOffset expiresAt
+    }
+
+    CT_WhatsAppCloudCredentialMetadata {
+        string kind "COMPLEX_TYPE"
+        string appId
+        string tokenVersion
+    }
+
+    CT_MessagePayload {
+        string kind "COMPLEX_TYPE"
+        string providerType
+        string providerMessageId
+        AudioPayload audio
+    }
+
+    CT_BlobPayload {
+        string kind "COMPLEX_TYPE"
+        string blobUri
+        string contentType
+        long sizeBytes
+    }
+
+    CT_AudioPayload {
+        string kind "COMPLEX_TYPE"
+        string language
+        int durationMs
+        SpeechProcessingStatus sttStatus
+        SpeechProcessingStatus ttsStatus
+    }
+
+    CT_ToolExecutionRequest {
+        string kind "COMPLEX_TYPE"
+        string toolKey
+        CheckAvailabilityRequest check_availability
+        RequestHumanHandoffRequest request_human_handoff
+        CreateCalendarEventRequest create_calendar_event
+    }
+
+    CT_CheckAvailabilityRequest {
+        string kind "COMPLEX_TYPE"
+        DateOnly date
+        int partySize
+        TimeOnly preferredTime
+    }
+
+    CT_RequestHumanHandoffRequest {
+        string kind "COMPLEX_TYPE"
+        string reason
+        string notes
+    }
+
+    CT_CreateCalendarEventRequest {
+        string kind "COMPLEX_TYPE"
+        DateTimeOffset start
+        DateTimeOffset end
+        string summary
+    }
+
+    CT_ToolExecutionResult {
+        string kind "COMPLEX_TYPE"
+        string toolKey
+        CheckAvailabilityResult check_availability
+        RequestHumanHandoffResult request_human_handoff
+        CreateCalendarEventResult create_calendar_event
+    }
+
+    CT_CheckAvailabilityResult {
+        string kind "COMPLEX_TYPE"
+        bool available
+        List_TimeOnly alternativeSlots
+        string unavailabilityReason
+    }
+
+    CT_RequestHumanHandoffResult {
+        string kind "COMPLEX_TYPE"
+        bool handoffRequested
+        string handoffTicketId
+        DateTimeOffset estimatedPickupAt
+    }
+
+    CT_CreateCalendarEventResult {
+        string kind "COMPLEX_TYPE"
+        string eventId
+        string eventUrl
+    }
+
     %% Company relations
     Company ||--o{ CompanyChannel : "has"
     Company ||--o| AgentProfile : "configures"
@@ -139,7 +341,6 @@ erDiagram
     Company ||--o{ Conversation : "owns"
     Company ||--o{ ConversationState : "owns"
     Company ||--o{ Message : "owns"
-    Company ||--o{ AudioAsset : "owns"
     Company ||--o{ ToolExecution : "owns"
     IntegrationCredentialReference ||--o{ CompanyChannel : "authenticates"
     IntegrationCredentialReference ||--o{ CompanyTool : "authenticates"
@@ -154,7 +355,37 @@ erDiagram
     Conversation ||--o{ ToolExecution : "logs"
 
     %% Message relations
-    Message ||--o{ AudioAsset : "attached_to"
     Message ||--o{ ToolExecution : "triggers"
     Message ||--o{ ToolExecution : "records_result"
     CompanyTool ||--o{ ToolExecution : "executes"
+
+    %% JSONB complex-type ownership; CT_* nodes are embedded documents, not tables.
+    Company ||--|| CT_WorkingHours : "working_hours_json"
+    CompanyChannel ||--|| CT_ChannelMetadata : "metadata_json"
+    CompanyTool ||--|| CT_ToolConfiguration : "configuration_json"
+    ConversationState ||--|| CT_ConversationStateSnapshot : "state_json"
+    IntegrationCredentialReference ||--|| CT_CredentialMetadata : "metadata_json"
+    Message ||--|| CT_MessagePayload : "payload_json"
+    ToolExecution ||--|| CT_ToolExecutionRequest : "request_json"
+    ToolExecution ||--|| CT_ToolExecutionResult : "result_json"
+    CT_WorkingHours ||--|| CT_WeeklySchedule : "schedule"
+    CT_WorkingHours ||--o{ CT_SpecialDay : "holidays"
+    CT_WeeklySchedule ||--o{ CT_TimeSlot : "day slots"
+    CT_SpecialDay ||--o{ CT_TimeSlot : "timeSlots"
+    CT_ChannelMetadata ||--|| CT_WhatsAppCloudMetadata : "whatsapp_cloud"
+    CT_ChannelMetadata ||--|| CT_InstagramMetadata : "instagram"
+    CT_ChannelMetadata ||--|| CT_TelegramMetadata : "telegram"
+    CT_ToolConfiguration ||--|| CT_CheckAvailabilityConfig : "check_availability"
+    CT_ToolConfiguration ||--|| CT_RequestHumanHandoffConfig : "request_human_handoff"
+    CT_ToolConfiguration ||--|| CT_GoogleCalendarConfig : "google_calendar"
+    CT_ConversationStateSnapshot ||--o{ CT_ConversationSlot : "slots"
+    CT_CredentialMetadata ||--|| CT_GoogleCalendarCredentialMetadata : "google_calendar"
+    CT_CredentialMetadata ||--|| CT_WhatsAppCloudCredentialMetadata : "whatsapp_cloud"
+    CT_MessagePayload ||--|| CT_AudioPayload : "audio"
+    CT_AudioPayload ||--|| CT_BlobPayload : "inherits"
+    CT_ToolExecutionRequest ||--|| CT_CheckAvailabilityRequest : "check_availability"
+    CT_ToolExecutionRequest ||--|| CT_RequestHumanHandoffRequest : "request_human_handoff"
+    CT_ToolExecutionRequest ||--|| CT_CreateCalendarEventRequest : "create_calendar_event"
+    CT_ToolExecutionResult ||--|| CT_CheckAvailabilityResult : "check_availability"
+    CT_ToolExecutionResult ||--|| CT_RequestHumanHandoffResult : "request_human_handoff"
+    CT_ToolExecutionResult ||--|| CT_CreateCalendarEventResult : "create_calendar_event"

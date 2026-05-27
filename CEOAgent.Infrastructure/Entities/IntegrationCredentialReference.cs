@@ -1,4 +1,5 @@
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Infrastructure.Entities;
 
@@ -12,7 +13,7 @@ public sealed class IntegrationCredentialReference : AuditableCompanyOwnedEntity
     /// <summary>
     /// Integration provider key. Example: google_calendar.
     /// </summary>
-    public required string Provider { get; set; }
+    public IntegrationProvider Provider { get; set; }
 
     /// <summary>
     /// Purpose for the credential reference. Example: whatsapp_cloud.

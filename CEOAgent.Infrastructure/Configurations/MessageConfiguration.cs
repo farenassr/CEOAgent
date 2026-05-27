@@ -11,8 +11,25 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.ToTable("message");
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(entity => entity.Type).HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(entity => entity.MessageText).HasColumnName("message_text");
         builder.Property(entity => entity.ProviderMessageId).HasMaxLength(200);
-        builder.Property(entity => entity.Payload).HasJsonbConversion("payload_json");
+        builder.ComplexProperty(entity => entity.Payload, payload =>
+        {
+            payload.ToJson("payload_json");
+            payload.Property(entity => entity.ProviderType).HasJsonPropertyName("providerType");
+            payload.Property(entity => entity.ProviderMessageId).HasJsonPropertyName("providerMessageId");
+
+            var audio = payload.ComplexProperty(entity => entity.Audio);
+            audio.HasJsonPropertyName("audio");
+            audio.Property(entity => entity.BlobUri).HasJsonPropertyName("blobUri");
+            audio.Property(entity => entity.ContentType).HasJsonPropertyName("contentType");
+            audio.Property(entity => entity.SizeBytes).HasJsonPropertyName("sizeBytes");
+            audio.Property(entity => entity.Language).HasJsonPropertyName("language");
+            audio.Property(entity => entity.DurationMs).HasJsonPropertyName("durationMs");
+            audio.Property(entity => entity.SttStatus).HasConversion<string>().HasJsonPropertyName("sttStatus");
+            audio.Property(entity => entity.TtsStatus).HasConversion<string>().HasJsonPropertyName("ttsStatus");
+        });
         builder.HasIndex(entity => new { entity.CompanyId, entity.ProviderMessageId }).IsUnique()
             .HasFilter("provider_message_id IS NOT NULL");
         builder.HasOne(entity => entity.Conversation)
