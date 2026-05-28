@@ -56,7 +56,7 @@ Por favor, Crea un archivo md del informe técnico detallado formateado exclusiv
 
 - Identificación de dependencias ocultas o difíciles de simular (mockear) y sugerencias para desacoplarlas.
 
-## 9. 🧠 Uso de Sintaxis Moderna y Optimización de Memoria (.NET 11)
+## 9. 🧠 Uso de Sintaxis Moderna y Optimización de Memoria (.NET 10)
 
 - Sugerencias para aplicar las características más recientes del lenguaje utilizado, incluyendo azúcar sintáctico moderno y patrones recomendados.
 
