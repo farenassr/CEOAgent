@@ -42,11 +42,13 @@ if (!builder.Environment.IsEnvironment("Testing"))
     if (builder.Configuration.GetConnectionString("queues") is { Length: > 0 })
     {
         builder.AddAzureQueueServiceClient("queues");
+        builder.Services.AddAzureQueueServiceMetadataHealthCheck();
     }
 
     if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
     {
         builder.AddAzureBlobServiceClient("blobs");
+        builder.Services.AddAzureBlobServiceMetadataHealthCheck();
     }
 }
 

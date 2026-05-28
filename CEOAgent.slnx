@@ -1,17 +1,9 @@
 <Solution>
   <Folder Name="/tests/">
-    <Project Path="tests/CeoAgent.ApiService.Tests/CeoAgent.ApiService.Tests.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
-    <Project Path="tests/CeoAgent.Application.Tests/CeoAgent.Application.Tests.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
-    <Project Path="tests/CeoAgent.IntegrationTests/CeoAgent.IntegrationTests.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
-    <Project Path="tests/CeoAgent.Worker.Tests/CeoAgent.Worker.Tests.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
+    <Project Path="tests/CeoAgent.ApiService.Tests/CeoAgent.ApiService.Tests.csproj" />
+    <Project Path="tests/CeoAgent.Application.Tests/CeoAgent.Application.Tests.csproj" />
+    <Project Path="tests/CeoAgent.IntegrationTests/CeoAgent.IntegrationTests.csproj" />
+    <Project Path="tests/CeoAgent.Worker.Tests/CeoAgent.Worker.Tests.csproj" />
   </Folder>
   <Project Path="CeoAgent.Adapters/CeoAgent.Adapters.csproj" />
   <Project Path="CeoAgent.ApiService/CeoAgent.ApiService.csproj" />

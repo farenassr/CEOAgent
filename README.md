@@ -177,7 +177,7 @@ Ejemplo de configuración local:
 
 ### Requisitos
 
-- .NET SDK compatible con `net11.0`.
+- .NET SDK compatible con `net10.0`.
 - Docker Desktop o runtime de contenedores compatible para Aspire.
 - PowerShell, Windows Terminal o shell equivalente.
 
@@ -205,6 +205,11 @@ El API expone:
 ```text
 /health
 ```
+
+La configuracion de infraestructura local/Azure de fase 3 esta documentada en
+[docs/azure-infrastructure.md](./docs/azure-infrastructure.md). El desarrollo
+local usa Aspire con PostgreSQL y Azurite para Queue/Blob; Azure Key Vault se
+reserva para secretos compartidos en publish/deploy.
 
 En desarrollo, la referencia OpenAPI está disponible en:
 
