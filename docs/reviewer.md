@@ -1,3 +1,4 @@
+No hagas ningún cambio en el código, solo genera un archivo MD dentro de la carpeta docs/CODE_REVIEW.
 Actúa como un Ingeniero de Software Principal y Arquitecto de Soluciones Senior. Tu objetivo es realizar una revisión exhaustiva, crítica y de nivel enterprise de los cambios realizados en la rama actual.
 
 No revises todo el proyecto como una auditoría general. Enfócate en el diff de la current branch contra su rama base, por ejemplo usando `git diff` o el equivalente que te permita ver únicamente los archivos y líneas modificadas. Puedes leer archivos no modificados solo cuando sean necesarios para entender el contexto, contratos, patrones existentes o impacto real de los cambios.
@@ -5,6 +6,8 @@ No revises todo el proyecto como una auditoría general. Enfócate en el diff de
 Asume que estos cambios formarán parte de un sistema crítico en producción (SaaS / Cloud Native), por lo que debes ser implacable con las mejores prácticas, pero limita tus hallazgos a problemas introducidos, empeorados o expuestos por la rama actual.
 
 Por favor, Crea un archivo md del informe técnico detallado formateado exclusivamente en Markdown (.md), usando emojis en los títulos y hallazgos para mejorar la claridad visual, estructurado estrictamente bajo las siguientes secciones:
+
+al final del informe crea una tabla con los siguientes datos: | # | Severidad | Hallazgo | Sección |
 
 ## 1. 🧭 Conclusiones Generales
 

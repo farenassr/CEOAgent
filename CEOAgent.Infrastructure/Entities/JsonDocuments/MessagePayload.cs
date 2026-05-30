@@ -56,6 +56,11 @@ public abstract class BlobPayload
 public sealed class AudioPayload : BlobPayload
 {
     /// <summary>
+    /// Provider media identifier used to download protected inbound media.
+    /// </summary>
+    public string? ProviderMediaId { get; set; }
+
+    /// <summary>
     /// Detected or configured language for the audio content.
     /// </summary>
     public string? Language { get; set; }

@@ -1,5 +1,7 @@
 using CeoAgent.Application.Company;
+using CeoAgent.Infrastructure.Integrations;
 using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.Integrations.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,7 @@ public static class InfrastructureRegistrations
 
         services.AddScoped<ICompanyContextAccessor, CompanyContextAccessor>();
         services.AddScoped<ICompanyContext>(provider => provider.GetRequiredService<ICompanyContextAccessor>());
+        services.AddScoped<IWhatsAppChannelCredentialResolver, WhatsAppChannelCredentialResolver>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ConversationAgentProfileImmutabilityInterceptor>();
 

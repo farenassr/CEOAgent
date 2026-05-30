@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using CeoAgent.Shared.Constants;
 
 namespace CeoAgent.Infrastructure.Entities.JsonDocuments;
 
@@ -38,6 +39,17 @@ public sealed class ToolExecutionResult
         };
     }
 
+    public static ToolExecutionResult ForCheckGoogleCalendarAvailability(CheckAvailabilityResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new ToolExecutionResult
+        {
+            ToolKey = MvpToolKeys.CheckGoogleCalendarAvailability,
+            CheckAvailability = result,
+        };
+    }
+
     public static ToolExecutionResult ForRequestHumanHandoff(RequestHumanHandoffResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -56,6 +68,17 @@ public sealed class ToolExecutionResult
         return new ToolExecutionResult
         {
             ToolKey = "create_calendar_event",
+            CreateCalendarEvent = result,
+        };
+    }
+
+    public static ToolExecutionResult ForCreateGoogleCalendarReservation(CreateCalendarEventResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new ToolExecutionResult
+        {
+            ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
             CreateCalendarEvent = result,
         };
     }

@@ -13,6 +13,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(entity => entity.ExternalCustomerId).HasMaxLength(160).IsRequired();
         builder.Property(entity => entity.DisplayName).HasMaxLength(200);
         builder.HasIndex(entity => new { entity.CompanyChannelId, entity.ExternalCustomerId }).IsUnique();
+        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.CompanyChannel)
             .WithMany(entity => entity.Customers)
             .HasForeignKey(entity => entity.CompanyChannelId)

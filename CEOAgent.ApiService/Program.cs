@@ -1,12 +1,18 @@
+using CeoAgent.Adapters;
 using CeoAgent.ApiService.Dependencies;
 using CeoAgent.ApiService.Infrastructure.Company;
 using CeoAgent.ApiService.Infrastructure.Correlation;
 using CeoAgent.ApiService.Infrastructure.ErrorHandling;
+using CeoAgent.ApiService.Infrastructure.Queues;
+using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
+using CeoAgent.ApiService.Infrastructure.Queues.Implementation;
+using CeoAgent.ApiService.Modules.WhatsApp;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.ServiceDefaults;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Scalar.AspNetCore;
 using ZLogger;
 
@@ -43,6 +49,9 @@ if (!builder.Environment.IsEnvironment("Testing"))
     {
         builder.AddAzureQueueServiceClient("queues");
         builder.Services.AddAzureQueueServiceMetadataHealthCheck();
+        builder.Services.AddSingleton<IIncomingMessageJobEnqueuer, AzureIncomingMessageJobEnqueuer>();
+        builder.Services.AddSingleton<IQueueDiagnosticsService, AzureQueueDiagnosticsService>();
+        builder.Services.AddHostedService<AzureQueueProvisioner>();
     }
 
     if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
@@ -53,12 +62,26 @@ if (!builder.Environment.IsEnvironment("Testing"))
 }
 
 // Add services to the container.
+builder.Services.AddOptions<QueueDiagnosticsOptions>()
+    .BindConfiguration(QueueDiagnosticsOptions.SectionName)
+    .Validate(options => options.DefaultMaxMessages > 0 && options.DefaultMaxQueues > 0, "Queue diagnostics limits must be positive.")
+    .ValidateOnStart();
+builder.Services.TryAddSingleton<IIncomingMessageJobEnqueuer, UnavailableIncomingMessageJobEnqueuer>();
+builder.Services.TryAddSingleton<IQueueDiagnosticsService, UnavailableQueueDiagnosticsService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAdapters(builder.Configuration);
 builder.Services.AddApi();
+builder.Services.AddOptions<WhatsAppOptions>()
+    .BindConfiguration(WhatsAppOptions.SectionName)
+    .Validate(options => options.MaxWebhookBodyBytes > 0, "WhatsApp webhook body limit must be positive.")
+    .ValidateOnStart();
+builder.Services.AddScoped<WhatsAppWebhookIngestionService>();
+builder.Services.AddSingleton<IWhatsAppSignatureValidator, WhatsAppSignatureValidator>();
+builder.Services.AddSingleton<WhatsAppWebhookVerificationService>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();

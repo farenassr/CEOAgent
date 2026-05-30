@@ -13,6 +13,7 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.HasIndex(entity => new { entity.CompanyId, entity.CustomerId, entity.CompanyChannelId }).IsUnique()
             .HasFilter("status = 'Open'");
+        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Customer)
             .WithMany(entity => entity.Conversations)
             .HasForeignKey(entity => entity.CustomerId)

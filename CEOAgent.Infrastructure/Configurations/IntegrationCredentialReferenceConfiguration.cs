@@ -20,6 +20,7 @@ public sealed class IntegrationCredentialReferenceConfiguration : IEntityTypeCon
         builder.Property(entity => entity.Purpose).HasMaxLength(80).IsRequired();
         builder.Property(entity => entity.Reference).HasMaxLength(300).IsRequired();
         builder.HasIndex(entity => new { entity.CompanyId, entity.Provider, entity.Purpose }).IsUnique();
+        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
         builder.ComplexProperty(entity => entity.Metadata, metadata =>
         {
             metadata.ToJson("metadata_json");
