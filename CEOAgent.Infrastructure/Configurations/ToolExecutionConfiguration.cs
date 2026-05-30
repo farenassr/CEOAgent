@@ -59,6 +59,7 @@ public sealed class ToolExecutionConfiguration : IEntityTypeConfiguration<ToolEx
             createCalendarEventResult.Property(entity => entity.EventUrl).HasJsonPropertyName("eventUrl");
         });
         builder.HasIndex(entity => new { entity.CompanyId, entity.IdempotencyKey }).IsUnique();
+        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Conversation)
             .WithMany()
             .HasForeignKey(entity => entity.ConversationId)

@@ -4,6 +4,8 @@ using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.IntegrationTests.Infrastructure;
 using CeoAgent.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Shouldly;
 using CompanyEntity = CeoAgent.Infrastructure.Entities.Company;
 using WorkingHoursEntity = CeoAgent.Infrastructure.Entities.JsonDocuments.WorkingHours;
@@ -85,6 +87,36 @@ public sealed class JsonEntityMappingTests
             .Tables
             .Any(table => table.Name == "audio_asset")
             .ShouldBeFalse();
+    }
+
+    [Test]
+    public void Model_AddsCompanyCreatedAtDescendingIndexToAuditableCompanyOwnedTables()
+    {
+        using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
+            new CompanyContextAccessor());
+        var model = dbContext.GetService<IDesignTimeModel>().Model;
+
+        var auditableCompanyOwnedTypes = typeof(AuditableCompanyOwnedEntity).Assembly
+            .GetTypes()
+            .Where(type => !type.IsAbstract && typeof(AuditableCompanyOwnedEntity).IsAssignableFrom(type))
+            .ToArray();
+
+        foreach (var clrType in auditableCompanyOwnedTypes)
+        {
+            var entityType = model.FindEntityType(clrType);
+            entityType.ShouldNotBeNull();
+
+            var index = entityType.GetIndexes()
+                .SingleOrDefault(index => index.Properties.Select(property => property.Name).SequenceEqual([
+                    nameof(AuditableCompanyOwnedEntity.CompanyId),
+                    nameof(AuditableCompanyOwnedEntity.CreatedAt),
+                ]));
+
+            index.ShouldNotBeNull($"{clrType.Name} should have an index on CompanyId + CreatedAt.");
+            index.IsDescending.ShouldNotBeNull($"{clrType.Name} should configure index sort order.");
+            index.IsDescending.ShouldBe([false, true]);
+        }
     }
 
     [Test]

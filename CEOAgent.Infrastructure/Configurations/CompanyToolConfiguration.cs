@@ -12,6 +12,7 @@ public sealed class CompanyToolConfiguration : IEntityTypeConfiguration<CompanyT
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.ToolKey).HasMaxLength(120).IsRequired();
         builder.HasIndex(entity => new { entity.CompanyId, entity.ToolKey }).IsUnique();
+        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
         builder.ComplexProperty(entity => entity.Configuration, configuration =>
         {
             configuration.ToJson("configuration_json");

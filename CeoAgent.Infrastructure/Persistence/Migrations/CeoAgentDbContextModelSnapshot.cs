@@ -72,6 +72,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_agent_profile_company_id");
 
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_agent_profile_company_id_created_at");
+
                     b.ToTable("agent_profile", "public");
                 });
 
@@ -322,14 +326,15 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_company_channel");
 
-                    b.HasIndex("CompanyId")
-                        .HasDatabaseName("ix_company_channel_company_id");
-
                     b.HasIndex("CredentialReferenceId")
                         .HasDatabaseName("ix_company_channel_credential_reference_id");
 
                     b.HasIndex("Provider")
                         .HasDatabaseName("ix_company_channel_provider");
+
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_company_channel_company_id_created_at");
 
                     b.HasIndex("Provider", "ProviderChannelId")
                         .IsUnique()
@@ -436,6 +441,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("CredentialReferenceId")
                         .HasDatabaseName("ix_company_tool_credential_reference_id");
 
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_company_tool_company_id_created_at");
+
                     b.HasIndex("CompanyId", "ToolKey")
                         .IsUnique()
                         .HasDatabaseName("ix_company_tool_company_id_tool_key");
@@ -495,6 +504,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId")
                         .HasDatabaseName("ix_conversation_customer_id");
+
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_conversation_company_id_created_at");
 
                     b.HasIndex("CompanyId", "CustomerId", "CompanyChannelId")
                         .IsUnique()
@@ -582,6 +595,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_conversation_state_conversation_id");
 
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_conversation_state_company_id_created_at");
+
                     b.ToTable("conversation_state", "public");
                 });
 
@@ -625,6 +642,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompanyChannelId", "ExternalCustomerId")
                         .IsUnique()
                         .HasDatabaseName("ix_customer_company_channel_id_external_customer_id");
+
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_customer_company_id_created_at");
 
                     b.ToTable("customer", "public");
                 });
@@ -709,6 +730,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_integration_credential_reference");
 
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_integration_credential_reference_company_id_created_at");
+
                     b.HasIndex("CompanyId", "Provider", "Purpose")
                         .IsUnique()
                         .HasDatabaseName("ix_integration_credential_reference_company_id_provider_purpose");
@@ -788,6 +813,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                     b2.Property<string>("Language")
                                         .HasJsonPropertyName("language");
 
+                                    b2.Property<string>("ProviderMediaId")
+                                        .HasJsonPropertyName("providerMediaId");
+
                                     b2.Property<long>("SizeBytes")
                                         .HasJsonPropertyName("sizeBytes");
 
@@ -810,6 +838,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ConversationId")
                         .HasDatabaseName("ix_message_conversation_id");
+
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_message_company_id_created_at");
 
                     b.HasIndex("CompanyId", "ProviderMessageId")
                         .IsUnique()
@@ -996,6 +1028,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TriggerMessageId")
                         .HasDatabaseName("ix_tool_execution_trigger_message_id");
+
+                    b.HasIndex("CompanyId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_tool_execution_company_id_created_at");
 
                     b.HasIndex("CompanyId", "IdempotencyKey")
                         .IsUnique()

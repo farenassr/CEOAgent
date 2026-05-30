@@ -12,10 +12,14 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly PostgreSqlContainer _postgres;
     private readonly string _environmentName;
+    private readonly Action<IServiceCollection>? _configureServices;
 
-    public ApiFactory(string environmentName = "Testing")
+    public ApiFactory(
+        string environmentName = "Testing",
+        Action<IServiceCollection>? configureServices = null)
     {
         _environmentName = environmentName;
+        _configureServices = configureServices;
         _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .Build();
 
@@ -29,6 +33,7 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         // Point Npgsql at the Testcontainers instance instead of InMemory.
         builder.UseSetting("Persistence:UseInMemoryDatabase", "false");
         builder.UseSetting("ConnectionStrings:CeoAgent", _postgres.GetConnectionString());
+        builder.ConfigureServices(services => _configureServices?.Invoke(services));
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
