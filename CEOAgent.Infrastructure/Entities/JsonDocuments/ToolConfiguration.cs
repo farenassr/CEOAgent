@@ -118,4 +118,28 @@ public sealed class GoogleCalendarConfig
     /// Buffer in minutes applied around calendar events.
     /// </summary>
     public int BufferMinutes { get; set; }
+
+    /// <summary>
+    /// Reservation duration in minutes.
+    /// </summary>
+    public int ReservationMinutes { get; set; } = GoogleCalendarSchedulingDefaults.ReservationMinutes;
+
+    /// <summary>
+    /// Maximum number of days in advance that can be booked.
+    /// </summary>
+    public int AdvanceBookingDays { get; set; } = GoogleCalendarSchedulingDefaults.AdvanceBookingDays;
+
+    /// <summary>
+    /// Slot granularity in minutes.
+    /// </summary>
+    public int SlotMinutes { get; set; } = GoogleCalendarSchedulingDefaults.SlotMinutes;
+}
+
+public static class GoogleCalendarSchedulingDefaults
+{
+    public const int ReservationMinutes = 60;
+
+    public const int AdvanceBookingDays = 14;
+
+    public const int SlotMinutes = 30;
 }

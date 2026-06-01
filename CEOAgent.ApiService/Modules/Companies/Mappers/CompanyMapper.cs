@@ -62,11 +62,13 @@ public static partial class CompanyMapper
         {
             CompanyId = companyId,
             ToolKey = request.ToolKey,
+            Description = request.Description,
         };
     }
 
     public static void ApplyToEntity(CompanyToolRequest request, CompanyTool tool)
     {
+        tool.Description = request.Description;
         tool.IsEnabled = request.IsEnabled;
         tool.CredentialReferenceId = request.CredentialReferenceId;
         tool.Configuration = request.Configuration.DeserializeOptional<ToolConfiguration>();

@@ -2,6 +2,7 @@ using CeoAgent.ApiService.Modules.Companies.Mappers;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Shared.Enums;
+using CeoAgent.Shared.Request.Company;
 using Shouldly;
 
 namespace CeoAgent.ApiService.Tests;
@@ -88,6 +89,7 @@ public sealed class CompanyMapperTests
             Id = Guid.CreateVersion7(),
             CompanyId = Guid.CreateVersion7(),
             ToolKey = "check_availability",
+            Description = "Checks available reservation slots.",
             IsEnabled = true,
             CredentialReferenceId = credentialReferenceId,
             Configuration = ToolConfiguration.ForCheckAvailability(new CheckAvailabilityConfig
@@ -104,11 +106,35 @@ public sealed class CompanyMapperTests
         response.Id.ShouldBe(tool.Id);
         response.CompanyId.ShouldBe(tool.CompanyId);
         response.ToolKey.ShouldBe(tool.ToolKey);
+        response.Description.ShouldBe(tool.Description);
         response.IsEnabled.ShouldBeTrue();
         response.CredentialReferenceId.ShouldBe(credentialReferenceId);
         response.Configuration.ShouldNotBeNull();
         response.Configuration.Value.GetProperty("toolKey").GetString().ShouldBe("check_availability");
         response.Configuration.Value.GetProperty("check_availability").GetProperty("maxPartySize").GetInt32().ShouldBe(8);
+    }
+
+    [Test]
+    public void ApplyToEntity_MapsCompanyToolRequestToEntity()
+    {
+        var credentialReferenceId = Guid.CreateVersion7();
+        var tool = new CompanyTool
+        {
+            CompanyId = Guid.CreateVersion7(),
+            ToolKey = "check_availability",
+        };
+        var request = new CompanyToolRequest
+        {
+            Description = "Checks available reservation slots.",
+            IsEnabled = false,
+            CredentialReferenceId = credentialReferenceId,
+        };
+
+        CompanyMapper.ApplyToEntity(request, tool);
+
+        tool.Description.ShouldBe(request.Description);
+        tool.IsEnabled.ShouldBeFalse();
+        tool.CredentialReferenceId.ShouldBe(credentialReferenceId);
     }
 
     [Test]
@@ -125,6 +151,17 @@ public sealed class CompanyMapperTests
             {
                 CalendarId = "primary",
                 Scope = "calendar.events",
+                Type = "service_account",
+                ProjectId = "gen-lang-client-0728870398",
+                PrivateKeyId = "private-key-id",
+                PrivateKey = "-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n",
+                ClientEmail = "ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com",
+                ClientId = "1111",
+                AuthUri = "https://accounts.google.com/o/oauth2/auth",
+                TokenUri = "https://oauth2.googleapis.com/token",
+                AuthProviderX509CertUrl = "https://www.googleapis.com/oauth2/v1/certs",
+                ClientX509CertUrl = "https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com",
+                UniverseDomain = "googleapis.com",
             }),
         };
 

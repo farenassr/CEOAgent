@@ -1,3 +1,4 @@
+using CeoAgent.Adapters;
 using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.ServiceDefaults;
 using CeoAgent.Worker;
@@ -32,6 +33,7 @@ if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
 }
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAdapters(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();

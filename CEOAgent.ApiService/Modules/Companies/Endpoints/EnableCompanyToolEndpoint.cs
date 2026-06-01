@@ -7,6 +7,8 @@ using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using CeoAgent.Infrastructure;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Scheduling;
 using CeoAgent.ApiService.Modules.Companies.Mappers;
 
 namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
@@ -42,6 +44,7 @@ public sealed class EnableCompanyToolEndpoint(
         }
 
         CompanyMapper.ApplyToEntity(request, tool);
+        ValidateConfiguration(tool.Configuration);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -76,6 +79,14 @@ public sealed class EnableCompanyToolEndpoint(
             throw new NotFoundException("integration_credential_reference", id);
         }
     }
+
+    private static void ValidateConfiguration(ToolConfiguration? configuration)
+    {
+        if (configuration?.GoogleCalendar is { } googleCalendar)
+        {
+            GoogleCalendarConfigValidator.Validate(googleCalendar);
+        }
+    }
 }
 
 public sealed class CompanyToolValidator : Validator<CompanyToolRequest>
@@ -83,5 +94,6 @@ public sealed class CompanyToolValidator : Validator<CompanyToolRequest>
     public CompanyToolValidator()
     {
         RuleFor(request => request.ToolKey).NotEmpty().MaximumLength(120);
+        RuleFor(request => request.Description).MaximumLength(1000);
     }
 }

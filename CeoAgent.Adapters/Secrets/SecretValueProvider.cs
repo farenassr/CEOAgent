@@ -1,11 +1,10 @@
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
-using CeoAgent.Adapters.WhatsApp.Abstractions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Concurrent;
 
-namespace CeoAgent.Adapters.WhatsApp;
+namespace CeoAgent.Adapters.Secrets;
 
 /// <summary>
 /// Resolves secret references from local configuration or Azure Key Vault with short-lived in-memory caching.

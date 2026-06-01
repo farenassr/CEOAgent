@@ -15,6 +15,11 @@ public sealed class CompanyTool : AuditableCompanyOwnedEntity
     public required string ToolKey { get; set; }
 
     /// <summary>
+    /// Human-readable explanation of what this tool does. Example: Checks available reservation slots.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
     /// Whether the tool is enabled for the company. Example: true.
     /// </summary>
     public bool IsEnabled { get; set; } = true;

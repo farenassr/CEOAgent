@@ -1,5 +1,6 @@
 using CeoAgent.Adapters.WhatsApp;
 using CeoAgent.Adapters.WhatsApp.Abstractions;
+using CeoAgent.Adapters.Secrets;
 using CeoAgent.Adapters.WhatsApp.Client;
 using CeoAgent.Integrations.Messaging;
 using Microsoft.Extensions.Configuration;

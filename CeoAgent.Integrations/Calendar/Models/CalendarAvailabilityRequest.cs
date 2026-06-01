@@ -6,4 +6,5 @@ public sealed record CalendarAvailabilityRequest(
     DateTimeOffset Start,
     DateTimeOffset End,
     int PartySize,
-    IReadOnlyList<DateTimeOffset> AlternativeSearchStarts);
+    IReadOnlyList<DateTimeOffset> AlternativeSearchStarts,
+    int BufferMinutes = 0);

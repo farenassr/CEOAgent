@@ -1,4 +1,4 @@
-namespace CeoAgent.Adapters.WhatsApp.Abstractions;
+namespace CeoAgent.Adapters.Secrets;
 
 public interface ISecretValueProvider
 {

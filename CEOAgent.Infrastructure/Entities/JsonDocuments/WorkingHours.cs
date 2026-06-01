@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace CeoAgent.Infrastructure.Entities.JsonDocuments;
 
 public sealed class WorkingHours
@@ -79,10 +81,12 @@ public sealed class TimeSlot
     /// <summary>
     /// Local start time for the slot.
     /// </summary>
+    [JsonPropertyName("start")]
     public TimeOnly Start { get; set; }
 
     /// <summary>
     /// Local end time for the slot.
     /// </summary>
+    [JsonPropertyName("end")]
     public TimeOnly End { get; set; }
 }

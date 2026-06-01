@@ -1,15 +1,22 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using CeoAgent.Adapters.GoogleCalendar.Abstractions;
-using CeoAgent.Adapters.GoogleCalendar.Client;
 using CeoAgent.Integrations.Calendar;
+using Google;
+using Google.Apis.Calendar.v3;
+using Google.Apis.Calendar.v3.Data;
 
 namespace CeoAgent.Adapters.GoogleCalendar;
 
 /// <summary>
 /// Implements calendar availability and reservation operations against Google Calendar.
 /// </summary>
-public sealed class GoogleCalendarIntegration(IGoogleCalendarRefitClientFactory googleCalendarClientFactory)
+public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory googleCalendarServiceFactory)
     : ICalendarIntegration
 {
+    private const string IdempotencyPropertyName = "ceoagent_idempotency_key";
+
     /// <summary>
     /// Checks whether the requested interval is free and returns the nearest configured alternative when it is busy.
     /// </summary>
@@ -19,14 +26,14 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarRefitClientFactory 
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var client = await googleCalendarClientFactory.CreateAsync(request.CredentialReference, cancellationToken);
+        var service = await googleCalendarServiceFactory.CreateAsync(request.CredentialReference, cancellationToken);
         var duration = request.End - request.Start;
         var allStarts = new[] { request.Start }
             .Concat(request.AlternativeSearchStarts)
             .ToArray();
-        var queryStart = allStarts.Min();
-        var queryEnd = allStarts.Max().Add(duration);
-        var busyRanges = await GetBusyRangesAsync(client, request.CalendarId, queryStart, queryEnd, cancellationToken);
+        var queryStart = allStarts.Min().AddMinutes(-request.BufferMinutes);
+        var queryEnd = allStarts.Max().Add(duration).AddMinutes(request.BufferMinutes);
+        var busyRanges = await GetBusyRangesAsync(service, request.CalendarId, queryStart, queryEnd, cancellationToken);
         if (busyRanges is null)
         {
             return new CalendarAvailabilityResult(
@@ -35,7 +42,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarRefitClientFactory 
                 UnavailabilityReason: "slot_unavailable");
         }
 
-        var primaryAvailable = IsAvailable(busyRanges, request.Start, request.End);
+        var primaryAvailable = IsAvailable(busyRanges, request.Start, request.End, request.BufferMinutes);
         if (primaryAvailable)
         {
             return new CalendarAvailabilityResult(Available: true, [], UnavailabilityReason: null);
@@ -46,7 +53,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarRefitClientFactory 
         foreach (var alternativeStart in request.AlternativeSearchStarts)
         {
             var alternativeEnd = alternativeStart + duration;
-            if (IsAvailable(busyRanges, alternativeStart, alternativeEnd))
+            if (IsAvailable(busyRanges, alternativeStart, alternativeEnd, request.BufferMinutes))
             {
                 alternatives.Add(alternativeStart);
                 break;
@@ -68,50 +75,131 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarRefitClientFactory 
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var client = await googleCalendarClientFactory.CreateAsync(request.CredentialReference, cancellationToken);
-        var created = await client.CreateEventAsync(
-            request.CalendarId,
-            new GoogleCalendarEventRequest(
-                request.Summary,
-                request.Description,
-                new GoogleCalendarEventDateTime(request.Start),
-                new GoogleCalendarEventDateTime(request.End),
-                new GoogleExtendedProperties(new Dictionary<string, string>
-                {
-                    ["ceoagent_idempotency_key"] = request.IdempotencyKey,
-                })),
-            cancellationToken);
+        var service = await googleCalendarServiceFactory.CreateAsync(request.CredentialReference, cancellationToken);
+        var existing = await FindExistingReservationAsync(service, request, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        Event created;
+        try
+        {
+            created = await service.Events.Insert(
+                BuildEvent(request),
+                request.CalendarId).ExecuteAsync(cancellationToken);
+        }
+        catch (GoogleApiException exception) when (exception.HttpStatusCode == HttpStatusCode.Conflict)
+        {
+            existing = await FindExistingReservationAsync(service, request, cancellationToken);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            throw;
+        }
 
         return new CalendarReservationResult(created.Id, created.HtmlLink);
     }
 
-    private static async Task<IReadOnlyList<GoogleBusyRange>?> GetBusyRangesAsync(
-        IGoogleCalendarRefitClient client,
+    private static async Task<CalendarReservationResult?> FindExistingReservationAsync(
+        CalendarService service,
+        CalendarReservationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var existingRequest = service.Events.List(request.CalendarId);
+        existingRequest.PrivateExtendedProperty = $"{IdempotencyPropertyName}={request.IdempotencyKey}";
+        existingRequest.SingleEvents = true;
+        existingRequest.MaxResults = 1;
+
+        var existingEvents = await existingRequest.ExecuteAsync(cancellationToken);
+        var existing = existingEvents.Items?
+            .FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.Id)
+                && !string.IsNullOrWhiteSpace(item.HtmlLink));
+        return existing is null
+            ? null
+            : new CalendarReservationResult(existing.Id, existing.HtmlLink);
+    }
+
+    private static Event BuildEvent(CalendarReservationRequest request)
+    {
+        return new Event
+        {
+            Id = BuildDeterministicEventId(request.IdempotencyKey),
+            Summary = request.Summary,
+            Description = request.Description,
+            Start = new EventDateTime
+            {
+                DateTimeDateTimeOffset = request.Start,
+            },
+            End = new EventDateTime
+            {
+                DateTimeDateTimeOffset = request.End,
+            },
+            Attendees = string.IsNullOrWhiteSpace(request.CustomerEmail)
+                ? null
+                :
+                [
+                    new EventAttendee
+                    {
+                        Email = request.CustomerEmail,
+                    },
+                ],
+            ExtendedProperties = new Event.ExtendedPropertiesData
+            {
+                Private__ = new Dictionary<string, string>
+                {
+                    [IdempotencyPropertyName] = request.IdempotencyKey,
+                },
+            },
+        };
+    }
+
+    private static string BuildDeterministicEventId(string idempotencyKey)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey));
+        return "ceoagent" + Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static async Task<IReadOnlyList<TimePeriod>?> GetBusyRangesAsync(
+        CalendarService service,
         string calendarId,
         DateTimeOffset start,
         DateTimeOffset end,
         CancellationToken cancellationToken)
     {
-        var response = await client.QueryFreeBusyAsync(
-            new GoogleFreeBusyRequest(
-                start,
-                end,
-                [new GoogleFreeBusyItem(calendarId)]),
-            cancellationToken);
+        var response = await service.Freebusy.Query(new FreeBusyRequest
+        {
+            TimeMinDateTimeOffset = start,
+            TimeMaxDateTimeOffset = end,
+            Items =
+            [
+                new FreeBusyRequestItem
+                {
+                    Id = calendarId,
+                },
+            ],
+        }).ExecuteAsync(cancellationToken);
 
         if (response.Calendars is null || !response.Calendars.TryGetValue(calendarId, out var calendar))
         {
             return null;
         }
 
-        return calendar.Busy ?? [];
+        return calendar.Busy?.ToArray() ?? [];
     }
 
     private static bool IsAvailable(
-        IReadOnlyList<GoogleBusyRange> busyRanges,
+        IReadOnlyList<TimePeriod> busyRanges,
         DateTimeOffset start,
-        DateTimeOffset end)
+        DateTimeOffset end,
+        int bufferMinutes)
     {
-        return busyRanges.All(busy => busy.Start >= end || busy.End <= start);
+        var bufferedStart = start.AddMinutes(-bufferMinutes);
+        var bufferedEnd = end.AddMinutes(bufferMinutes);
+        return busyRanges.All(busy =>
+            busy.StartDateTimeOffset >= bufferedEnd
+            || busy.EndDateTimeOffset <= bufferedStart);
     }
 }

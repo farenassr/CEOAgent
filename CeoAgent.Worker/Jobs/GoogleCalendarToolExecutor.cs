@@ -1,6 +1,8 @@
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Integrations;
+using CeoAgent.Infrastructure.Scheduling;
 using CeoAgent.Integrations.Calendar;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
@@ -16,9 +18,6 @@ public sealed class GoogleCalendarToolExecutor(
     ICalendarIntegration calendarIntegration,
     TimeProvider timeProvider)
 {
-    private const int DefaultReservationMinutes = 60;
-    private const int DefaultSlotMinutes = 30;
-
     /// <summary>
     /// Checks a requested reservation slot against working hours and Google Calendar, then stores the tool result.
     /// </summary>
@@ -39,7 +38,31 @@ public sealed class GoogleCalendarToolExecutor(
         }
 
         var context = await LoadContextAsync(conversationId, companyToolId, cancellationToken);
-        var preferredTime = request.PreferredTime ?? FirstWorkingTime(context.Company.WorkingHours, request.Date);
+        var config = context.Configuration;
+        var preferredTime = request.PreferredTime
+            ?? GoogleCalendarSchedulingPolicy.FirstWorkingTime(context.Company.WorkingHours, request.Date);
+        if (!GoogleCalendarSchedulingPolicy.IsWithinAdvanceWindow(
+            request.Date,
+            context.Company.TimeZoneId,
+            timeProvider.GetUtcNow(),
+            config.AdvanceBookingDays))
+        {
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.CheckGoogleCalendarAvailability,
+                idempotencyKey,
+                ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
+                ToolExecutionResult.ForCheckGoogleCalendarAvailability(new CheckAvailabilityResult
+                {
+                    Available = false,
+                    UnavailabilityReason = "outside_advance_booking_window",
+                }),
+                ToolExecutionStatus.Succeeded,
+                failureReason: null,
+                cancellationToken);
+        }
+
         if (preferredTime is null)
         {
             return await PersistExecutionAsync(
@@ -58,11 +81,17 @@ public sealed class GoogleCalendarToolExecutor(
                 cancellationToken);
         }
 
-        var start = ToCompanyLocalOffset(request.Date, preferredTime.Value, context.Company.TimeZoneId);
-        var end = start.AddMinutes(DefaultReservationMinutes);
-        var alternatives = BuildAlternativeStarts(context.Company.WorkingHours, request.Date, start, DefaultSlotMinutes);
+        var start = GoogleCalendarSchedulingPolicy.ToCompanyLocalOffset(request.Date, preferredTime.Value, context.Company.TimeZoneId);
+        var end = start.AddMinutes(config.ReservationMinutes);
+        var alternatives = GoogleCalendarSchedulingPolicy.BuildAlternativeStarts(
+            context.Company.WorkingHours,
+            request.Date,
+            start,
+            config.SlotMinutes,
+            config.ReservationMinutes,
+            config.BufferMinutes);
 
-        if (!IsWithinWorkingHours(context.Company.WorkingHours, start, end))
+        if (!GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(context.Company.WorkingHours, start, end, config.BufferMinutes))
         {
             return await PersistExecutionAsync(
                 context,
@@ -82,12 +111,13 @@ public sealed class GoogleCalendarToolExecutor(
         }
 
         var calendarRequest = new CalendarAvailabilityRequest(
-            CredentialReference(context.Tool),
-            CalendarConfig(context.Tool).CalendarId,
+            context.CredentialReference,
+            config.CalendarId,
             start,
             end,
             request.PartySize,
-            alternatives);
+            alternatives,
+            config.BufferMinutes);
 
         var calendarResult = await calendarIntegration.CheckAvailabilityAsync(calendarRequest, cancellationToken);
         var result = new CheckAvailabilityResult
@@ -129,7 +159,30 @@ public sealed class GoogleCalendarToolExecutor(
         }
 
         var context = await LoadContextAsync(conversationId, companyToolId, cancellationToken);
-        if (!IsWithinWorkingHours(context.Company.WorkingHours, request.Start, request.End))
+        var config = context.Configuration;
+        if (!GoogleCalendarSchedulingPolicy.IsWithinAdvanceWindow(
+            DateOnly.FromDateTime(request.Start.DateTime),
+            context.Company.TimeZoneId,
+            timeProvider.GetUtcNow(),
+            config.AdvanceBookingDays))
+        {
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.CreateGoogleCalendarReservation,
+                idempotencyKey,
+                ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
+                result: null,
+                ToolExecutionStatus.Denied,
+                "outside_advance_booking_window",
+                cancellationToken);
+        }
+
+        if (!GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(
+            context.Company.WorkingHours,
+            request.Start,
+            request.End,
+            config.BufferMinutes))
         {
             return await PersistExecutionAsync(
                 context,
@@ -145,8 +198,8 @@ public sealed class GoogleCalendarToolExecutor(
 
         var calendarResult = await calendarIntegration.CreateReservationAsync(
             new CalendarReservationRequest(
-                CredentialReference: CredentialReference(context.Tool),
-                CalendarId: CalendarConfig(context.Tool).CalendarId,
+                CredentialReference: context.CredentialReference,
+                CalendarId: config.CalendarId,
                 Start: request.Start,
                 End: request.End,
                 Summary: request.Summary,
@@ -186,15 +239,26 @@ public sealed class GoogleCalendarToolExecutor(
             ?? throw new InvalidOperationException($"Conversation '{conversationId}' was not found.");
         var company = await dbContext.Companies.FindAsync([conversation.CompanyId], cancellationToken)
             ?? throw new InvalidOperationException($"Company '{conversation.CompanyId}' was not found.");
-        var tool = await dbContext.CompanyTools.FindAsync([companyToolId], cancellationToken)
+        var tool = await dbContext.CompanyTools
+            .Include(entity => entity.CredentialReference)
+            .SingleOrDefaultAsync(
+                entity => entity.Id == companyToolId
+                    && entity.CompanyId == conversation.CompanyId
+                    && entity.IsEnabled,
+                cancellationToken)
             ?? throw new InvalidOperationException($"Company tool '{companyToolId}' was not found.");
 
-        if (tool.CompanyId != conversation.CompanyId)
+        var config = tool.Configuration?.GoogleCalendar
+            ?? throw new InvalidOperationException("Google Calendar tool configuration is required.");
+        GoogleCalendarConfigValidator.Validate(config);
+
+        if (tool.CredentialReference is null)
         {
-            throw new InvalidOperationException("Company tool does not belong to the conversation company.");
+            throw new InvalidOperationException("Google Calendar credential reference is required.");
         }
 
-        return new CalendarToolContext(conversation, company, tool);
+        var credentialReference = GoogleCalendarCredentialMaterialResolver.Resolve(tool.CredentialReference);
+        return new CalendarToolContext(conversation, company, tool, config, credentialReference);
     }
 
     private async Task<ToolExecution> PersistExecutionAsync(
@@ -243,104 +307,10 @@ public sealed class GoogleCalendarToolExecutor(
         return execution;
     }
 
-    private static GoogleCalendarConfig CalendarConfig(CompanyTool tool)
-    {
-        return tool.Configuration?.GoogleCalendar
-            ?? throw new InvalidOperationException("Google Calendar tool configuration is required.");
-    }
-
-    private static string CredentialReference(CompanyTool tool)
-    {
-        return tool.CredentialReference?.Reference ?? "default";
-    }
-
-    private static DateTimeOffset ToCompanyLocalOffset(DateOnly date, TimeOnly time, string timeZoneId)
-    {
-        var localDateTime = date.ToDateTime(time);
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-        var offset = timeZone.GetUtcOffset(localDateTime);
-        return new DateTimeOffset(localDateTime, offset);
-    }
-
-    private static TimeOnly? FirstWorkingTime(WorkingHours? workingHours, DateOnly date)
-    {
-        return SlotsForDate(workingHours, date)
-            .OrderBy(slot => slot.Start)
-            .Select(slot => (TimeOnly?)slot.Start)
-            .FirstOrDefault();
-    }
-
-    private static bool IsWithinWorkingHours(WorkingHours? workingHours, DateTimeOffset start, DateTimeOffset end)
-    {
-        var date = DateOnly.FromDateTime(start.DateTime);
-        var startTime = TimeOnly.FromDateTime(start.DateTime);
-        var endTime = TimeOnly.FromDateTime(end.DateTime);
-
-        return SlotsForDate(workingHours, date)
-            .Any(slot => startTime >= slot.Start && endTime <= slot.End);
-    }
-
-    private static DateTimeOffset[] BuildAlternativeStarts(
-        WorkingHours? workingHours,
-        DateOnly date,
-        DateTimeOffset requestedStart,
-        int slotMinutes)
-    {
-        var alternatives = new List<DateTimeOffset>();
-        foreach (var slot in SlotsForDate(workingHours, date).OrderBy(slot => slot.Start))
-        {
-            var cursor = new DateTimeOffset(date.ToDateTime(slot.Start), requestedStart.Offset);
-            var latestStart = new DateTimeOffset(date.ToDateTime(slot.End), requestedStart.Offset).AddMinutes(-DefaultReservationMinutes);
-            while (cursor <= latestStart)
-            {
-                if (cursor != requestedStart)
-                {
-                    alternatives.Add(cursor);
-                }
-
-                cursor = cursor.AddMinutes(slotMinutes);
-            }
-        }
-
-        return alternatives
-            .OrderBy(value => Math.Abs((value - requestedStart).TotalMinutes))
-            .ThenBy(value => value)
-            .ToArray();
-    }
-
-    private static List<TimeSlot> SlotsForDate(WorkingHours? workingHours, DateOnly date)
-    {
-        if (workingHours is null)
-        {
-            return [];
-        }
-
-        var specialDay = workingHours.Holidays.FirstOrDefault(day => day.Date == date);
-        if (specialDay is { IsClosed: true })
-        {
-            return [];
-        }
-
-        if (specialDay is not null)
-        {
-            return specialDay.TimeSlots;
-        }
-
-        return date.DayOfWeek switch
-        {
-            DayOfWeek.Monday => workingHours.Schedule.Monday,
-            DayOfWeek.Tuesday => workingHours.Schedule.Tuesday,
-            DayOfWeek.Wednesday => workingHours.Schedule.Wednesday,
-            DayOfWeek.Thursday => workingHours.Schedule.Thursday,
-            DayOfWeek.Friday => workingHours.Schedule.Friday,
-            DayOfWeek.Saturday => workingHours.Schedule.Saturday,
-            DayOfWeek.Sunday => workingHours.Schedule.Sunday,
-            _ => [],
-        };
-    }
-
     private sealed record CalendarToolContext(
         Conversation Conversation,
         Company Company,
-        CompanyTool Tool);
+        CompanyTool Tool,
+        GoogleCalendarConfig Configuration,
+        string CredentialReference);
 }
