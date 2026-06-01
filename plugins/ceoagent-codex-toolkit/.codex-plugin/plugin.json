@@ -1,0 +1,27 @@
+{
+  "name": "ceoagent-codex-toolkit",
+  "version": "0.1.0",
+  "description": "Repo-specific Codex skills and MCP servers for CeoAgent development.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CeoAgent Codex Toolkit",
+    "shortDescription": "CeoAgent Aspire, EF, docs, GitHub, and database helpers.",
+    "longDescription": "Repo-local Codex toolkit for operating the CeoAgent Aspire development loop, reviewing EF Core migrations, and connecting useful MCP servers for docs, GitHub, and local PostgreSQL work.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Start CeoAgent with Aspire and verify health.",
+      "Review this EF migration for CeoAgent.",
+      "Inspect CeoAgent docs and local PostgreSQL schema."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}
