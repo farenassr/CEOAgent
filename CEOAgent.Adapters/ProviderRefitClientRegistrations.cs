@@ -38,30 +38,4 @@ public static class ProviderRefitClientRegistrations
         return builder;
     }
 
-    /// <summary>
-    /// Registers a Google Calendar API Refit client and configures a short
-    /// exponential retry policy that honors provider retry-after responses.
-    /// </summary>
-    public static IHttpClientBuilder AddGoogleCalendarRefitClient<TClient>(
-        this IServiceCollection services)
-        where TClient : class
-    {
-        var builder = services.AddRefitClient<TClient>();
-
-        builder.RemoveAllResilienceHandlers();
-        builder.AddResilienceHandler("google-calendar", pipeline =>
-        {
-            pipeline.AddRetry(new HttpRetryStrategyOptions
-            {
-                BackoffType = DelayBackoffType.Exponential,
-                Delay = TimeSpan.FromMilliseconds(500),
-                MaxDelay = TimeSpan.FromSeconds(10),
-                MaxRetryAttempts = 2,
-                ShouldRetryAfterHeader = true,
-                UseJitter = true,
-            });
-        });
-
-        return builder;
-    }
 }

@@ -1,6 +1,10 @@
+using CeoAgent.Adapters.GoogleCalendar;
+using CeoAgent.Adapters.GoogleCalendar.Abstractions;
+using CeoAgent.Adapters.GoogleCalendar.Service;
+using CeoAgent.Adapters.Secrets;
 using CeoAgent.Adapters.WhatsApp;
-using CeoAgent.Adapters.WhatsApp.Abstractions;
 using CeoAgent.Adapters.WhatsApp.Client;
+using CeoAgent.Integrations.Calendar;
 using CeoAgent.Integrations.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +34,8 @@ public static class AdapterRegistrations
         services.AddHttpClient<WhatsAppCloudIntegration>();
         services.AddMemoryCache();
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
+        services.AddScoped<IGoogleCalendarServiceFactory, GoogleCalendarServiceFactory>();
+        services.AddScoped<ICalendarIntegration, GoogleCalendarIntegration>();
         services.AddScoped<IMessageChannelIntegration>(provider =>
         {
             var integration = provider.GetRequiredService<WhatsAppCloudIntegration>();

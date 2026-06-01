@@ -2,6 +2,7 @@ using CeoAgent.Application.Company;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.IntegrationTests.Infrastructure;
+using CeoAgent.Infrastructure.Scheduling;
 using CeoAgent.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -171,6 +172,51 @@ public sealed class JsonEntityMappingTests
     }
 
     [Test]
+    public async Task CompanyWorkingHours_ReadsLowercaseTimeSlotJson()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        database.CompanyContext.SetCompany(companyId);
+        const string workingHoursJson = """
+            {
+              "holidays": [],
+              "schedule": {
+                "monday": [{ "start": "08:00:00", "end": "17:00:00" }],
+                "tuesday": [{ "start": "08:00:00", "end": "17:00:00" }],
+                "wednesday": [{ "start": "08:00:00", "end": "17:00:00" }],
+                "thursday": [{ "start": "08:00:00", "end": "17:00:00" }],
+                "friday": [{ "start": "08:00:00", "end": "17:00:00" }],
+                "saturday": [],
+                "sunday": []
+              }
+            }
+            """;
+
+        await database.Context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO company (id, name, time_zone_id, status, created_at, updated_at, working_hours_json)
+            VALUES ({companyId}, 'Contoso Bistro', 'America/Bogota', 'Active', now(), now(), {workingHoursJson}::jsonb)
+            """);
+        database.Context.ChangeTracker.Clear();
+
+        var loaded = await database.Context.Companies.SingleAsync(entity => entity.Id == companyId);
+
+        loaded.WorkingHours.ShouldNotBeNull();
+        loaded.WorkingHours.Schedule.ShouldNotBeNull();
+        loaded.WorkingHours.Schedule.Monday.ShouldNotBeNull();
+        var mondaySlot = loaded.WorkingHours.Schedule.Monday.Single();
+        mondaySlot.Start.ShouldBe(new TimeOnly(8, 0));
+        mondaySlot.End.ShouldBe(new TimeOnly(17, 0));
+
+        var start = GoogleCalendarSchedulingPolicy.ToCompanyLocalOffset(
+            new DateOnly(2026, 6, 1),
+            new TimeOnly(14, 30),
+            loaded.TimeZoneId);
+        var end = start.AddMinutes(GoogleCalendarSchedulingPolicy.DefaultReservationMinutes);
+        GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(loaded.WorkingHours, start, end).ShouldBeTrue();
+    }
+
+    [Test]
     public async Task IntegrationCredentialReference_StoresProviderUsingSnakeCaseEnumMemberName()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -198,6 +244,62 @@ public sealed class JsonEntityMappingTests
             .SingleAsync();
 
         provider.ShouldBe("whatsapp_cloud");
+    }
+
+    [Test]
+    public async Task IntegrationCredentialReference_RoundTripsGoogleCalendarServiceAccountMetadata()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        database.CompanyContext.SetCompany(companyId);
+
+        database.Context.Companies.Add(new CompanyEntity
+        {
+            Id = companyId,
+            Name = "Contoso Bistro",
+            TimeZoneId = "America/Bogota",
+        });
+        var credential = new IntegrationCredentialReference
+        {
+            CompanyId = companyId,
+            Provider = IntegrationProvider.GoogleCalendar,
+            Purpose = "google_calendar",
+            Reference = "stored://google-calendar/service-account",
+            Metadata = CredentialMetadata.ForGoogleCalendar(new GoogleCalendarCredentialMetadata
+            {
+                Type = "service_account",
+                ProjectId = "gen-lang-client-0728870398",
+                PrivateKeyId = "private-key-id",
+                PrivateKey = "-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n",
+                ClientEmail = "ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com",
+                ClientId = "1111",
+                AuthUri = "https://accounts.google.com/o/oauth2/auth",
+                TokenUri = "https://oauth2.googleapis.com/token",
+                AuthProviderX509CertUrl = "https://www.googleapis.com/oauth2/v1/certs",
+                ClientX509CertUrl = "https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com",
+                UniverseDomain = "googleapis.com",
+            }),
+        };
+        database.Context.IntegrationCredentialReferences.Add(credential);
+        await database.Context.SaveChangesAsync();
+        database.Context.ChangeTracker.Clear();
+
+        var loaded = await database.Context.IntegrationCredentialReferences.SingleAsync(entity => entity.Id == credential.Id);
+
+        loaded.Metadata.ShouldNotBeNull();
+        var metadata = loaded.Metadata.GoogleCalendar;
+        metadata.ShouldNotBeNull();
+        metadata.Type.ShouldBe("service_account");
+        metadata.ProjectId.ShouldBe("gen-lang-client-0728870398");
+        metadata.PrivateKeyId.ShouldBe("private-key-id");
+        metadata.PrivateKey.ShouldBe("-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n");
+        metadata.ClientEmail.ShouldBe("ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com");
+        metadata.ClientId.ShouldBe("1111");
+        metadata.AuthUri.ShouldBe("https://accounts.google.com/o/oauth2/auth");
+        metadata.TokenUri.ShouldBe("https://oauth2.googleapis.com/token");
+        metadata.AuthProviderX509CertUrl.ShouldBe("https://www.googleapis.com/oauth2/v1/certs");
+        metadata.ClientX509CertUrl.ShouldBe("https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com");
+        metadata.UniverseDomain.ShouldBe("googleapis.com");
     }
 
     private static void AssertJsonComplexProperty<TEntity, TProperty>(

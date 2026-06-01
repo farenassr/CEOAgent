@@ -13,6 +13,13 @@ public sealed class CompanyToolRequest
     public string ToolKey { get; set; } = string.Empty;
 
     /// <summary>
+    /// Human-readable explanation of what this tool does.
+    /// </summary>
+    [Description("Human-readable explanation of what this tool does.")]
+    [DefaultValue("Checks available reservation slots.")]
+    public string? Description { get; set; }
+
+    /// <summary>
     /// Whether the tool is enabled for the company.
     /// </summary>
     [Description("Whether the tool is enabled for the company.")]

@@ -7,4 +7,5 @@ public sealed record CalendarReservationRequest(
     DateTimeOffset End,
     string Summary,
     string IdempotencyKey,
-    string? Description);
+    string? Description,
+    string? CustomerEmail = null);

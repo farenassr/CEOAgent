@@ -95,6 +95,31 @@ public sealed class GoogleCalendarToolExecutorTests
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
     }
 
+    [Test]
+    public async Task CreateReservationAsync_WithConfiguredCredentialReference_UsesStoredCredentialReference()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        var credential = await fixture.DbContext.IntegrationCredentialReferences.SingleAsync();
+        credential.Reference = "stored://google-calendar/contoso";
+        await fixture.DbContext.SaveChangesAsync();
+        fixture.DbContext.ChangeTracker.Clear();
+
+        await fixture.Executor.CreateReservationAsync(
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new CreateCalendarEventRequest
+            {
+                Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+                End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                Summary = "Reservation for 2",
+            },
+            "reservation-key",
+            CancellationToken.None);
+
+        fixture.Calendar.ReservationRequests.Single().CredentialReference.ShouldBe("stored://google-calendar/contoso");
+    }
+
     private sealed class CalendarToolFixture
     {
         private readonly PostgresWorkerDatabase database;
@@ -106,7 +131,10 @@ public sealed class GoogleCalendarToolExecutorTests
             CompanyContext.SetCompany(CompanyId);
             DbContext = database.Context;
             Calendar = new FakeCalendarIntegration();
-            Executor = new GoogleCalendarToolExecutor(DbContext, Calendar, TimeProvider.System);
+            Executor = new GoogleCalendarToolExecutor(
+                DbContext,
+                Calendar,
+                new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
 
             var company = new Company
             {
@@ -178,12 +206,21 @@ public sealed class GoogleCalendarToolExecutorTests
                 OccurredAt = new DateTime(2026, 5, 28, 21, 0, 0, DateTimeKind.Utc),
             };
 
+            var credential = new IntegrationCredentialReference
+            {
+                Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b41"),
+                CompanyId = CompanyId,
+                Provider = IntegrationProvider.GoogleCalendar,
+                Purpose = "google_calendar",
+                Reference = "default",
+            };
+
             Tool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40"),
                 CompanyId = CompanyId,
                 ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
-                CredentialReferenceId = null,
+                CredentialReferenceId = credential.Id,
                 Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
                 {
                     CalendarId = "primary",
@@ -192,7 +229,7 @@ public sealed class GoogleCalendarToolExecutorTests
                 }),
             };
 
-            DbContext.AddRange(company, profile, channel, customer, Conversation, TriggerMessage, Tool);
+            DbContext.AddRange(company, profile, channel, customer, Conversation, TriggerMessage, credential, Tool);
             DbContext.SaveChanges();
         }
 
@@ -253,6 +290,14 @@ public sealed class GoogleCalendarToolExecutorTests
         {
             ReservationRequests.Add(request);
             return Task.FromResult(new CalendarReservationResult("event-123", "https://calendar.google.com/event?eid=event-123"));
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return utcNow;
         }
     }
 }

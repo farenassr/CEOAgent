@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using CeoAgent.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CeoAgent.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CeoAgentDbContext))]
-    partial class CeoAgentDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260530074103_GoogleCalendarServiceAccountMetadata")]
+    partial class GoogleCalendarServiceAccountMetadata
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -131,11 +134,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("timeSlots");
                                         });
@@ -151,11 +152,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("friday");
                                         });
@@ -164,11 +163,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("monday");
                                         });
@@ -177,11 +174,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("saturday");
                                         });
@@ -190,11 +185,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("sunday");
                                         });
@@ -203,11 +196,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("thursday");
                                         });
@@ -216,11 +207,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("tuesday");
                                         });
@@ -229,11 +218,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         {
                                             b3.IsRequired();
 
-                                            b3.Property<TimeOnly>("End")
-                                                .HasJsonPropertyName("end");
+                                            b3.Property<TimeOnly>("End");
 
-                                            b3.Property<TimeOnly>("Start")
-                                                .HasJsonPropertyName("start");
+                                            b3.Property<TimeOnly>("Start");
 
                                             b3.HasJsonPropertyName("wednesday");
                                         });
@@ -378,11 +365,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("credential_reference_id");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
-
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("is_enabled");
@@ -422,18 +404,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                             b1.ComplexProperty(typeof(Dictionary<string, object>), "GoogleCalendar", "CeoAgent.Infrastructure.Entities.CompanyTool.Configuration#ToolConfiguration.GoogleCalendar#GoogleCalendarConfig", b2 =>
                                 {
-                                    b2.Property<int>("AdvanceBookingDays");
-
                                     b2.Property<int>("BufferMinutes")
                                         .HasJsonPropertyName("bufferMinutes");
 
                                     b2.Property<string>("CalendarId")
                                         .IsRequired()
                                         .HasJsonPropertyName("calendarId");
-
-                                    b2.Property<int>("ReservationMinutes");
-
-                                    b2.Property<int>("SlotMinutes");
 
                                     b2.Property<string>("TimeZoneId")
                                         .IsRequired()

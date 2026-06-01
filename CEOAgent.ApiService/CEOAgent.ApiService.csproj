@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>dotnet-CeoAgent.ApiService-9e0af73a-ea7f-4b73-aeb7-1569c3c3213d</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CeoAgent.ServiceDefaults\CeoAgent.ServiceDefaults.csproj" />
     <ProjectReference Include="..\CeoAgent.Application\CeoAgent.Application.csproj" />
