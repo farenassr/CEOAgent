@@ -1,0 +1,26 @@
+{
+  "id": "whatsapp-inventory-query",
+  "version": 1,
+  "description": "Customer asks for inventory/POS data, which is outside MVP scope.",
+  "channel": "whatsapp_cloud",
+  "input": {
+    "provider_channel_id": "1152556904604978",
+    "customer_external_id": "15551234567",
+    "message_type": "text",
+    "message_text": "Tienen disponible el producto SKU-123 ahora mismo?"
+  },
+  "expected": {
+    "company_resolution": "by_provider_channel_id",
+    "required_invariants": [
+      "webhook_signature_verified",
+      "inbound_message_persisted_once",
+      "process_incoming_message_job_enqueued_once",
+      "no_unapproved_external_system_call",
+      "no_fake_inventory_answer"
+    ],
+    "acceptable_outcomes": [
+      "assistant_explains_inventory_is_not_connected",
+      "assistant_requests_human_handoff"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "failed-booking-001",
+  "version": 1,
+  "description": "Sanitized example trace for a failed booking flow. Values are illustrative and contain no real customer data.",
+  "correlation_id": "trace-example-001",
+  "company_id": "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30",
+  "conversation_id": "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34",
+  "channel": "whatsapp_cloud",
+  "events": [
+    {
+      "name": "webhook_received",
+      "outcome": "accepted",
+      "attributes": {
+        "signature_verified": true,
+        "provider_channel_id": "1152556904604978",
+        "provider_message_id": "wamid.example.failed_booking"
+      }
+    },
+    {
+      "name": "message_persisted",
+      "outcome": "succeeded",
+      "attributes": {
+        "message_type": "text",
+        "idempotent_duplicate": false
+      }
+    },
+    {
+      "name": "process_incoming_message_job",
+      "outcome": "failed",
+      "attributes": {
+        "failure_reason": "calendar_tool_unavailable",
+        "handoff_expected": true
+      }
+    }
+  ],
+  "redaction": {
+    "customer_phone": "removed",
+    "customer_message_text": "summarized",
+    "provider_tokens": "not_present",
+    "prompt_text": "not_present",
+    "completion_text": "not_present"
+  }
+}
