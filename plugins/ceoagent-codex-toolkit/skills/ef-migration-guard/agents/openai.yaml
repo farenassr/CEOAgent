@@ -1,4 +1,0 @@
-interface:
-  display_name: "EF Migration Guard"
-  short_description: "Review EF migrations and protect persistence boundaries."
-  default_prompt: "Review this EF migration for CeoAgent."
