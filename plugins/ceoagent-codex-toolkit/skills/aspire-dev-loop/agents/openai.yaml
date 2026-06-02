@@ -1,4 +1,0 @@
-interface:
-  display_name: "Aspire Dev Loop"
-  short_description: "Run and verify the CeoAgent Aspire stack."
-  default_prompt: "Start CeoAgent with Aspire and verify health."
