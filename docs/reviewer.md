@@ -9,6 +9,48 @@ Por favor, Crea un archivo md del informe técnico detallado formateado exclusiv
 
 al final del informe crea una tabla con los siguientes datos: | # | Severidad | Hallazgo | Sección |
 
+### 🧭 Contexto de Harness Engineering
+
+Este repositorio usa harness engineering.
+
+Antes de revisar:
+
+1. Lee `AGENTS.md`.
+2. Ejecuta o inspecciona `git status --short`.
+3. Determina la rama base y revisa el diff de la rama actual contra esa base usando `git diff` o equivalente.
+4. No revises todo el proyecto como auditoría general.
+5. Enfócate en archivos y líneas modificadas.
+6. Puedes leer archivos no modificados solo cuando sean necesarios para entender contexto, contratos, patrones existentes o impacto real.
+7. Lee documentos de `AIHarness/` solo si son relevantes para los cambios.
+8. Usa `scripts/` en lugar de comandos ad-hoc cuando necesites validar algo.
+
+### 🤖 Uso de Subagentes
+
+Usa los subagentes disponibles en `.codex/agents/` cuando sean relevantes para el diff.
+
+Subagentes disponibles:
+
+- `architecture-reviewer`: arquitectura, modular monolith, vertical slices, límites entre proyectos, acoplamiento y diseño.
+- `backend-engineer`: implementación .NET, FastEndpoints, Mediator, Worker jobs, servicios, handlers y lógica de aplicación.
+- `db-specialist`: EF Core, PostgreSQL, JSONB, índices, query filters, tenant isolation, queries y persistencia.
+- `integrations-engineer`: ports/adapters, WhatsApp Cloud, Google Calendar, APIs externas, SDKs y tool execution.
+- `ai-engineer`: Microsoft Agent Framework, agent loop, prompts, structured output, tool calling, LLM safety y evals.
+- `testing-engineer`: pruebas unitarias, integración, Aspire Testing, Testcontainers, fixtures, evals y regresiones.
+- `code-simplifier`: redundancia, simplificación de código, queries duplicadas, LINQ/EF Core readability y refactors behavior-preserving.
+- `codebase-scout`: lectura inicial del contexto, archivos relevantes, patrones existentes y resumen del estado actual, si existe.
+
+Si los cambios son complejos, primero usa `codebase-scout` para resumir el contexto del diff.
+
+Luego ejecuta en paralelo solo los subagentes relevantes. No uses todos por defecto.
+
+Cada subagente seleccionado debe devolver:
+
+1. Riesgos principales.
+2. Archivos o áreas relevantes.
+3. Hallazgos accionables.
+4. Pruebas, evals o docs que deberían agregarse o actualizarse.
+5. Cosas que no deberían cambiarse.
+
 ## 1. 🧭 Conclusiones Generales
 
 - Un resumen ejecutivo sobre la calidad general de los cambios de la rama actual, legibilidad, mantenibilidad y coherencia con los módulos afectados.

@@ -134,6 +134,79 @@ Estas reglas están detalladas en [AGENTS.md](./AGENTS.md), que es la fuente nor
 
 ---
 
+## 🧭 Harness engineering para agentes
+
+Este repositorio usa **harness engineering**: no se espera que los agentes
+solo escriban codigo, sino que trabajen dentro de un flujo repetible para
+inspeccionar, planificar, implementar, revisar y validar cambios. El harness
+incluye reglas, prompts, subagentes, scripts, fixtures de evaluacion y trazas
+que reducen regresiones y hacen que cada fase sea verificable.
+
+Activos principales del harness:
+
+- `AGENTS.md`: reglas normativas para agentes y colaboradores.
+- `.codex/agents/*.toml`: subagentes Codex project-scoped.
+- `.claude/agents/*.md`: subagentes Claude Code en formato Markdown estandar.
+- `AIHarness/`: documentos de arquitectura, integraciones, seguridad y flujos.
+- `scripts/`: wrappers estables para build, test y format.
+- `evals/`: fixtures de regresion, especialmente para WhatsApp.
+- `traces/`: ejemplos sanitizados de fallos reales o simulados.
+
+### Subagentes disponibles
+
+| Agente                  | Uso principal                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `phase-orchestrator`    | Coordina fases harness-engineered: selecciona docs, subagentes, plan, limites de implementacion y validaciones.        |
+| `codebase-scout`        | Inspecciona codigo, tests, docs y harness assets relevantes antes de planificar o codificar.                           |
+| `architecture-reviewer` | Revisa arquitectura, modular monolith, vertical slices, limites entre proyectos, tenant isolation y riesgos de diseno. |
+| `backend-engineer`      | Implementa .NET backend: FastEndpoints, Mediator, handlers, validators, DTOs, Worker jobs y DI.                        |
+| `db-specialist`         | Revisa EF Core, PostgreSQL, migraciones, indices, JSONB, query filters, tenant isolation y modelo de datos.            |
+| `integrations-engineer` | Implementa y revisa ports/adapters, WhatsApp Cloud, Google Calendar, APIs externas, SDKs y tool execution.             |
+| `ai-engineer`           | Trabaja en Microsoft Agent Framework, prompts, agent loop, structured output, tool calling, evals y seguridad LLM.     |
+| `testing-engineer`      | Define y escribe unit tests, integration tests, Aspire Testing, Testcontainers, fixtures, evals y regresiones.         |
+| `code-simplifier`       | Simplifica codigo y queries, reduce duplicacion y propone refactors behavior-preserving sin cambiar contratos.         |
+
+### Flujo obligatorio de una tarea o fase
+
+Cada vez que empiece una tarea o fase, inicia desde
+[`docs/PromptTemplate.md`](./docs/PromptTemplate.md). Ese archivo se usa como
+plantilla operativa de arranque; no debe tratarse como contexto tecnico o
+arquitectonico si contradice `AGENTS.md`.
+
+Flujo recomendado:
+
+1. Leer `AGENTS.md`.
+2. Revisar `git status --short`.
+3. Usar `docs/PromptTemplate.md` para formular la fase.
+4. Inspeccionar solo archivos y harness docs relevantes.
+5. Seleccionar subagentes relevantes; no usar todos por defecto.
+6. Producir un plan breve antes de editar.
+7. Implementar el cambio mas pequeno y durable.
+8. Ejecutar la validacion mas estrecha que tenga sentido.
+9. Antes de terminar, ejecutar la revision definida en
+   [`docs/reviewer.md`](./docs/reviewer.md), revisar el informe generado en
+   `docs/CODE_REVIEW/` y corregir o documentar los hallazgos accionables.
+
+### Como crear un commit
+
+Antes de crear un commit:
+
+#### Usa el formato de commit del proyecto:
+
+```text
+<ProjectOrArea>/<ProjectOrArea>/...: [<GitHubIssueId>] <Concise change summary>
+```
+
+Ejemplo:
+
+```text
+Repo/AIHarness/.claude/.codex: [#0] Add harness docs and agent definitions
+```
+
+Si no hay issue de GitHub asociado, usa `[#0]`.
+
+---
+
 ## ⚙️ Configuración
 
 El proyecto usa **Options Pattern** con clases fuertemente tipadas y validación al iniciar.
@@ -144,7 +217,7 @@ Secciones relevantes:
   - CORS.
   - Rate limiting.
 - `Persistence`
-  - Modo PostgreSQL o InMemory para tests.
+  - Modo PostgreSQL.
 - `ServiceDefaults`
   - OTLP.
   - Langfuse.
@@ -228,13 +301,13 @@ dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
 
 Secretos/parámetros usados actualmente:
 
-| Proyecto | Clave | Uso |
-| -------- | ----- | --- |
-| `CeoAgent.AppHost` | `Parameters:postgres-password` | Password local leído por Aspire para el contenedor PostgreSQL. |
-| `CeoAgent.AppHost` | `Parameters:langfuse-host` | Host de Langfuse, por ejemplo `https://cloud.langfuse.com`. |
-| `CeoAgent.AppHost` | `Parameters:langfuse-public-key` | Public key de Langfuse para trazas GenAI. |
-| `CeoAgent.AppHost` | `Parameters:langfuse-secret-key` | Secret key de Langfuse para trazas GenAI. |
-| `CeoAgent.Infrastructure` | `ConnectionStrings:CeoAgent` | Connection string de diseño para comandos `dotnet ef`. |
+| Proyecto                  | Clave                            | Uso                                                            |
+| ------------------------- | -------------------------------- | -------------------------------------------------------------- |
+| `CeoAgent.AppHost`        | `Parameters:postgres-password`   | Password local leído por Aspire para el contenedor PostgreSQL. |
+| `CeoAgent.AppHost`        | `Parameters:langfuse-host`       | Host de Langfuse, por ejemplo `https://cloud.langfuse.com`.    |
+| `CeoAgent.AppHost`        | `Parameters:langfuse-public-key` | Public key de Langfuse para trazas GenAI.                      |
+| `CeoAgent.AppHost`        | `Parameters:langfuse-secret-key` | Secret key de Langfuse para trazas GenAI.                      |
+| `CeoAgent.Infrastructure` | `ConnectionStrings:CeoAgent`     | Connection string de diseño para comandos `dotnet ef`.         |
 
 Configurar el password local de PostgreSQL para Aspire:
 
@@ -360,7 +433,7 @@ Antes de tocar código:
 3. Usa nombres descriptivos.
 4. Añade tests proporcionales al riesgo.
 5. Ejecuta build y tests antes de cerrar el cambio.
-6. Antes de dar una tarea por terminada, abre [docs/reviewer.md](./docs/reviewer.md) y usa el prompt que contiene para pedirle a la AI que revise los cambios actuales contra el proyecto. Esta revisión es una ayuda para detectar problemas serios, no una camisa de fuerza: algunos warnings pueden no ser relevantes y se pueden ignorar con criterio.
+6. **Antes de dar una tarea por terminada**, abre [docs/reviewer.md](./docs/reviewer.md) y usa el prompt que contiene para pedirle a la AI que revise los cambios actuales contra el proyecto. Esta revisión es una ayuda para detectar problemas serios, no una camisa de fuerza: algunos warnings pueden no ser relevantes y se pueden ignorar con criterio.
 
 ### 📝 Mensajes de commit
 

@@ -216,6 +216,8 @@ public sealed class GoogleCalendarToolEndpointTests
     {
         return new ApiFactory(environmentName, services =>
         {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
             services.RemoveAll<ICalendarIntegration>();
             services.AddSingleton(calendar);
         });
@@ -415,5 +417,13 @@ public sealed class GoogleCalendarToolEndpointTests
         public string EventId { get; set; } = string.Empty;
 
         public string EventUrl { get; set; } = string.Empty;
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return utcNow;
+        }
     }
 }

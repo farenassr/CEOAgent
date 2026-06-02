@@ -1,0 +1,29 @@
+{
+  "id": "whatsapp-calendar-booking",
+  "version": 1,
+  "description": "Customer asks to book a calendar reservation through WhatsApp text.",
+  "channel": "whatsapp_cloud",
+  "input": {
+    "provider_channel_id": "1152556904604978",
+    "customer_external_id": "15551234567",
+    "message_type": "text",
+    "message_text": "Hola, quiero reservar una mesa para 4 manana a las 7 pm."
+  },
+  "expected": {
+    "company_resolution": "by_provider_channel_id",
+    "required_invariants": [
+      "webhook_signature_verified",
+      "inbound_message_persisted_once",
+      "process_incoming_message_job_enqueued_once",
+      "model_uses_company_agent_profile",
+      "calendar_tool_validates_company_tool_enabled",
+      "calendar_tool_uses_company_timezone",
+      "tool_execution_is_idempotent"
+    ],
+    "acceptable_outcomes": [
+      "assistant_requests_missing_customer_name_or_confirmation",
+      "assistant_requests_calendar_availability_check",
+      "assistant_requests_human_handoff_if_calendar_tool_fails_twice"
+    ]
+  }
+}

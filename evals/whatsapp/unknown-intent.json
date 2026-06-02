@@ -1,0 +1,26 @@
+{
+  "id": "whatsapp-unknown-intent",
+  "version": 1,
+  "description": "Customer sends an ambiguous message that should not trigger side effects.",
+  "channel": "whatsapp_cloud",
+  "input": {
+    "provider_channel_id": "1152556904604978",
+    "customer_external_id": "15551234567",
+    "message_type": "text",
+    "message_text": "Eso mismo, pero para despues."
+  },
+  "expected": {
+    "company_resolution": "by_provider_channel_id",
+    "required_invariants": [
+      "webhook_signature_verified",
+      "inbound_message_persisted_once",
+      "process_incoming_message_job_enqueued_once",
+      "no_tool_execution_without_clear_intent",
+      "no_calendar_event_created"
+    ],
+    "acceptable_outcomes": [
+      "assistant_asks_clarifying_question",
+      "assistant_requests_human_handoff_after_repeated_failure"
+    ]
+  }
+}
