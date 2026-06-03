@@ -1,4 +1,4 @@
-using CeoAgent.Infrastructure.Entities.Filters;
+using CeoAgent.Infrastructure.Entities.Filters.Abstractions;
 
 namespace CeoAgent.Infrastructure.Entities;
 

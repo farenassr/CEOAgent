@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+    <ProjectReference Include="..\CeoAgent.Shared\CeoAgent.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.98" />
   </ItemGroup>
 </Project>

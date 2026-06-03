@@ -24,6 +24,13 @@ Antes de revisar:
 7. Lee documentos de `AIHarness/` solo si son relevantes para los cambios.
 8. Usa `scripts/` en lugar de comandos ad-hoc cuando necesites validar algo.
 
+## Ambiguity Protocol & Workflow
+
+- **Ambiguity Handling:** If any requirements are unclear, **do not assume**. Stop immediately and ask clarifying questions before proceeding.
+- **Design Phase:** Execute `superpowers:brainstorming` to scope and design the architecture of the solution.
+- **Development Phase:** Apply `superpowers:test-driven-development` to implement validation checks _before_ writing any scripts.
+- **Closure Phase:** Run `superpowers:verification-before-completion` to validate the final output and close the task with clear evidence.
+
 ### 🤖 Uso de Subagentes
 
 Usa los subagentes disponibles en `.codex/agents/` cuando sean relevantes para el diff.

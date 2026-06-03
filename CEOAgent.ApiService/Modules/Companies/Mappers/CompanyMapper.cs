@@ -40,6 +40,7 @@ public static partial class CompanyMapper
         {
             CompanyId = companyId,
             ModelName = request.ModelName,
+            LlmProvider = request.LlmProvider,
             DisplayName = request.DisplayName,
             Language = request.Language,
             PromptOverride = request.PromptOverride,
@@ -49,6 +50,7 @@ public static partial class CompanyMapper
     public static void ApplyToEntity(AgentProfileRequest request, AgentProfile profile, Company company)
     {
         profile.ModelName = request.ModelName;
+        profile.LlmProvider = request.LlmProvider;
         profile.DisplayName = request.DisplayName;
         profile.Language = request.Language;
         profile.PromptOverride = request.PromptOverride;
@@ -63,12 +65,14 @@ public static partial class CompanyMapper
             CompanyId = companyId,
             ToolKey = request.ToolKey,
             Description = request.Description,
+            ParametersSchema = request.ParametersSchema,
         };
     }
 
     public static void ApplyToEntity(CompanyToolRequest request, CompanyTool tool)
     {
         tool.Description = request.Description;
+        tool.ParametersSchema = request.ParametersSchema;
         tool.IsEnabled = request.IsEnabled;
         tool.CredentialReferenceId = request.CredentialReferenceId;
         tool.Configuration = request.Configuration.DeserializeOptional<ToolConfiguration>();

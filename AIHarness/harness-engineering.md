@@ -1,18 +1,56 @@
 # Harness Engineering
 
-This document tracks proposals for making Codex reliable in this repository
-over time.
+This document is the index for the repository harness. It points agents to
+the smallest useful source of truth, the executable checks, and the current
+backlog for improving repeatability.
+
+## Harness Doc Index
+
+| Document | Use when |
+| --- | --- |
+| `AIHarness/harness-engineering.md` | Choosing harness scripts, checks, subagents, and next reliability work. |
+| `AIHarness/architecture.md` | Changing project boundaries, dependency direction, API shape, Worker flow, or tool orchestration. |
+| `AIHarness/integration-model.md` | Changing ports, adapters, provider selection, credentials, or external SDK usage. |
+| `AIHarness/whatsapp-flow.md` | Changing WhatsApp webhook ingestion, idempotency, message parsing, media, or outbound replies. |
+| `AIHarness/google-calendar-integration.md` | Changing availability, booking, calendar tool execution, or Google Calendar adapter behavior. |
+| `AIHarness/security-rules.md` | Changing secrets, authentication, authorization, webhook signatures, tenant isolation, logging, AI safety, or PII handling. |
+
+## Executable Harness Checks
+
+Run focused checks first, then broaden when risk warrants it.
+
+| Script | Purpose |
+| --- | --- |
+| `scripts/architecture-check.ps1` | Enforces project references, no MediatR, no MVC controllers, provider SDK isolation, `/v1` FastEndpoints routes, critical contract uniqueness, scoped folder conventions, and namespace/folder alignment. |
+| `scripts/doc-gardening.ps1` | Checks markdown links, stale references to missing instruction files, PromptTemplate usage, and AIHarness index freshness. |
+| `scripts/whatsapp-eval.ps1` | Validates WhatsApp eval fixture structure, required invariants, and expected outcomes. |
+| `scripts/harness-check.ps1` | Runs doc gardening, WhatsApp eval validation, and architecture checks. Use `-IncludeFormat`, `-IncludeBuild`, or `-IncludeTests` to broaden. |
+| `scripts/review-current-branch.ps1` | Generates a review context file for `docs/reviewer.md` using the current branch diff. |
+| `scripts/aspire-smoke.ps1` | Optionally starts AppHost, checks API health, captures AppHost logs, and points agents to local Aspire logs, traces, and metrics. |
+
+## Local Observability Loop
+
+Use `scripts/aspire-smoke.ps1 -StartAppHost` when a change needs runtime
+confidence. The script starts the AppHost with the HTTP launch profile, probes
+the API health endpoint, writes AppHost logs to `TestResults/`, and leaves a
+clear path for inspecting Aspire dashboard logs, traces, and metrics.
+
+For code-only harness changes, do not start Aspire by default. Use the static
+checks instead.
 
 ## Recommended Custom Subagents
 
 Existing project-scoped Codex agents live in `.codex/agents/`:
 
+- `phase-orchestrator`
+- `codebase-scout`
 - `architecture-reviewer`
 - `backend-engineer`
 - `db-specialist`
 - `integrations-engineer`
 - `ai-engineer`
 - `testing-engineer`
+- `code-simplifier`
 
 Recommended future agents:
 
@@ -38,7 +76,6 @@ steps:
 
 ## Harness Backlog
 
-- Automate eval fixture validation once the agent loop has a stable API.
-- Add a sanitized trace schema validator.
-- Add a script for focused WhatsApp regression checks.
-- Add CI documentation mapping scripts to pipeline jobs.
+- Add a sanitized trace schema validator for `traces/examples/`.
+- Add CI documentation mapping harness scripts to pipeline jobs.
+- Add a recurring doc-gardening task once CI or automations are available.

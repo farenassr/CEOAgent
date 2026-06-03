@@ -2,5 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="..\CeoAgent.ServiceDefaults\CeoAgent.ServiceDefaults.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.98" />
+  </ItemGroup>
 
 </Project>

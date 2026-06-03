@@ -1,23 +1,34 @@
 # CeoAgent Plans
 
-Use this file as the index for implementation plans and harness proposals.
+Use this file as the index for implementation plans, harness proposals,
+completed work, technical debt, and decision history.
 
-## Active Harness Plan
+## Active Plans
 
-Goal: improve long-running Codex reliability through root instructions,
-stable scripts, architecture docs, WhatsApp eval fixtures, and sanitized trace
-examples without changing business logic.
+| Plan | Status | Owner | Notes |
+| --- | --- | --- | --- |
+| Harness reliability pass | Active | Agents | Add executable eval checks, architecture lints, doc gardening, and local observability scripts. |
+| MVP backend completion | Active | Agents | Tracked in `docs/mvp-phases.md`; keep changes small and validated by focused tests. |
 
-Current low-risk scaffolding:
+## Completed Plans
 
-- Root `AGENTS.md`.
-- `scripts/build.ps1`, `scripts/test.ps1`, `scripts/format.ps1`.
-- Architecture and integration docs under `docs/`.
-- WhatsApp eval fixtures under `evals/whatsapp/`.
-- Sanitized trace examples under `traces/examples/`.
+| Plan | Completed | Evidence |
+| --- | --- | --- |
+| Foundation harness scaffold | 2026-06-03 | Root `AGENTS.md`, `AIHarness/`, `scripts/`, `evals/`, `traces/`, and project subagents exist. |
 
-## Future Plans
+## Technical Debt
 
-Create detailed task plans under `docs/superpowers/plans/` when a change
-requires code, test, or migration work. Each plan should include exact files,
-commands, expected verification, and rollback notes.
+| Debt | Impact | Next step |
+| --- | --- | --- |
+| Trace examples are not schema-validated | Repeated production-like failures can drift from eval fixtures. | Add a trace schema validator under `scripts/`. |
+| Harness scripts are not mapped to CI jobs | Agents can run checks locally, but merge gates are not visible in repo docs. | Add CI documentation or workflows when the pipeline is finalized. |
+| Aspire smoke loop is opt-in | Runtime observability is available but not part of default harness checks. | Use `scripts/aspire-smoke.ps1 -StartAppHost` for runtime-sensitive changes. |
+
+## Decision Log
+
+| Date | Decision | Reason |
+| --- | --- | --- |
+| 2026-06-03 | Treat `AGENTS.md` as the single normative root guide. | The previously referenced historical guide file does not exist. |
+| 2026-06-03 | Keep the old prompt template ignored as scratch material. | Prevent conflicting task-start instructions from entering agent context. |
+| 2026-06-03 | Validate WhatsApp eval fixtures with `scripts/whatsapp-eval.ps1`. | Move evals from passive documentation toward executable harness checks. |
+| 2026-06-03 | Enforce architecture rules with scripts and tests. | Convert repo rules into repeatable checks instead of relying on agent memory. |

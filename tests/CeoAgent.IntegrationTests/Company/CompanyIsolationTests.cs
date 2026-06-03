@@ -1,4 +1,5 @@
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.IntegrationTests.Infrastructure;
 using CeoAgent.IntegrationTests.Seed;

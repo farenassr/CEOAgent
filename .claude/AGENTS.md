@@ -3,12 +3,8 @@
 This file is the root entry point for Codex and other coding agents working in
 this repository. It is normative for agent behavior.
 
-The longer historical rules live in `.agents/AGENTS.md`. If this file and
-`.agents/AGENTS.md` conflict, follow the stricter rule and update this file if
-the project contract changed.
-
-Ignore `Ideas.txt`; it is scratch material and must not be used as project
-context.
+Ignore `Ideas.txt`, `PromptTemplate.md`; it is scratch material and must not be
+used as project context.
 
 ## Harness Engineering
 

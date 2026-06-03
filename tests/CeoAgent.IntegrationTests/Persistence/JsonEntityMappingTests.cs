@@ -1,4 +1,5 @@
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.IntegrationTests.Infrastructure;
@@ -117,6 +118,27 @@ public sealed class JsonEntityMappingTests
             index.ShouldNotBeNull($"{clrType.Name} should have an index on CompanyId + CreatedAt.");
             index.IsDescending.ShouldNotBeNull($"{clrType.Name} should configure index sort order.");
             index.IsDescending.ShouldBe([false, true]);
+        }
+    }
+
+    [Test]
+    public void Model_AddsQueryFilterToEveryAuditableCompanyOwnedEntity()
+    {
+        using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
+            new CompanyContextAccessor());
+        var model = dbContext.Model;
+
+        var auditableCompanyOwnedTypes = typeof(AuditableCompanyOwnedEntity).Assembly
+            .GetTypes()
+            .Where(type => !type.IsAbstract && typeof(AuditableCompanyOwnedEntity).IsAssignableFrom(type))
+            .ToArray();
+
+        foreach (var clrType in auditableCompanyOwnedTypes)
+        {
+            var entityType = model.FindEntityType(clrType);
+            entityType.ShouldNotBeNull();
+            entityType.GetDeclaredQueryFilters().ShouldNotBeEmpty($"{clrType.Name} should have a global company query filter.");
         }
     }
 

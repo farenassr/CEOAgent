@@ -1,3 +1,5 @@
+using CeoAgent.Integrations.AI;
+
 namespace CeoAgent.Application.Agents;
 
 public sealed class AgentPromptContext
@@ -18,5 +20,5 @@ public sealed class AgentPromptContext
 
     public string? WorkingHoursSummary { get; init; }
 
-    public IReadOnlyList<EnabledToolDescriptor> Tools { get; init; } = [];
+    public IReadOnlyList<AgentToolDescriptor> Tools { get; init; } = [];
 }

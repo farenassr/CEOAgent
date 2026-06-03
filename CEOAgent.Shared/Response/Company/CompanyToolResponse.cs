@@ -25,6 +25,11 @@ public sealed class CompanyToolResponse
     public string? Description { get; set; }
 
     /// <summary>
+    /// JSON schema for parameters exposed to the model.
+    /// </summary>
+    public JsonElement? ParametersSchema { get; set; }
+
+    /// <summary>
     /// Whether the tool is enabled for the company. Example: true.
     /// </summary>
     public bool IsEnabled { get; set; }

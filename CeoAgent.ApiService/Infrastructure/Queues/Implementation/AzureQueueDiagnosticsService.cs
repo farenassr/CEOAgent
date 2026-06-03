@@ -105,6 +105,9 @@ public sealed class AzureQueueDiagnosticsService(
         return new QueueMessagesResponse(queueName, messages);
     }
 
+    /// <summary>
+    /// Reads a bounded set of visible messages from an Azure queue and maps them to sanitized diagnostics records.
+    /// </summary>
     private static async Task<IReadOnlyList<QueueDiagnosticsMessage>> PeekMessagesCoreAsync(
         QueueClient queueClient,
         int maxMessages,
@@ -117,6 +120,9 @@ public sealed class AzureQueueDiagnosticsService(
             .ToArray();
     }
 
+    /// <summary>
+    /// Converts a peeked Azure queue message into diagnostics metadata without returning the raw message text.
+    /// </summary>
     private static QueueDiagnosticsMessage ToDiagnosticsMessage(PeekedMessage message)
     {
         return new QueueDiagnosticsMessage(
@@ -128,6 +134,9 @@ public sealed class AzureQueueDiagnosticsService(
             message.ExpiresOn);
     }
 
+    /// <summary>
+    /// Inspects a single allowed queue under the shared concurrency limit and returns null when the queue does not exist.
+    /// </summary>
     private async Task<QueueDiagnosticsInfo?> TryReadQueueAsync(
         string queueName,
         int maxMessages,
@@ -157,6 +166,9 @@ public sealed class AzureQueueDiagnosticsService(
         }
     }
 
+    /// <summary>
+    /// Returns configured queue names that are allowed for diagnostics, optionally filtered by a case-insensitive prefix.
+    /// </summary>
     private string[] AllowedQueueNames(string? queueNamePrefix)
     {
         return options.Value.AllowedQueueNames
@@ -166,12 +178,18 @@ public sealed class AzureQueueDiagnosticsService(
             .ToArray();
     }
 
+    /// <summary>
+    /// Determines whether diagnostics operations are permitted for the requested queue name.
+    /// </summary>
     private bool IsAllowed(string queueName)
     {
         return options.Value.AllowedQueueNames
             .Any(name => string.Equals(name, queueName, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Clamps the requested message count to the configured default and Azure Storage Queue peek limit.
+    /// </summary>
     private int BoundMaxMessages(int maxMessages)
     {
         return maxMessages <= 0
@@ -179,6 +197,9 @@ public sealed class AzureQueueDiagnosticsService(
             : Math.Min(maxMessages, AzureQueuePeekLimit);
     }
 
+    /// <summary>
+    /// Clamps the requested queue count to the configured default and service diagnostics maximum.
+    /// </summary>
     private int BoundMaxQueues(int maxQueues)
     {
         return maxQueues <= 0
@@ -186,6 +207,9 @@ public sealed class AzureQueueDiagnosticsService(
             : Math.Min(maxQueues, 500);
     }
 
+    /// <summary>
+    /// Parses the diagnostics continuation token as a zero-based offset and falls back to the first page for invalid tokens.
+    /// </summary>
     private static int ParseContinuationToken(string? continuationToken)
     {
         return int.TryParse(
@@ -198,6 +222,9 @@ public sealed class AzureQueueDiagnosticsService(
                 : 0;
     }
 
+    /// <summary>
+    /// Computes a short SHA-256 prefix for message correlation without exposing the original queue payload.
+    /// </summary>
     private static string HashPrefix(string value)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));

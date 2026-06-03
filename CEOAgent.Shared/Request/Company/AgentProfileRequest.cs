@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Shared.Request.Company;
 
@@ -11,6 +12,13 @@ public sealed class AgentProfileRequest
     [Description("Company-selected model name used by the agent.")]
     [DefaultValue("gpt-4.1-mini")]
     public string ModelName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Company-selected LLM provider used by the agent runtime.
+    /// </summary>
+    [Description("Company-selected LLM provider used by the agent runtime.")]
+    [DefaultValue(LlmProvider.OpenAI)]
+    public LlmProvider LlmProvider { get; set; } = LlmProvider.OpenAI;
 
     /// <summary>
     /// Display name used when describing the assistant.

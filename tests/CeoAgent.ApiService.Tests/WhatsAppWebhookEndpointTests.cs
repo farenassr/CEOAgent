@@ -52,7 +52,7 @@ public sealed class WhatsAppWebhookEndpointTests
             }
 
             using var client = factory.CreateClient();
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/webhooks/whatsapp")
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/webhooks/whatsapp")
             {
                 Content = new StringContent(WebhookJson, Encoding.UTF8, "application/json"),
             };
@@ -81,7 +81,7 @@ public sealed class WhatsAppWebhookEndpointTests
             await using var factory = new ApiFactory();
             using var client = factory.CreateClient();
             const string malformedJson = "{\"entry\":[";
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/webhooks/whatsapp")
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/webhooks/whatsapp")
             {
                 Content = new StringContent(malformedJson, Encoding.UTF8, "application/json"),
             };
@@ -111,7 +111,7 @@ public sealed class WhatsAppWebhookEndpointTests
             await using var factory = new ApiFactory();
             using var client = factory.CreateClient();
             const string body = "{\"entry\":[]}";
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/webhooks/whatsapp")
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/webhooks/whatsapp")
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
             };

@@ -148,9 +148,20 @@ Activos principales del harness:
 - `.codex/agents/*.toml`: subagentes Codex project-scoped.
 - `.claude/agents/*.md`: subagentes Claude Code en formato Markdown estandar.
 - `AIHarness/`: documentos de arquitectura, integraciones, seguridad y flujos.
-- `scripts/`: wrappers estables para build, test y format.
-- `evals/`: fixtures de regresion, especialmente para WhatsApp.
+- `scripts/`: wrappers estables para build, test, format y checks de harness.
+- `evals/`: fixtures de regresion, especialmente para WhatsApp, validadas con `scripts/whatsapp-eval.ps1`.
 - `traces/`: ejemplos sanitizados de fallos reales o simulados.
+
+### Plugin recomendado: Superpowers
+
+Se recomienda usar el plugin
+[obra/superpowers](https://github.com/obra/superpowers) cuando trabajes con
+agentes de coding en este repo.
+
+Encaja bien con el harness de CeoAgent porque convierte tareas abiertas en
+fases verificables, fuerza evidencia antes de declarar un cambio terminado y
+reduce el riesgo de que el agente salte directamente a editar sin entender el
+contexto, los limites del slice o las validaciones esperadas.
 
 ### Subagentes disponibles
 
@@ -166,23 +177,18 @@ Activos principales del harness:
 | `testing-engineer`      | Define y escribe unit tests, integration tests, Aspire Testing, Testcontainers, fixtures, evals y regresiones.         |
 | `code-simplifier`       | Simplifica codigo y queries, reduce duplicacion y propone refactors behavior-preserving sin cambiar contratos.         |
 
-### Flujo obligatorio de una tarea o fase
-
-Cada vez que empiece una tarea o fase, inicia desde
-[`docs/PromptTemplate.md`](./docs/PromptTemplate.md). Ese archivo se usa como
-plantilla operativa de arranque; no debe tratarse como contexto tecnico o
-arquitectonico si contradice `AGENTS.md`.
-
-Flujo recomendado:
+### Flujo recomendado de una tarea o fase
 
 1. Leer `AGENTS.md`.
 2. Revisar `git status --short`.
-3. Usar `docs/PromptTemplate.md` para formular la fase.
-4. Inspeccionar solo archivos y harness docs relevantes.
-5. Seleccionar subagentes relevantes; no usar todos por defecto.
-6. Producir un plan breve antes de editar.
-7. Implementar el cambio mas pequeno y durable.
-8. Ejecutar la validacion mas estrecha que tenga sentido.
+3. Inspeccionar solo archivos y harness docs relevantes.
+4. Seleccionar subagentes relevantes; no usar todos por defecto.
+5. Producir un plan breve antes de editar.
+6. Implementar el cambio mas pequeno y durable.
+7. Ejecutar la validacion mas estrecha que tenga sentido.
+8. Para cambios de harness, ejecutar `scripts/harness-check.ps1` o los checks
+   especificos: `scripts/architecture-check.ps1`, `scripts/doc-gardening.ps1`
+   y `scripts/whatsapp-eval.ps1`.
 9. Antes de terminar, ejecutar la revision definida en
    [`docs/reviewer.md`](./docs/reviewer.md), revisar el informe generado en
    `docs/CODE_REVIEW/` y corregir o documentar los hallazgos accionables.

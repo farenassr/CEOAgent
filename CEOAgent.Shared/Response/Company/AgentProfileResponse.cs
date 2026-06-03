@@ -1,3 +1,5 @@
+using CeoAgent.Shared.Enums;
+
 namespace CeoAgent.Shared.Response.Company;
 
 public sealed class AgentProfileResponse
@@ -16,6 +18,11 @@ public sealed class AgentProfileResponse
     /// Company-selected model name used by the agent. Example: gpt-4.1-mini.
     /// </summary>
     public string ModelName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Company-selected LLM provider used by the agent runtime. Example: openai.
+    /// </summary>
+    public LlmProvider LlmProvider { get; set; } = LlmProvider.OpenAI;
 
     /// <summary>
     /// Display name used when describing the assistant. Example: Contoso Assistant.

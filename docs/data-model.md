@@ -250,6 +250,7 @@ No todas las compañias hablan igual ni usan el mismo modelo. `agent_profile` gu
 | `Id`             | `Guid`     | Identificador unico del perfil.                                                                | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32` |
 | `CompanyId`      | `Guid`     | Compañia a la que pertenece el perfil.                                                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
 | `ModelName`      | `string`   | Modelo elegido para esa compañia. No se debe hardcodear en el agente.                          | `gpt-4.1-mini`                         |
+| `LlmProvider`    | `enum`     | Proveedor LLM elegido para la compañia. En el codigo actual existe con valor por defecto `openai`; la columna fisica requiere migracion manual del operador. | `openai`                               |
 | `DisplayName`    | `string`   | Nombre que se puede usar para describir al asistente.                                          | `Contoso Assistant`                    |
 | `Language`       | `string`   | Idioma principal de respuesta.                                                                 | `es`                                   |
 | `PromptOverride` | `string?`  | Instrucciones adicionales de estilo o comportamiento. No deben reemplazar reglas de seguridad. | `Usa un tono amable y responde breve.` |
@@ -525,8 +526,8 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 5. Busca o crea una `conversation` abierta para ese cliente y ese canal, guardando el `AgentProfileId` vigente al crearla.
 6. Guarda el `message` entrante con `ProviderMessageId` para evitar duplicados.
 7. Si el mensaje trae audio, guarda sus metadatos en `message.payload_json.audio`.
-8. El agente procesa el turno usando `agent_profile`, ultimos mensajes y herramientas habilitadas en `company_tool`.
-9. Si el agente pide una herramienta, se registra un `tool_execution`.
+8. El agente procesa el turno usando `agent_profile`, ultimos mensajes elegibles y herramientas habilitadas en `company_tool`.
+9. Si el agente pide una herramienta, Worker orquesta el turno y delega en `CeoAgent.Tools`, donde el gateway valida el catalogo habilitado, ejecuta el handler nativo, registra `tool_execution` cuando aplica y devuelve un resultado sanitizado al modelo antes de responder al cliente.
 
 ---
 

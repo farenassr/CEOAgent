@@ -8,7 +8,7 @@ using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 
-namespace CeoAgent.Worker.Jobs;
+namespace CeoAgent.Tools.Implementation.GoogleCalendar;
 
 /// <summary>
 /// Executes Google Calendar-backed tool calls with company working-hours validation and idempotent persistence.
@@ -22,6 +22,7 @@ public sealed class GoogleCalendarToolExecutor(
     /// Checks a requested reservation slot against working hours and Google Calendar, then stores the tool result.
     /// </summary>
     public async Task<ToolExecution> CheckAvailabilityAsync(
+        Guid companyId,
         Guid conversationId,
         Guid companyToolId,
         Guid triggerMessageId,
@@ -31,13 +32,13 @@ public sealed class GoogleCalendarToolExecutor(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var existing = await FindExistingAsync(idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
+        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
         }
 
-        var context = await LoadContextAsync(conversationId, companyToolId, cancellationToken);
         var config = context.Configuration;
         var preferredTime = request.PreferredTime
             ?? GoogleCalendarSchedulingPolicy.FirstWorkingTime(context.Company.WorkingHours, request.Date);
@@ -143,6 +144,7 @@ public sealed class GoogleCalendarToolExecutor(
     /// Creates a calendar reservation only when it falls within working hours, then stores the tool result.
     /// </summary>
     public async Task<ToolExecution> CreateReservationAsync(
+        Guid companyId,
         Guid conversationId,
         Guid companyToolId,
         Guid triggerMessageId,
@@ -152,13 +154,13 @@ public sealed class GoogleCalendarToolExecutor(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var existing = await FindExistingAsync(idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
+        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
         }
 
-        var context = await LoadContextAsync(conversationId, companyToolId, cancellationToken);
         var config = context.Configuration;
         if (!GoogleCalendarSchedulingPolicy.IsWithinAdvanceWindow(
             DateOnly.FromDateTime(request.Start.DateTime),
@@ -223,27 +225,35 @@ public sealed class GoogleCalendarToolExecutor(
             cancellationToken);
     }
 
-    private async Task<ToolExecution?> FindExistingAsync(string idempotencyKey, CancellationToken cancellationToken)
+    private async Task<ToolExecution?> FindExistingAsync(
+        Guid companyId,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
     {
         return await dbContext.ToolExecutions
-            .Where(entity => entity.IdempotencyKey == idempotencyKey)
+            .Where(entity => entity.CompanyId == companyId && entity.IdempotencyKey == idempotencyKey)
             .SingleOrDefaultAsync(cancellationToken);
     }
 
     private async Task<CalendarToolContext> LoadContextAsync(
+        Guid companyId,
         Guid conversationId,
         Guid companyToolId,
         CancellationToken cancellationToken)
     {
-        var conversation = await dbContext.Conversations.FindAsync([conversationId], cancellationToken)
+        var conversation = await dbContext.Conversations
+            .SingleOrDefaultAsync(
+                entity => entity.Id == conversationId && entity.CompanyId == companyId,
+                cancellationToken)
             ?? throw new InvalidOperationException($"Conversation '{conversationId}' was not found.");
-        var company = await dbContext.Companies.FindAsync([conversation.CompanyId], cancellationToken)
-            ?? throw new InvalidOperationException($"Company '{conversation.CompanyId}' was not found.");
+        var company = await dbContext.Companies
+            .SingleOrDefaultAsync(entity => entity.Id == companyId, cancellationToken)
+            ?? throw new InvalidOperationException($"Company '{companyId}' was not found.");
         var tool = await dbContext.CompanyTools
             .Include(entity => entity.CredentialReference)
             .SingleOrDefaultAsync(
                 entity => entity.Id == companyToolId
-                    && entity.CompanyId == conversation.CompanyId
+                    && entity.CompanyId == companyId
                     && entity.IsEnabled,
                 cancellationToken)
             ?? throw new InvalidOperationException($"Company tool '{companyToolId}' was not found.");

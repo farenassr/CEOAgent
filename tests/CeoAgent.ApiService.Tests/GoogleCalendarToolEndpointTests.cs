@@ -358,6 +358,8 @@ public sealed class GoogleCalendarToolEndpointTests
             Content = JsonContent.Create(new
             {
                 toolKey,
+                description = ToolDescription(toolKey),
+                parametersSchema = ToolSchema(toolKey),
                 isEnabled = true,
                 credentialReferenceId = credentialId,
                 configuration = new
@@ -369,6 +371,45 @@ public sealed class GoogleCalendarToolEndpointTests
         };
         request.Headers.Add("X-Company-Id", companyId.ToString());
         return request;
+    }
+
+    private static string ToolDescription(string toolKey)
+    {
+        return toolKey == MvpToolKeys.CreateGoogleCalendarReservation
+            ? "Create a Google Calendar reservation after explicit customer confirmation."
+            : "Check Google Calendar availability before offering or confirming reservation times.";
+    }
+
+    private static object ToolSchema(string toolKey)
+    {
+        if (toolKey == MvpToolKeys.CreateGoogleCalendarReservation)
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    start = new { type = "string" },
+                    end = new { type = "string" },
+                    summary = new { type = "string" },
+                },
+                required = new[] { "start", "end", "summary" },
+                additionalProperties = false,
+            };
+        }
+
+        return new
+        {
+            type = "object",
+            properties = new
+            {
+                date = new { type = "string" },
+                partySize = new { type = "integer" },
+                preferredTime = new { type = new object[] { "string", "null" } },
+            },
+            required = new[] { "date", "partySize", "preferredTime" },
+            additionalProperties = false,
+        };
     }
 
     private sealed class RecordingCalendarIntegration : ICalendarIntegration

@@ -7,7 +7,7 @@ future evals.
 
 ```text
 WhatsApp Cloud webhook
-  -> ApiService /webhooks/whatsapp
+  -> ApiService /v1/webhooks/whatsapp
   -> signature validation
   -> parse payload
   -> resolve company by phone_number_id
@@ -63,6 +63,6 @@ Current focused tests live in `tests/CeoAgent.ApiService.Tests`:
 
 ## Eval Fixtures
 
-Scenario fixtures live in `evals/whatsapp/`. They are not an automated test
-runner yet. Use them to keep expected inputs, safety invariants, and expected
-high-level outcomes stable while the Worker and agent loop evolve.
+Scenario fixtures live in `evals/whatsapp/`. Run `scripts/whatsapp-eval.ps1`
+to validate their schema, expected invariants, and high-level outcomes. These
+fixtures keep WhatsApp behavior stable while the Worker and agent loop evolve.

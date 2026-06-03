@@ -5,9 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Azure.Storage.Blobs" Version="13.3.5" />
-    <PackageReference Include="Aspire.Azure.Storage.Queues" Version="13.3.5" />
-    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.3.5" />
+    <PackageReference Include="Aspire.Azure.Storage.Blobs" Version="13.4.0" />
+    <PackageReference Include="Aspire.Azure.Storage.Queues" Version="13.4.0" />
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.0" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="Mediator.Abstractions" Version="3.0.2" />
@@ -30,6 +30,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.98" />
   </ItemGroup>
 </Project>

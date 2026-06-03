@@ -1,11 +1,12 @@
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Integrations.Calendar;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
-using CeoAgent.Worker.Jobs;
+using CeoAgent.Tools.Implementation.GoogleCalendar;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -26,6 +27,7 @@ public sealed class GoogleCalendarToolExecutorTests
         };
 
         var result = await fixture.Executor.CreateReservationAsync(
+            fixture.CompanyId,
             fixture.Conversation.Id,
             fixture.Tool.Id,
             fixture.TriggerMessage.Id,
@@ -46,6 +48,7 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.Calendar.AvailableStarts.Add(new DateTimeOffset(2026, 5, 28, 16, 30, 0, TimeSpan.FromHours(-5)));
 
         var result = await fixture.Executor.CheckAvailabilityAsync(
+            fixture.CompanyId,
             fixture.Conversation.Id,
             fixture.Tool.Id,
             fixture.TriggerMessage.Id,
@@ -75,6 +78,7 @@ public sealed class GoogleCalendarToolExecutorTests
         };
 
         await fixture.Executor.CreateReservationAsync(
+            fixture.CompanyId,
             fixture.Conversation.Id,
             fixture.Tool.Id,
             fixture.TriggerMessage.Id,
@@ -83,6 +87,7 @@ public sealed class GoogleCalendarToolExecutorTests
             CancellationToken.None);
 
         var second = await fixture.Executor.CreateReservationAsync(
+            fixture.CompanyId,
             fixture.Conversation.Id,
             fixture.Tool.Id,
             fixture.TriggerMessage.Id,
@@ -105,6 +110,7 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.DbContext.ChangeTracker.Clear();
 
         await fixture.Executor.CreateReservationAsync(
+            fixture.CompanyId,
             fixture.Conversation.Id,
             fixture.Tool.Id,
             fixture.TriggerMessage.Id,

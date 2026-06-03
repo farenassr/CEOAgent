@@ -1,8 +1,10 @@
 using CeoAgent.Application.Agents;
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Integrations.AI;
 using CeoAgent.Integrations.Jobs;
 using CeoAgent.Integrations.Messaging;
 using CeoAgent.Integrations.Speech;
@@ -10,6 +12,8 @@ using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Media;
 using CeoAgent.Shared.Prompt;
+using CeoAgent.Tools.Implementation.Execution;
+using CeoAgent.Tools.Models.Execution;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 using ZLogger;
@@ -26,13 +30,18 @@ public sealed class ProcessIncomingMessageJobProcessor(
     ISpeechSynthesisIntegration speechSynthesis,
     IAudioBlobStore audioBlobStore,
     IAgentRuntime agentRuntime,
+    CompanyToolRegistry toolRegistry,
+    ToolExecutionGateway toolGateway,
     ICompanyContextAccessor companyContextAccessor,
     TimeProvider timeProvider,
     ILogger<ProcessIncomingMessageJobProcessor> logger)
 {
     private const string WhatsAppProvider = "whatsapp_cloud";
+    private const string SimulationProvider = "simulation";
     private const string AudioAckText = "Recibí tu audio, lo estoy revisando.";
     private const string DefaultVoiceName = "default";
+    private const int MaxToolLoopIterations = 4;
+    private const string LoopCapFallbackText = "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.";
 
     /// <summary>
     /// Runs the inbound message workflow, including read receipts, audio transcription, prompt creation, and outbound response delivery.
@@ -52,14 +61,14 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(context.Inbound.ProviderMessageId))
+            if (ShouldMarkInboundRead(context.Inbound))
             {
                 await messaging.MarkMessageReadAsync(
                     new ChannelMessageReference(
                         context.Company.Id,
                         context.Channel.Id,
                         WhatsAppProvider,
-                        context.Inbound.ProviderMessageId),
+                        context.Inbound.ProviderMessageId!),
                     cancellationToken);
             }
 
@@ -81,20 +90,10 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 Tools = context.Tools,
             });
 
-            var messages = context.Messages
-                .ToArray();
-
-            var agentResult = await agentRuntime.RunAsync(
-                new AgentRunRequest(
-                    context.AgentProfile.ModelName,
-                    prompt,
-                    messages,
-                    context.Tools),
-                cancellationToken);
-
-            var assistantText = string.IsNullOrWhiteSpace(agentResult.AssistantText)
+            var agentText = await RunAgentLoopAsync(context, prompt, cancellationToken);
+            var assistantText = string.IsNullOrWhiteSpace(agentText)
                 ? string.Empty
-                : agentResult.AssistantText.Trim();
+                : agentText.Trim();
 
             var assistant = new Message
             {
@@ -140,6 +139,13 @@ public sealed class ProcessIncomingMessageJobProcessor(
         {
             companyContextAccessor.Clear();
         }
+    }
+
+    private static bool ShouldMarkInboundRead(Message inbound)
+    {
+        return !string.IsNullOrWhiteSpace(inbound.ProviderMessageId)
+            && !string.Equals(inbound.Payload?.ProviderType, SimulationProvider, StringComparison.OrdinalIgnoreCase)
+            && !inbound.ProviderMessageId.StartsWith(SimulationProvider + ":", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task ProcessInboundAudioAsync(ProcessorContext context, CancellationToken cancellationToken)
@@ -349,11 +355,14 @@ public sealed class ProcessIncomingMessageJobProcessor(
     {
         var company = await dbContext.Companies.FindAsync([job.CompanyId], cancellationToken)
             ?? throw new InvalidOperationException($"Company '{job.CompanyId}' was not found.");
-        var agentProfile = await dbContext.AgentProfiles
-            .SingleAsync(entity => entity.CompanyId == job.CompanyId, cancellationToken);
         var conversation = await dbContext.Conversations
             .SingleAsync(
                 entity => entity.Id == job.ConversationId
+                    && entity.CompanyId == job.CompanyId,
+                cancellationToken);
+        var agentProfile = await dbContext.AgentProfiles
+            .SingleAsync(
+                entity => entity.Id == conversation.AgentProfileId
                     && entity.CompanyId == job.CompanyId,
                 cancellationToken);
         var channel = await dbContext.CompanyChannels.FindAsync([conversation.CompanyChannelId], cancellationToken)
@@ -373,11 +382,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
         Array.Reverse(messageHistory);
 
-        var toolKeys = await dbContext.CompanyTools
-            .Where(entity => entity.CompanyId == job.CompanyId && entity.IsEnabled)
-            .OrderBy(entity => entity.ToolKey)
-            .Select(entity => entity.ToolKey)
-            .ToArrayAsync(cancellationToken);
+        var tools = await toolRegistry.GetEnabledToolsAsync(job.CompanyId, cancellationToken);
 
         return new ProcessorContext(
             company,
@@ -387,7 +392,71 @@ public sealed class ProcessIncomingMessageJobProcessor(
             customer,
             inbound,
             messageHistory.Select(entity => entity.ToAgentMessage()).ToArray(),
-            toolKeys.Select(ToDescriptor).ToArray());
+            tools);
+    }
+
+    private async Task<string?> RunAgentLoopAsync(
+        ProcessorContext context,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        var messages = context.Messages.ToList();
+
+        for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
+        {
+            var agentResult = await agentRuntime.RunAsync(
+                new AgentRunRequest(
+                    context.AgentProfile.LlmProvider,
+                    context.AgentProfile.ModelName,
+                    prompt,
+                    messages.ToArray(),
+                    context.Tools),
+                cancellationToken);
+
+            if (agentResult.ToolCalls.Count == 0)
+            {
+                return agentResult.AssistantText;
+            }
+
+            foreach (var toolCall in agentResult.ToolCalls)
+            {
+                var triggerMessage = new Message
+                {
+                    CompanyId = context.Company.Id,
+                    ConversationId = context.Conversation.Id,
+                    Role = MessageRole.Assistant,
+                    Type = MessageType.Text,
+                    MessageText = toolCall.Name,
+                    OccurredAt = timeProvider.GetUtcNow().UtcDateTime,
+                };
+                dbContext.Messages.Add(triggerMessage);
+
+                messages.Add(new AgentConversationMessage(
+                    "assistant",
+                    toolCall.Name,
+                    toolCall.Id,
+                    toolCall.Name,
+                    toolCall.Arguments));
+
+                var toolResult = await toolGateway.ExecuteAsync(
+                    new ToolExecutionGatewayRequest(
+                        context.Company.Id,
+                        context.Conversation.Id,
+                        triggerMessage.Id,
+                        context.Inbound.Id,
+                        toolCall,
+                        context.Tools),
+                    cancellationToken);
+
+                messages.Add(new AgentConversationMessage(
+                    "tool",
+                    toolResult.Content,
+                    toolResult.ToolCallId,
+                    toolResult.ToolName));
+            }
+        }
+
+        return LoopCapFallbackText;
     }
 
     private DateTimeOffset ToCompanyLocalNow(string timeZoneId)
@@ -416,14 +485,14 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 Sunday = ConvertSlots(workingHours.Schedule.Sunday),
             },
             Holidays = workingHours.Holidays
-                .Select(holiday => new CeoAgent.Shared.JsonDocuments.SpecialDay
+                .ConvertAll(holiday => new CeoAgent.Shared.JsonDocuments.SpecialDay
                 {
                     Date = holiday.Date,
                     IsClosed = holiday.IsClosed,
                     Reason = holiday.Reason,
                     TimeSlots = ConvertSlots(holiday.TimeSlots),
                 })
-                .ToList(),
+,
         };
     }
 
@@ -438,19 +507,6 @@ public sealed class ProcessIncomingMessageJobProcessor(
             .ToList();
     }
 
-    private static EnabledToolDescriptor ToDescriptor(string toolKey)
-    {
-        var description = toolKey switch
-        {
-            MvpToolKeys.CheckGoogleCalendarAvailability => "Check Google Calendar availability before offering or confirming reservation times.",
-            MvpToolKeys.CreateGoogleCalendarReservation => "Create a Google Calendar reservation after explicit customer confirmation.",
-            MvpToolKeys.RequestHumanHandoff => "Request a human handoff for this conversation.",
-            _ => "Company-enabled tool.",
-        };
-
-        return new EnabledToolDescriptor(toolKey, description);
-    }
-
     private sealed record ProcessorContext(
         Company Company,
         AgentProfile AgentProfile,
@@ -459,7 +515,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         Customer Customer,
         Message Inbound,
         IReadOnlyList<AgentConversationMessage> Messages,
-        IReadOnlyList<EnabledToolDescriptor> Tools);
+        IReadOnlyList<AgentToolDescriptor> Tools);
 
     private sealed record MessageHistoryItem(MessageRole Role, string? MessageText)
     {

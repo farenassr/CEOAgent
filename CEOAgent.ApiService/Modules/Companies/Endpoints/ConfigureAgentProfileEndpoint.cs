@@ -1,5 +1,6 @@
 using CeoAgent.Application.Errors;
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -71,6 +72,7 @@ public sealed class AgentProfileValidator : Validator<AgentProfileRequest>
     public AgentProfileValidator()
     {
         RuleFor(request => request.ModelName).NotEmpty().MaximumLength(120);
+        RuleFor(request => request.LlmProvider).IsInEnum();
         RuleFor(request => request.DisplayName).NotEmpty().MaximumLength(160);
         RuleFor(request => request.Language).NotEmpty().MaximumLength(16);
         RuleFor(request => request.TimeZoneId).NotEmpty().MaximumLength(120);

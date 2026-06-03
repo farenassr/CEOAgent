@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations.Schema;
+using CeoAgent.Shared.Enums;
+
 namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class AgentProfile : AuditableCompanyOwnedEntity
@@ -11,6 +14,12 @@ public sealed class AgentProfile : AuditableCompanyOwnedEntity
     /// Company-selected model name used by the agent. Example: gpt-4.1-mini.
     /// </summary>
     public required string ModelName { get; set; }
+
+    /// <summary>
+    /// Company-selected LLM provider. Not persisted until the operator adds the provider migration.
+    /// </summary>
+    [NotMapped]
+    public LlmProvider LlmProvider { get; set; } = LlmProvider.OpenAI;
 
     /// <summary>
     /// Display name used when describing the assistant. Example: Contoso Assistant.

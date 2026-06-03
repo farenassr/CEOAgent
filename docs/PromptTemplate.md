@@ -10,6 +10,14 @@ Context:
 - Use `scripts/` instead of ad-hoc commands when possible.
 - Use the custom Codex subagents defined under `.codex/agents/`.
 - Do not make code changes until you have inspected the relevant files and produced a plan.
+- Make code changes once you have inspected the relevant files and produced a plan.
+
+## Ambiguity Protocol & Workflow
+
+* **Ambiguity Handling:** If any requirements are unclear, **do not assume**. Stop immediately and ask clarifying questions before proceeding.
+* **Design Phase:** Execute `superpowers:brainstorming` to scope and design the architecture of the solution.
+* **Development Phase:** Apply `superpowers:test-driven-development` to implement validation checks *before* writing any scripts.
+* **Closure Phase:** Run `superpowers:verification-before-completion` to validate the final output and close the task with clear evidence.
 
 You can use the available project subagents:
 
@@ -34,7 +42,7 @@ You can use the available project subagents:
    - Use codebase-scout if available.
    - Inspect relevant code, tests, scripts, and harness docs.
    - Produce a grounded summary of the current implementation.
-   - Do not modify files.
+   - Do not modify files on this phase.
 
 3. Specialist review phase
    Use relevant subagents in parallel:
@@ -52,7 +60,7 @@ You can use the available project subagents:
    - List files or areas likely to change.
    - List tests/evals/docs that may need updates.
    - List risks, open questions, and validation commands.
-   - Wait for approval before editing files.
+   - Wait for approval before editing files on this phase.
 
 5. Implementation phase
    - After approval, implement the smallest durable change.
