@@ -1,4 +1,6 @@
+using System.Text.Json;
 using CeoAgent.Application.Agents;
+using CeoAgent.Integrations.AI;
 using Shouldly;
 
 namespace CeoAgent.Application.Tests.Agents;
@@ -20,8 +22,8 @@ public sealed class AgentPromptBuilderTests
             WorkingHoursSummary = "Mon-Fri 12:00-22:00; Sat 12:00-23:00; Sun closed",
             Tools =
             [
-                new EnabledToolDescriptor("check_google_calendar_availability", "Check available reservation slots."),
-                new EnabledToolDescriptor("create_google_calendar_reservation", "Create a confirmed Google Calendar reservation."),
+                CreateTool("check_google_calendar_availability", "Check available reservation slots."),
+                CreateTool("create_google_calendar_reservation", "Create a confirmed Google Calendar reservation."),
             ],
         });
 
@@ -31,11 +33,16 @@ public sealed class AgentPromptBuilderTests
         prompt.ShouldContain("Language: es");
         prompt.ShouldContain("Model: gpt-4.1-mini");
         prompt.ShouldContain("Hours: Mon-Fri 12:00-22:00; Sat 12:00-23:00; Sun closed");
+        prompt.ShouldContain("Rules:");
         prompt.ShouldContain("Responde corto.");
         prompt.ShouldContain("check_google_calendar_availability");
         prompt.ShouldContain("create_google_calendar_reservation");
-        prompt.ShouldContain("Do not promise or create reservations outside working hours.");
-        prompt.ShouldContain("Do not confirm availability without calling check_google_calendar_availability.");
+        prompt.ShouldNotContain("- Keep replies concise and useful.");
+        prompt.ShouldNotContain("- Do not promise or create reservations outside working hours.");
+        prompt.ShouldNotContain("- Do not invent availability.");
+        prompt.ShouldNotContain("- Call check_google_calendar_availability before offering or confirming reservation times.");
+        prompt.ShouldNotContain("- Do not confirm availability without calling check_google_calendar_availability.");
+        prompt.ShouldNotContain("- Only call create_google_calendar_reservation after explicit customer confirmation.");
     }
 
     [Test]
@@ -61,5 +68,19 @@ public sealed class AgentPromptBuilderTests
         reassertionIndex.ShouldBeGreaterThan(overrideIndex);
         prompt[reassertionIndex..].ShouldContain("Never bypass calendar availability checks");
         prompt[reassertionIndex..].ShouldContain("Never bypass company isolation");
+    }
+
+    private static AgentToolDescriptor CreateTool(string name, string description)
+    {
+        return new AgentToolDescriptor(
+            Guid.CreateVersion7(),
+            name,
+            description,
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "object",
+                additionalProperties = false,
+            }),
+            IsMutating: false);
     }
 }

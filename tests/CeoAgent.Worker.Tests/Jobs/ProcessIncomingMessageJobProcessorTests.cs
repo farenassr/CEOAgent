@@ -1,15 +1,21 @@
 using System.Text;
-using CeoAgent.Application.Agents;
-using CeoAgent.Application.Company;
+using System.Text.Json;
+using CeoAgent.Integrations.AI;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Integrations.Calendar;
 using CeoAgent.Integrations.Jobs;
 using CeoAgent.Integrations.Messaging;
 using CeoAgent.Integrations.Speech;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Media;
+using CeoAgent.Tools.Implementation.Execution;
+using CeoAgent.Tools.Models.Execution;
+using CeoAgent.Tools.Implementation.GoogleCalendar;
 using CeoAgent.Worker.Jobs;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +95,77 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         assistantCount.ShouldBe(1);
     }
 
+    [Test]
+    public async Task ProcessAsync_ForSimulationMessage_SkipsWhatsAppReadReceiptAndRunsAgent()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola desde simulacion";
+        fixture.InboundMessage.ProviderMessageId = "simulation:message-1";
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "simulation",
+            ProviderMessageId = "simulation:message-1",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Messaging.ReadMessages.ShouldBeEmpty();
+        var request = fixture.Agent.Requests.Single();
+        request.Messages[^1].Text.ShouldBe("Hola desde simulacion");
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenModelRequestsCalendarTool_ExecutesToolThenSendsFinalReply()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Quiero reservar a las cuatro.";
+        fixture.InboundMessage.Payload = null;
+        await fixture.DbContext.SaveChangesAsync();
+
+        fixture.Agent.Results.Enqueue(new AgentRunResult(
+            AssistantText: null,
+            ToolCalls:
+            [
+                new AgentToolCall(
+                    "call-availability",
+                    MvpToolKeys.CheckGoogleCalendarAvailability,
+                    System.Text.Json.JsonSerializer.SerializeToElement(new
+                    {
+                        date = "2026-05-28",
+                        partySize = 2,
+                        preferredTime = "16:00",
+                    })),
+            ]));
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Si, tenemos disponibilidad a las 4:00 p.m.", []));
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.Count.ShouldBe(2);
+        fixture.Agent.Requests[1].Messages.Any(message =>
+            message.Role == "tool"
+            && message.ToolCallId == "call-availability"
+            && message.Text is not null
+            && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)).ShouldBeTrue();
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Si, tenemos disponibilidad a las 4:00 p.m.");
+        fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
+    }
+
     private sealed class ProcessorFixture
     {
         private readonly PostgresWorkerDatabase database;
@@ -104,6 +181,13 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             Speech = new FakeSpeechSynthesisIntegration();
             Blobs = new FakeAudioBlobStore();
             Agent = new FakeAgentRuntime();
+            Calendar = new FakeCalendarIntegration();
+            var calendarExecutor = new GoogleCalendarToolExecutor(
+                DbContext,
+                Calendar,
+                new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
+            var toolRegistry = new CompanyToolRegistry(DbContext);
+            var toolGateway = new ToolExecutionGateway(DbContext, calendarExecutor);
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,
@@ -111,6 +195,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Speech,
                 Blobs,
                 Agent,
+                toolRegistry,
+                toolGateway,
                 CompanyContext,
                 TimeProvider.System,
                 NullLogger<ProcessIncomingMessageJobProcessor>.Instance);
@@ -197,12 +283,24 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 OccurredAt = new DateTime(2026, 5, 28, 21, 0, 0, DateTimeKind.Utc),
             };
 
+            var credential = new IntegrationCredentialReference
+            {
+                Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42"),
+                CompanyId = CompanyId,
+                Provider = IntegrationProvider.GoogleCalendar,
+                Purpose = "google_calendar",
+                Reference = "config://GoogleCalendar:ServiceAccountJson",
+            };
+
             var checkTool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40"),
                 CompanyId = CompanyId,
                 ToolKey = MvpToolKeys.CheckGoogleCalendarAvailability,
+                Description = "Check Google Calendar availability before offering or confirming reservation times.",
+                ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":"string"},"partySize":{"type":"integer"},"preferredTime":{"type":["string","null"]}},"required":["date","partySize","preferredTime"],"additionalProperties":false}"""),
                 IsEnabled = true,
+                CredentialReferenceId = credential.Id,
                 Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
                 {
                     CalendarId = "primary",
@@ -215,7 +313,10 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b41"),
                 CompanyId = CompanyId,
                 ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
+                Description = "Create a Google Calendar reservation after explicit customer confirmation.",
+                ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"}},"required":["start","end","summary"],"additionalProperties":false}"""),
                 IsEnabled = true,
+                CredentialReferenceId = credential.Id,
                 Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
                 {
                     CalendarId = "primary",
@@ -223,8 +324,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                     BufferMinutes = 0,
                 }),
             };
-
-            DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, checkTool, createTool);
+            DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool);
             DbContext.SaveChanges();
         }
 
@@ -249,6 +349,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public FakeAgentRuntime Agent { get; }
 
+        public FakeCalendarIntegration Calendar { get; }
+
         public ProcessIncomingMessageJobProcessor Processor { get; }
 
         public CompanyChannel Channel { get; }
@@ -262,6 +364,12 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         public async ValueTask DisposeAsync()
         {
             await database.DisposeAsync();
+        }
+
+        private static JsonElement ParseSchema(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
         }
     }
 
@@ -348,10 +456,45 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     {
         public List<AgentRunRequest> Requests { get; } = [];
 
+        public Queue<AgentRunResult> Results { get; } = [];
+
         public Task<AgentRunResult> RunAsync(AgentRunRequest request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
-            return Task.FromResult(new AgentRunResult("Claro, reviso disponibilidad.", []));
+            return Task.FromResult(Results.Count > 0
+                ? Results.Dequeue()
+                : new AgentRunResult("Claro, reviso disponibilidad.", []));
+        }
+    }
+
+    private sealed class FakeCalendarIntegration : ICalendarIntegration
+    {
+        public List<CalendarAvailabilityRequest> AvailabilityRequests { get; } = [];
+
+        public List<CalendarReservationRequest> ReservationRequests { get; } = [];
+
+        public Task<CalendarAvailabilityResult> CheckAvailabilityAsync(
+            CalendarAvailabilityRequest request,
+            CancellationToken cancellationToken)
+        {
+            AvailabilityRequests.Add(request);
+            return Task.FromResult(new CalendarAvailabilityResult(true, [], null));
+        }
+
+        public Task<CalendarReservationResult> CreateReservationAsync(
+            CalendarReservationRequest request,
+            CancellationToken cancellationToken)
+        {
+            ReservationRequests.Add(request);
+            return Task.FromResult(new CalendarReservationResult("event-123", "https://calendar.google.com/event?eid=event-123"));
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return utcNow;
         }
     }
 }

@@ -6,7 +6,9 @@ stay behind `ICalendarIntegration` and the Google Calendar adapter.
 ## Boundary
 
 ```text
-Tool or Worker workflow
+Model tool call or Worker workflow
+  -> CeoAgent.Tools ToolExecutionGateway
+  -> CeoAgent.Tools Google Calendar handler / executor
   -> ICalendarIntegration
   -> GoogleCalendarIntegration
   -> Google Calendar SDK/API
@@ -24,6 +26,7 @@ Do not use Google Calendar SDK types outside `CeoAgent.Adapters`.
 ## Required Safety Rules
 
 - Validate company ownership before executing calendar tools.
+- Validate model-requested tool names against enabled `company_tool` rows before execution.
 - Validate working hours and advance booking windows before provider calls.
 - Store idempotency keys so retries do not duplicate reservations.
 - Map provider failures to recoverable integration errors where possible.
@@ -35,6 +38,7 @@ Do not use Google Calendar SDK types outside `CeoAgent.Adapters`.
 - Is the Google SDK usage confined to `CeoAgent.Adapters/GoogleCalendar`?
 - Does the tool path load company, conversation, tool, and credential context
   from company-scoped data?
+- Does the LLM path return only sanitized tool result JSON to the model?
 - Does the operation remain idempotent under queue retries?
 - Are date/time values converted with the company's time zone rules?
 - Is there a focused test for boundary behavior or provider failure?

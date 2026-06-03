@@ -27,12 +27,12 @@ public static class AgentPromptBuilder
         AppendInvariant(builder, $"Hours: {NormalizeOptionalText(context.WorkingHoursSummary, "not configured")}");
         builder.AppendLine();
         builder.AppendLine("Rules:");
-        builder.AppendLine("- Keep replies concise and useful.");
-        builder.AppendLine("- Do not promise or create reservations outside working hours.");
-        builder.AppendLine("- Do not invent availability.");
-        builder.AppendLine("- Call check_google_calendar_availability before offering or confirming reservation times.");
-        builder.AppendLine("- Do not confirm availability without calling check_google_calendar_availability.");
-        builder.AppendLine("- Only call create_google_calendar_reservation after explicit customer confirmation.");
+        //builder.AppendLine("- Keep replies concise and useful.");
+        //builder.AppendLine("- Do not promise or create reservations outside working hours.");
+        //builder.AppendLine("- Do not invent availability.");
+        //builder.AppendLine("- Call check_google_calendar_availability before offering or confirming reservation times.");
+        //builder.AppendLine("- Do not confirm availability without calling check_google_calendar_availability.");
+        //builder.AppendLine("- Only call create_google_calendar_reservation after explicit customer confirmation.");
 
         if (!string.IsNullOrWhiteSpace(context.PromptOverride))
         {

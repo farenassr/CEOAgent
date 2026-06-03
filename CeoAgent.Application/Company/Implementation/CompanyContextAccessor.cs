@@ -1,4 +1,6 @@
-namespace CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+
+namespace CeoAgent.Application.Company.Implementation;
 
 public sealed class CompanyContextAccessor : ICompanyContextAccessor
 {

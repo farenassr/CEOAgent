@@ -1,13 +1,18 @@
 using CeoAgent.Adapters.GoogleCalendar;
 using CeoAgent.Adapters.GoogleCalendar.Abstractions;
 using CeoAgent.Adapters.GoogleCalendar.Service;
+using CeoAgent.Adapters.OpenAI;
 using CeoAgent.Adapters.Secrets;
+using CeoAgent.Adapters.Speech;
 using CeoAgent.Adapters.WhatsApp;
 using CeoAgent.Adapters.WhatsApp.Client;
+using CeoAgent.Integrations.AI;
 using CeoAgent.Integrations.Calendar;
 using CeoAgent.Integrations.Messaging;
+using CeoAgent.Integrations.Speech;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CeoAgent.Adapters;
 
@@ -33,7 +38,12 @@ public static class AdapterRegistrations
 
         services.AddHttpClient<WhatsAppCloudIntegration>();
         services.AddMemoryCache();
+        services.AddOptions<OpenAIAgentRuntimeOptions>()
+            .BindConfiguration(OpenAIAgentRuntimeOptions.SectionName);
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
+        services.AddScoped<IAgentRuntime, OpenAIAgentRuntime>();
+        services.TryAddScoped<ITranscriptionIntegration, UnavailableTranscriptionIntegration>();
+        services.TryAddScoped<ISpeechSynthesisIntegration, UnavailableSpeechSynthesisIntegration>();
         services.AddScoped<IGoogleCalendarServiceFactory, GoogleCalendarServiceFactory>();
         services.AddScoped<ICalendarIntegration, GoogleCalendarIntegration>();
         services.AddScoped<IMessageChannelIntegration>(provider =>

@@ -1,4 +1,5 @@
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using System.Text.Json;
 
 namespace CeoAgent.Infrastructure.Entities;
 
@@ -18,6 +19,11 @@ public sealed class CompanyTool : AuditableCompanyOwnedEntity
     /// Human-readable explanation of what this tool does. Example: Checks available reservation slots.
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// JSON schema for tool parameters exposed to the model. Example: {"type":"object","properties":{},"required":[],"additionalProperties":false}.
+    /// </summary>
+    public JsonElement? ParametersSchema { get; set; }
 
     /// <summary>
     /// Whether the tool is enabled for the company. Example: true.

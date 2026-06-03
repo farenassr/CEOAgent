@@ -20,6 +20,12 @@ public sealed class CompanyToolRequest
     public string? Description { get; set; }
 
     /// <summary>
+    /// JSON schema for parameters exposed to the model.
+    /// </summary>
+    [Description("JSON schema for parameters exposed to the model.")]
+    public JsonElement? ParametersSchema { get; set; }
+
+    /// <summary>
     /// Whether the tool is enabled for the company.
     /// </summary>
     [Description("Whether the tool is enabled for the company.")]

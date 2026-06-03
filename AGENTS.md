@@ -1,10 +1,7 @@
 # CeoAgent Agent Guide
 
 This file is the root entry point for Codex and other coding agents working in
-this repository. It is normative for agent behavior. The longer historical
-rules live in `.agents/AGENTS.md`; when this file and `.agents/AGENTS.md`
-conflict, follow the stricter rule and update this root file if the project
-contract changed.
+this repository. It is normative for agent behavior.
 
 Ignore `Ideas.txt`, `PromptTemplate.md`; it is scratch material and must not be used as
 project context.

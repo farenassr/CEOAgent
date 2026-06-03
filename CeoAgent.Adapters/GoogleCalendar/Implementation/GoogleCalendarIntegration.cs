@@ -34,6 +34,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
         var queryStart = allStarts.Min().AddMinutes(-request.BufferMinutes);
         var queryEnd = allStarts.Max().Add(duration).AddMinutes(request.BufferMinutes);
         var busyRanges = await GetBusyRangesAsync(service, request.CalendarId, queryStart, queryEnd, cancellationToken);
+
         if (busyRanges is null)
         {
             return new CalendarAvailabilityResult(
@@ -43,6 +44,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
         }
 
         var primaryAvailable = IsAvailable(busyRanges, request.Start, request.End, request.BufferMinutes);
+
         if (primaryAvailable)
         {
             return new CalendarAvailabilityResult(Available: true, [], UnavailabilityReason: null);
@@ -103,6 +105,9 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
         return new CalendarReservationResult(created.Id, created.HtmlLink);
     }
 
+    /// <summary>
+    /// Looks up an existing event by the private idempotency property so retrying a reservation does not create a duplicate event.
+    /// </summary>
     private static async Task<CalendarReservationResult?> FindExistingReservationAsync(
         CalendarService service,
         CalendarReservationRequest request,
@@ -122,6 +127,9 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
             : new CalendarReservationResult(existing.Id, existing.HtmlLink);
     }
 
+    /// <summary>
+    /// Builds the Google Calendar event payload from the reservation request, including attendee details and private idempotency metadata.
+    /// </summary>
     private static Event BuildEvent(CalendarReservationRequest request)
     {
         return new Event
@@ -156,12 +164,18 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
         };
     }
 
+    /// <summary>
+    /// Creates a stable Google Calendar event id from the reservation idempotency key.
+    /// </summary>
     private static string BuildDeterministicEventId(string idempotencyKey)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(idempotencyKey));
         return "ceoagent" + Convert.ToHexString(hash).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// Queries Google Calendar free/busy data for the calendar and returns its busy periods, or null when the calendar is missing from the response.
+    /// </summary>
     private static async Task<IReadOnlyList<TimePeriod>?> GetBusyRangesAsync(
         CalendarService service,
         string calendarId,
@@ -190,6 +204,9 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
         return calendar.Busy?.ToArray() ?? [];
     }
 
+    /// <summary>
+    /// Determines whether an interval, expanded by the configured buffer, avoids all returned busy periods.
+    /// </summary>
     private static bool IsAvailable(
         IReadOnlyList<TimePeriod> busyRanges,
         DateTimeOffset start,

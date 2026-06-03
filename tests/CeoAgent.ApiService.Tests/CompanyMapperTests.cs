@@ -3,6 +3,7 @@ using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Request.Company;
+using System.Text.Json;
 using Shouldly;
 
 namespace CeoAgent.ApiService.Tests;
@@ -65,6 +66,7 @@ public sealed class CompanyMapperTests
             Id = Guid.CreateVersion7(),
             CompanyId = Guid.CreateVersion7(),
             ModelName = "gpt-4.1-mini",
+            LlmProvider = LlmProvider.OpenAI,
             DisplayName = "Contoso Assistant",
             Language = "es",
             PromptOverride = "Use a warm tone.",
@@ -75,9 +77,41 @@ public sealed class CompanyMapperTests
         response.Id.ShouldBe(profile.Id);
         response.CompanyId.ShouldBe(profile.CompanyId);
         response.ModelName.ShouldBe(profile.ModelName);
+        response.LlmProvider.ShouldBe(profile.LlmProvider);
         response.DisplayName.ShouldBe(profile.DisplayName);
         response.Language.ShouldBe(profile.Language);
         response.PromptOverride.ShouldBe(profile.PromptOverride);
+    }
+
+    [Test]
+    public void ApplyToEntity_MapsAgentProfileProviderToEntity()
+    {
+        var company = new Company
+        {
+            Id = Guid.CreateVersion7(),
+            Name = "Contoso Bistro",
+            TimeZoneId = "America/Bogota",
+        };
+        var profile = new AgentProfile
+        {
+            CompanyId = company.Id,
+            ModelName = "gpt-4.1-mini",
+            DisplayName = "Contoso Assistant",
+            Language = "es",
+        };
+        var request = new AgentProfileRequest
+        {
+            ModelName = "gpt-5.5",
+            LlmProvider = LlmProvider.OpenAI,
+            DisplayName = "Contoso AI",
+            Language = "es",
+            TimeZoneId = "America/Bogota",
+        };
+
+        CompanyMapper.ApplyToEntity(request, profile, company);
+
+        profile.ModelName.ShouldBe("gpt-5.5");
+        profile.LlmProvider.ShouldBe(LlmProvider.OpenAI);
     }
 
     [Test]
@@ -90,6 +124,7 @@ public sealed class CompanyMapperTests
             CompanyId = Guid.CreateVersion7(),
             ToolKey = "check_availability",
             Description = "Checks available reservation slots.",
+            ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":"string"}},"required":["date"],"additionalProperties":false}"""),
             IsEnabled = true,
             CredentialReferenceId = credentialReferenceId,
             Configuration = ToolConfiguration.ForCheckAvailability(new CheckAvailabilityConfig
@@ -107,6 +142,8 @@ public sealed class CompanyMapperTests
         response.CompanyId.ShouldBe(tool.CompanyId);
         response.ToolKey.ShouldBe(tool.ToolKey);
         response.Description.ShouldBe(tool.Description);
+        response.ParametersSchema.ShouldNotBeNull();
+        response.ParametersSchema.Value.GetProperty("properties").GetProperty("date").GetProperty("type").GetString().ShouldBe("string");
         response.IsEnabled.ShouldBeTrue();
         response.CredentialReferenceId.ShouldBe(credentialReferenceId);
         response.Configuration.ShouldNotBeNull();
@@ -126,6 +163,7 @@ public sealed class CompanyMapperTests
         var request = new CompanyToolRequest
         {
             Description = "Checks available reservation slots.",
+            ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":"string"}},"required":["date"],"additionalProperties":false}"""),
             IsEnabled = false,
             CredentialReferenceId = credentialReferenceId,
         };
@@ -133,6 +171,8 @@ public sealed class CompanyMapperTests
         CompanyMapper.ApplyToEntity(request, tool);
 
         tool.Description.ShouldBe(request.Description);
+        tool.ParametersSchema.ShouldNotBeNull();
+        tool.ParametersSchema.Value.GetProperty("required")[0].GetString().ShouldBe("date");
         tool.IsEnabled.ShouldBeFalse();
         tool.CredentialReferenceId.ShouldBe(credentialReferenceId);
     }
@@ -175,5 +215,11 @@ public sealed class CompanyMapperTests
         response.Metadata.ShouldNotBeNull();
         response.Metadata.Value.GetProperty("provider").GetString().ShouldBe("google_calendar");
         response.Metadata.Value.GetProperty("google_calendar").GetProperty("calendarId").GetString().ShouldBe("primary");
+    }
+
+    private static JsonElement ParseSchema(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
     }
 }

@@ -1,4 +1,5 @@
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure;
 using CeoAgent.IntegrationTests.Seed;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
     public static async Task<PostgresTestDatabase> CreateAsync()
     {
-        var postgres = new PostgreSqlBuilder("postgres:16-alpine")
+        var postgres = new PostgreSqlBuilder("postgres:18-alpine")
             .Build();
 
         await postgres.StartAsync();

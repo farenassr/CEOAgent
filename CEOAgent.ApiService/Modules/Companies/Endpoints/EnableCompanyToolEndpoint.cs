@@ -1,5 +1,6 @@
 using CeoAgent.Application.Errors;
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -10,6 +11,7 @@ using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Scheduling;
 using CeoAgent.ApiService.Modules.Companies.Mappers;
+using System.Text.Json;
 
 namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
@@ -94,6 +96,15 @@ public sealed class CompanyToolValidator : Validator<CompanyToolRequest>
     public CompanyToolValidator()
     {
         RuleFor(request => request.ToolKey).NotEmpty().MaximumLength(120);
-        RuleFor(request => request.Description).MaximumLength(1000);
+        RuleFor(request => request.Description).NotEmpty().MaximumLength(1000);
+        RuleFor(request => request.ParametersSchema)
+            .NotNull()
+            .Must(BeObjectSchema)
+            .WithMessage("Parameters schema must be a JSON object.");
+    }
+
+    private static bool BeObjectSchema(JsonElement? schema)
+    {
+        return schema is { ValueKind: JsonValueKind.Object };
     }
 }

@@ -34,7 +34,10 @@ Database rows store credential references only, such as `kv://...`.
 ## AI Safety
 
 - The model never executes side effects directly.
-- Tool calls must be validated against the enabled company tool catalog.
+- Tool calls must be validated by the tool gateway against the enabled company
+  tool catalog before a handler runs.
+- Do not enable SDK automatic function invocation for business side effects.
+- Return only sanitized tool result JSON to the model; never return credential material.
 - No live LLM calls in CI.
 - Do not log prompt/completion text in production by default.
 - Do not send full conversation history to the model.

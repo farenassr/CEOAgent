@@ -1,4 +1,5 @@
-using CeoAgent.Application.Company;
+using CeoAgent.Application.Company.Abstractions;
+using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.Filters;
 using Microsoft.EntityFrameworkCore;

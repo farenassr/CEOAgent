@@ -1,4 +1,4 @@
-namespace CeoAgent.Application.Agents;
+namespace CeoAgent.Integrations.AI;
 
 public interface IAgentRuntime
 {

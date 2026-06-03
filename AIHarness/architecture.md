@@ -1,8 +1,8 @@
 # CeoAgent Architecture
 
-This document is the short architecture reference for agents. The detailed
-historical rule set remains in `.agents/AGENTS.md`; this file captures the
-current boundaries to check before making changes.
+This document is the short architecture reference for agents. `AGENTS.md`
+is the normative root guide; this file captures the current boundaries to
+check before making changes.
 
 ## Runtime Shape
 
@@ -13,24 +13,26 @@ WhatsApp Cloud
   -> CeoAgent.ApiService
   -> Azure Storage Queue
   -> CeoAgent.Worker
+  -> CeoAgent.Tools
   -> PostgreSQL / Blob Storage / provider adapters
 ```
 
 The API receives HTTP requests, validates webhooks, persists inbound state, and
-queues work. The Worker owns long-running processing, agent execution, tool
-execution, outbound messaging, and integration calls.
+queues work. The Worker owns long-running job and agent-loop orchestration,
+outbound messaging, and integration call coordination. Native business tool
+execution lives in `CeoAgent.Tools`.
 
 ## Project Responsibilities
 
 | Project | Responsibility |
 | --- | --- |
 | `CeoAgent.ApiService` | FastEndpoints, webhook receiver, admin endpoints, global errors, correlation, HTTP contracts. |
-| `CeoAgent.Worker` | Queue-driven jobs, agent loop orchestration, tool workflows, outbound processing. |
+| `CeoAgent.Worker` | Queue-driven jobs, agent loop orchestration, outbound processing. |
 | `CeoAgent.Application` | Shared application behavior, AI prompt/runner abstractions, company context contracts. |
 | `CeoAgent.Infrastructure` | EF Core entities/configurations, DbContext, storage and queue infrastructure. |
 | `CeoAgent.Integrations` | Port interfaces and provider-neutral DTOs only. |
 | `CeoAgent.Adapters` | Provider-specific implementations for WhatsApp, Google Calendar, secrets, and external HTTP. |
-| `CeoAgent.Tools` | Native business tool handlers exposed to the agent. |
+| `CeoAgent.Tools` | Native business tool catalog, gateway, and handlers exposed to the agent. |
 | `CeoAgent.Shared` | Public request/response DTOs and shared enums. |
 
 ## Dependency Direction
@@ -51,6 +53,17 @@ Tools
 ```
 
 Avoid direct provider SDK usage outside `CeoAgent.Adapters`.
+
+## Physical Organization
+
+Use `Abstractions`, `Implementation`, and `Models` folders when a bounded area
+contains contracts, concrete runtime code, and request/result shapes that would
+otherwise be mixed together. Files under those folders should declare namespaces
+that include the same folder segments.
+
+`CeoAgent.Tools` is the enforced MVP runtime example: non-root source files
+belong under `Abstractions`, `Implementation`, or `Models`, while root files are
+limited to assembly markers and DI registration.
 
 ## Non-Negotiable Checks
 

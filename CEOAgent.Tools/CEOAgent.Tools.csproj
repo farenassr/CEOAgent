@@ -1,11 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\CeoAgent.Application\CeoAgent.Application.csproj" />
+    <ProjectReference Include="..\CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj" />
     <ProjectReference Include="..\CeoAgent.Integrations\CeoAgent.Integrations.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Meziantou.Analyzer" Version="3.0.94" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
+
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.98" />
   </ItemGroup>
 </Project>
