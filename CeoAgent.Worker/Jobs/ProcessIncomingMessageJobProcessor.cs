@@ -60,6 +60,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
             {
                 return;
             }
+            var isSimulation = IsSimulation(context.Inbound);
 
             if (ShouldMarkInboundRead(context.Inbound))
             {
@@ -72,7 +73,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                     cancellationToken);
             }
 
-            if (context.Inbound.Type == MessageType.Audio)
+            if (!isSimulation && context.Inbound.Type == MessageType.Audio)
             {
                 await ProcessInboundAudioAsync(context, cancellationToken);
             }
@@ -113,7 +114,11 @@ public sealed class ProcessIncomingMessageJobProcessor(
             dbContext.Messages.Add(assistant);
 
             SentMessageReference sent;
-            if (context.Inbound.Type == MessageType.Audio)
+            if (isSimulation)
+            {
+                sent = new SentMessageReference($"simulation:{assistant.Id}");
+            }
+            else if (context.Inbound.Type == MessageType.Audio)
             {
                 sent = await SendAudioReplyAsync(context, assistant, assistantText, replyClientMessageId, cancellationToken);
             }
@@ -143,9 +148,15 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
     private static bool ShouldMarkInboundRead(Message inbound)
     {
+        return !IsSimulation(inbound)
+            && !string.IsNullOrWhiteSpace(inbound.ProviderMessageId);
+    }
+
+    private static bool IsSimulation(Message inbound)
+    {
         return !string.IsNullOrWhiteSpace(inbound.ProviderMessageId)
-            && !string.Equals(inbound.Payload?.ProviderType, SimulationProvider, StringComparison.OrdinalIgnoreCase)
-            && !inbound.ProviderMessageId.StartsWith(SimulationProvider + ":", StringComparison.OrdinalIgnoreCase);
+            && (string.Equals(inbound.Payload?.ProviderType, SimulationProvider, StringComparison.OrdinalIgnoreCase)
+                || inbound.ProviderMessageId.StartsWith(SimulationProvider + ":", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task ProcessInboundAudioAsync(ProcessorContext context, CancellationToken cancellationToken)
@@ -375,6 +386,10 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
         var messageHistory = await dbContext.Messages
             .Where(entity => entity.ConversationId == job.ConversationId)
+            .Where(entity =>
+                entity.Role == MessageRole.User
+                || (entity.Role == MessageRole.Assistant
+                    && !dbContext.ToolExecutions.Any(execution => execution.TriggerMessageId == entity.Id)))
             .OrderByDescending(entity => entity.OccurredAt)
             .Take(8)
             .Select(entity => new MessageHistoryItem(entity.Role, entity.MessageText))
@@ -401,17 +416,29 @@ public sealed class ProcessIncomingMessageJobProcessor(
         CancellationToken cancellationToken)
     {
         var messages = context.Messages.ToList();
+        var sideEffectsEnabled = !IsSimulation(context.Inbound);
 
         for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
         {
-            var agentResult = await agentRuntime.RunAsync(
-                new AgentRunRequest(
-                    context.AgentProfile.LlmProvider,
-                    context.AgentProfile.ModelName,
-                    prompt,
-                    messages.ToArray(),
-                    context.Tools),
-                cancellationToken);
+            AgentRunResult agentResult;
+            try
+            {
+                agentResult = await agentRuntime.RunAsync(
+                    new AgentRunRequest(
+                        context.AgentProfile.LlmProvider,
+                        context.AgentProfile.ModelName,
+                        prompt,
+                        messages.ToArray(),
+                        context.Tools),
+                    cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.ZLogError(
+                    exception,
+                    $"AgentRuntimeFailed conversation_id={context.Conversation.Id} company_id={context.Company.Id} iteration={iteration}");
+                return LoopCapFallbackText;
+            }
 
             if (agentResult.ToolCalls.Count == 0)
             {
@@ -424,12 +451,14 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 {
                     CompanyId = context.Company.Id,
                     ConversationId = context.Conversation.Id,
-                    Role = MessageRole.Assistant,
+                    Role = MessageRole.ToolCall,
                     Type = MessageType.Text,
                     MessageText = toolCall.Name,
                     OccurredAt = timeProvider.GetUtcNow().UtcDateTime,
                 };
                 dbContext.Messages.Add(triggerMessage);
+                logger.ZLogInformation(
+                    $"ToolCallRequested tool={toolCall.Name} iteration={iteration} conversation_id={context.Conversation.Id} company_id={context.Company.Id} side_effects_enabled={sideEffectsEnabled}");
 
                 messages.Add(new AgentConversationMessage(
                     "assistant",
@@ -445,7 +474,8 @@ public sealed class ProcessIncomingMessageJobProcessor(
                         triggerMessage.Id,
                         context.Inbound.Id,
                         toolCall,
-                        context.Tools),
+                        context.Tools,
+                        sideEffectsEnabled),
                     cancellationToken);
 
                 messages.Add(new AgentConversationMessage(
@@ -456,6 +486,8 @@ public sealed class ProcessIncomingMessageJobProcessor(
             }
         }
 
+        logger.ZLogWarning(
+            $"AgentLoopCapReached conversation_id={context.Conversation.Id} company_id={context.Company.Id} max_iterations={MaxToolLoopIterations}");
         return LoopCapFallbackText;
     }
 

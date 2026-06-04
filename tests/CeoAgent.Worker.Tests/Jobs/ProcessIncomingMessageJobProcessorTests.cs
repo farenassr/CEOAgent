@@ -120,7 +120,123 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.ReadMessages.ShouldBeEmpty();
         var request = fixture.Agent.Requests.Single();
         request.Messages[^1].Text.ShouldBe("Hola desde simulacion");
-        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
+        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        var assistant = await fixture.DbContext.Messages
+            .SingleAsync(message => message.Role == MessageRole.Assistant);
+        assistant.MessageText.ShouldBe("Claro, reviso disponibilidad.");
+        assistant.ProviderMessageId.ShouldBe($"reply:{fixture.InboundMessage.Id}");
+        assistant.Payload!.ProviderMessageId.ShouldStartWith("simulation:");
+    }
+
+    [Test]
+    public async Task ProcessAsync_ForSimulationMessage_DoesNotExecuteMutatingTool()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
+        fixture.InboundMessage.ProviderMessageId = "simulation:message-1";
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "simulation",
+            ProviderMessageId = "simulation:message-1",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        fixture.Agent.Results.Enqueue(new AgentRunResult(
+            AssistantText: null,
+            ToolCalls:
+            [
+                new AgentToolCall(
+                    "call-reservation",
+                    MvpToolKeys.CreateGoogleCalendarReservation,
+                    System.Text.Json.JsonSerializer.SerializeToElement(new
+                    {
+                        start = "2026-05-28T16:00:00-05:00",
+                        end = "2026-05-28T17:00:00-05:00",
+                        summary = "Reservation for 2",
+                    })),
+            ]));
+        fixture.Agent.Results.Enqueue(new AgentRunResult("No puedo crear reservas en simulacion.", []));
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Calendar.ReservationRequests.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        fixture.Agent.Requests.Count.ShouldBe(2);
+        fixture.Agent.Requests[1].Messages.Any(message =>
+            message.Role == "tool"
+            && message.Text != null
+            && message.Text.Contains("\"failureReason\":\"side_effects_disabled\"", StringComparison.Ordinal)).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task ProcessAsync_ExcludesPersistedToolMessagesFromPromptHistory()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Nuevo turno";
+        fixture.InboundMessage.Payload = null;
+
+        fixture.DbContext.Messages.AddRange(
+            new Message
+            {
+                CompanyId = fixture.CompanyId,
+                ConversationId = fixture.Conversation.Id,
+                Role = MessageRole.ToolCall,
+                Type = MessageType.Text,
+                MessageText = MvpToolKeys.CheckGoogleCalendarAvailability,
+                OccurredAt = new DateTime(2026, 5, 28, 21, 1, 0, DateTimeKind.Utc),
+            },
+            new Message
+            {
+                CompanyId = fixture.CompanyId,
+                ConversationId = fixture.Conversation.Id,
+                Role = MessageRole.ToolResult,
+                Type = MessageType.Text,
+                MessageText = """{"toolKey":"check_google_calendar_availability","status":"succeeded"}""",
+                OccurredAt = new DateTime(2026, 5, 28, 21, 2, 0, DateTimeKind.Utc),
+            });
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        var request = fixture.Agent.Requests.Single();
+        request.Messages.Any(message =>
+            string.Equals(message.Text, MvpToolKeys.CheckGoogleCalendarAvailability, StringComparison.Ordinal)
+            || (message.Text != null && message.Text.Contains("\"toolKey\"", StringComparison.Ordinal))).ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenAgentRuntimeFails_SendsFallbackReply()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola";
+        fixture.InboundMessage.Payload = null;
+        await fixture.DbContext.SaveChangesAsync();
+        fixture.Agent.ThrowOnRun = new InvalidOperationException("runtime unavailable");
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
     }
 
     [Test]
@@ -458,8 +574,15 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public Queue<AgentRunResult> Results { get; } = [];
 
+        public Exception? ThrowOnRun { get; set; }
+
         public Task<AgentRunResult> RunAsync(AgentRunRequest request, CancellationToken cancellationToken)
         {
+            if (ThrowOnRun is not null)
+            {
+                throw ThrowOnRun;
+            }
+
             Requests.Add(request);
             return Task.FromResult(Results.Count > 0
                 ? Results.Dequeue()

@@ -1,8 +1,6 @@
 using System.Text.Json;
-using CeoAgent.Adapters.Secrets;
 using CeoAgent.Integrations.AI;
 using CeoAgent.Shared.Enums;
-using Microsoft.Extensions.Options;
 using OpenAI.Responses;
 
 namespace CeoAgent.Adapters.OpenAI;
@@ -10,8 +8,7 @@ namespace CeoAgent.Adapters.OpenAI;
 #pragma warning disable OPENAI001
 
 public sealed class OpenAIAgentRuntime(
-    ISecretValueProvider secrets,
-    IOptions<OpenAIAgentRuntimeOptions> options) : IAgentRuntime
+    IOpenAIResponsesClientFactory clientFactory) : IAgentRuntime
 {
     public async Task<AgentRunResult> RunAsync(
         AgentRunRequest request,
@@ -24,13 +21,7 @@ public sealed class OpenAIAgentRuntime(
             throw new NotSupportedException($"LLM provider '{request.Provider}' is not supported.");
         }
 
-        if (string.IsNullOrWhiteSpace(options.Value.ApiKeyReference))
-        {
-            throw new InvalidOperationException("LlmProviders:OpenAI:ApiKeyReference is required.");
-        }
-
-        var apiKey = await secrets.GetSecretValueAsync(options.Value.ApiKeyReference, cancellationToken);
-        var client = new ResponsesClient(apiKey);
+        var client = await clientFactory.GetClientAsync(cancellationToken);
         var response = await client.CreateResponseAsync(
             CreateOptions(request),
             cancellationToken);

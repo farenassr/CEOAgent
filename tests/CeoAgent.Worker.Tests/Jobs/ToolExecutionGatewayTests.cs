@@ -83,6 +83,71 @@ public sealed class ToolExecutionGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenSideEffectsAreDisabledForMutatingTool_DeniesWithoutSideEffect()
+    {
+        await using var fixture = await GatewayFixture.CreateAsync();
+        var reservationTool = await fixture.DbContext.CompanyTools
+            .SingleAsync(tool => tool.ToolKey == MvpToolKeys.CreateGoogleCalendarReservation);
+        reservationTool.IsEnabled = true;
+        await fixture.DbContext.SaveChangesAsync();
+
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var call = new AgentToolCall(
+            "call-reservation",
+            MvpToolKeys.CreateGoogleCalendarReservation,
+            JsonSerializer.SerializeToElement(new
+            {
+                start = "2026-05-28T16:00:00-05:00",
+                end = "2026-05-28T17:00:00-05:00",
+                summary = "Reservation for 2",
+            }));
+
+        var result = await fixture.Gateway.ExecuteAsync(
+            new ToolExecutionGatewayRequest(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.TriggerMessage.Id,
+                fixture.InboundMessage.Id,
+                call,
+                tools,
+                SideEffectsEnabled: false),
+            CancellationToken.None);
+
+        result.Content.ShouldContain("\"status\":\"denied\"");
+        result.Content.ShouldContain("\"failureReason\":\"side_effects_disabled\"");
+        fixture.Calendar.ReservationRequests.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ForIncompleteAvailabilityArguments_ReturnsMalformedArgumentsWithoutSideEffect()
+    {
+        await using var fixture = await GatewayFixture.CreateAsync();
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var call = new AgentToolCall(
+            "call-malformed",
+            MvpToolKeys.CheckGoogleCalendarAvailability,
+            JsonSerializer.SerializeToElement(new
+            {
+                date = "2026-05-28",
+            }));
+
+        var result = await fixture.Gateway.ExecuteAsync(
+            new ToolExecutionGatewayRequest(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.TriggerMessage.Id,
+                fixture.InboundMessage.Id,
+                call,
+                tools),
+            CancellationToken.None);
+
+        result.Content.ShouldContain("\"status\":\"denied\"");
+        result.Content.ShouldContain("\"failureReason\":\"malformed_arguments\"");
+        fixture.Calendar.AvailabilityRequests.ShouldBeEmpty();
+        (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
+    }
+
+    [Test]
     public async Task ExecuteAsync_ForSameReservationArgumentsWithDifferentToolCallIds_CreatesOnlyOneCalendarEvent()
     {
         await using var fixture = await GatewayFixture.CreateAsync();

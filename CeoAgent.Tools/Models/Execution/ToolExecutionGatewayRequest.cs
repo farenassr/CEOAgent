@@ -8,4 +8,5 @@ public sealed record ToolExecutionGatewayRequest(
     Guid TriggerMessageId,
     Guid InboundMessageId,
     AgentToolCall ToolCall,
-    IReadOnlyList<AgentToolDescriptor> EnabledTools);
+    IReadOnlyList<AgentToolDescriptor> EnabledTools,
+    bool SideEffectsEnabled = true);
