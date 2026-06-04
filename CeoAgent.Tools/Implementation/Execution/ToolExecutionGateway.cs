@@ -32,6 +32,11 @@ public sealed class ToolExecutionGateway(
             return Denied(request.ToolCall, "tool_not_enabled");
         }
 
+        if (!request.SideEffectsEnabled && descriptor.IsMutating)
+        {
+            return await PersistDeniedAsync(request, descriptor, "side_effects_disabled", cancellationToken);
+        }
+
         return request.ToolCall.Name switch
         {
             MvpToolKeys.CheckGoogleCalendarAvailability => await ExecuteAvailabilityAsync(request, descriptor, cancellationToken),
@@ -45,7 +50,8 @@ public sealed class ToolExecutionGateway(
         AgentToolDescriptor descriptor,
         CancellationToken cancellationToken)
     {
-        if (!TryDeserialize<CheckAvailabilityRequest>(request.ToolCall.Arguments, out var arguments))
+        if (!TryDeserialize<CheckAvailabilityRequest>(request.ToolCall.Arguments, out var arguments)
+            || !IsValid(arguments))
         {
             return await PersistDeniedAsync(request, descriptor, "malformed_arguments", cancellationToken);
         }
@@ -67,7 +73,8 @@ public sealed class ToolExecutionGateway(
         AgentToolDescriptor descriptor,
         CancellationToken cancellationToken)
     {
-        if (!TryDeserialize<CreateCalendarEventRequest>(request.ToolCall.Arguments, out var arguments))
+        if (!TryDeserialize<CreateCalendarEventRequest>(request.ToolCall.Arguments, out var arguments)
+            || !IsValid(arguments))
         {
             return await PersistDeniedAsync(request, descriptor, "malformed_arguments", cancellationToken);
         }
@@ -170,6 +177,20 @@ public sealed class ToolExecutionGateway(
             request = null!;
             return false;
         }
+    }
+
+    private static bool IsValid(CheckAvailabilityRequest request)
+    {
+        return request.Date != default
+            && request.PartySize > 0;
+    }
+
+    private static bool IsValid(CreateCalendarEventRequest request)
+    {
+        return request.Start != default
+            && request.End != default
+            && request.End > request.Start
+            && !string.IsNullOrWhiteSpace(request.Summary);
     }
 
     private static string CreateIdempotencyKey(ToolExecutionGatewayRequest request)

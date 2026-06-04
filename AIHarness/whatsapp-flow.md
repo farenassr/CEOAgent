@@ -52,6 +52,20 @@ Worker result
 
 TTS failure must not block a text reply.
 
+## Simulation Flow
+
+Agent simulation messages use the normal Worker prompt and tool-loop path, but
+they are a dry run for external side effects:
+
+- no WhatsApp read receipt is sent,
+- no outbound WhatsApp text or audio is sent,
+- mutating tools are denied by the tool gateway,
+- assistant output is persisted with a synthetic `simulation:*` provider result.
+
+Simulation can still call non-mutating tools when they are enabled for the
+company, because those calls are useful for validating prompt and availability
+behavior without sending customer-visible messages.
+
 ## Existing Regression Tests
 
 Current focused tests live in `tests/CeoAgent.ApiService.Tests`:

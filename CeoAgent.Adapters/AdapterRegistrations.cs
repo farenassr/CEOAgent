@@ -41,6 +41,7 @@ public static class AdapterRegistrations
         services.AddOptions<OpenAIAgentRuntimeOptions>()
             .BindConfiguration(OpenAIAgentRuntimeOptions.SectionName);
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
+        services.AddSingleton<IOpenAIResponsesClientFactory, OpenAIResponsesClientFactory>();
         services.AddScoped<IAgentRuntime, OpenAIAgentRuntime>();
         services.TryAddScoped<ITranscriptionIntegration, UnavailableTranscriptionIntegration>();
         services.TryAddScoped<ISpeechSynthesisIntegration, UnavailableSpeechSynthesisIntegration>();

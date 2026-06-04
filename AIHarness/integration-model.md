@@ -43,6 +43,10 @@ implementation abstractions inside `CeoAgent.Adapters`.
 - The LLM runtime adapter must not execute business side effects automatically.
   Model-requested tools are routed by Worker orchestration into the
   `CeoAgent.Tools` tool gateway.
+- The OpenAI MVP runtime currently uses the OpenAI Responses SDK surface. Keep
+  that experimental SDK usage isolated behind `IAgentRuntime`, and reuse
+  adapter-owned client instances instead of constructing SDK clients inside each
+  agent loop iteration.
 
 ## Credential Rules
 
