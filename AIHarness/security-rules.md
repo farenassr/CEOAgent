@@ -23,6 +23,9 @@ Database rows store credential references only, such as `kv://...`.
 - Apply idempotency and replay protection.
 - Return quickly; enqueue long work.
 - Do not log raw webhook payloads by default.
+- Do not log signature prefixes, raw query strings, remote IP addresses, user
+  agents, or provider response bodies by default on noisy webhook/provider
+  paths.
 
 ## Multi-Tenancy
 
@@ -41,6 +44,11 @@ Database rows store credential references only, such as `kv://...`.
 - No live LLM calls in CI.
 - Do not log prompt/completion text in production by default.
 - Do not send full conversation history to the model.
+- GenAI and tool telemetry may include non-sensitive tags such as tenant,
+  conversation, channel, provider, model, tool key, status, retry count, and
+  failure reason. It must not include prompts, completions, customer message
+  text, audio transcripts, raw tool arguments, or credential material by
+  default.
 
 ## Logging
 
@@ -52,6 +60,7 @@ Allowed by default:
 - provider names
 - tool keys
 - status and failure reason codes
+- message IDs and channel IDs
 
 Avoid by default:
 
@@ -59,5 +68,6 @@ Avoid by default:
 - raw customer message text
 - audio transcripts
 - prompt/completion text
+- raw tool arguments or tool result content
 - provider secrets
 - raw external payloads

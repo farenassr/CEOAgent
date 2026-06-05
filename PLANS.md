@@ -8,7 +8,7 @@ completed work, technical debt, and decision history.
 | Plan | Status | Owner | Notes |
 | --- | --- | --- | --- |
 | Harness reliability pass | Active | Agents | Add executable eval checks, architecture lints, doc gardening, and local observability scripts. |
-| MVP backend completion | Active | Agents | Tracked in `docs/mvp-phases.md`; keep changes small and validated by focused tests. |
+| MVP backend completion | Active | Agents | Historical phase docs were removed; track active backend work in issues or new focused plans here. |
 
 ## Completed Plans
 
@@ -32,3 +32,4 @@ completed work, technical debt, and decision history.
 | 2026-06-03 | Keep the old prompt template ignored as scratch material. | Prevent conflicting task-start instructions from entering agent context. |
 | 2026-06-03 | Validate WhatsApp eval fixtures with `scripts/whatsapp-eval.ps1`. | Move evals from passive documentation toward executable harness checks. |
 | 2026-06-03 | Enforce architecture rules with scripts and tests. | Convert repo rules into repeatable checks instead of relying on agent memory. |
+| 2026-06-04 | Keep GitHub Actions workflows empty for now. | Local harness scripts remain the preferred validation path until a pipeline is chosen. |

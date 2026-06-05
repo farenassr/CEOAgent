@@ -1,6 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http.Resilience;
-using Polly;
 using Refit;
 
 namespace CeoAgent.Adapters;
@@ -12,30 +10,14 @@ namespace CeoAgent.Adapters;
 public static class ProviderRefitClientRegistrations
 {
     /// <summary>
-    /// Registers a WhatsApp Cloud API Refit client and configures an exponential
-    /// retry policy that honors provider retry-after responses.
+    /// Registers a WhatsApp Cloud API Refit client without automatic retries.
+    /// Message send operations are not provider-idempotent, so retries must be
+    /// explicit at the workflow boundary.
     /// </summary>
     public static IHttpClientBuilder AddWhatsAppCloudRefitClient<TClient>(
         this IServiceCollection services)
         where TClient : class
     {
-        var builder = services.AddRefitClient<TClient>();
-
-        builder.RemoveAllResilienceHandlers();
-        builder.AddResilienceHandler("whatsapp-cloud", pipeline =>
-        {
-            pipeline.AddRetry(new HttpRetryStrategyOptions
-            {
-                BackoffType = DelayBackoffType.Exponential,
-                Delay = TimeSpan.FromSeconds(1),
-                MaxDelay = TimeSpan.FromSeconds(30),
-                MaxRetryAttempts = 3,
-                ShouldRetryAfterHeader = true,
-                UseJitter = true,
-            });
-        });
-
-        return builder;
+        return services.AddRefitClient<TClient>();
     }
-
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Azure.Storage.Queues;
+using CeoAgent.Application;
 using CeoAgent.Integrations.Jobs;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
@@ -14,6 +15,7 @@ public sealed class IncomingMessageQueueWorker(
     QueueServiceClient queues,
     IServiceScopeFactory scopeFactory,
     IOptions<IncomingQueueOptions> options,
+    WorkerHealthTracker healthTracker,
     ILogger<IncomingMessageQueueWorker> logger) : BackgroundService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -31,8 +33,19 @@ public sealed class IncomingMessageQueueWorker(
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            healthTracker.RecordPoll();
+            try
+            {
+                var properties = await queue.GetPropertiesAsync(cancellationToken: stoppingToken);
+                CeoAgentTelemetry.SetQueueBacklog(properties.Value.ApproximateMessagesCount);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to retrieve queue properties for backlog telemetry.");
+            }
+
             var messages = await queue.ReceiveMessagesAsync(
-                maxMessages: 1,
+                maxMessages: settings.MaxMessages > 0 ? settings.MaxMessages : 1,
                 visibilityTimeout: TimeSpan.FromMinutes(Math.Max(1, settings.VisibilityTimeoutMinutes)),
                 cancellationToken: stoppingToken);
 
@@ -44,10 +57,18 @@ public sealed class IncomingMessageQueueWorker(
                 continue;
             }
 
-            foreach (var message in messages.Value)
+            CeoAgentTelemetry.QueueDequeueCount.Add(messages.Value.Length);
+
+            var parallelOptions = new ParallelOptions
             {
-                await ProcessSingleAsync(queue, poisonQueue, message, stoppingToken);
-            }
+                MaxDegreeOfParallelism = settings.MaxDegreeOfParallelism > 0 ? settings.MaxDegreeOfParallelism : 1,
+                CancellationToken = stoppingToken
+            };
+
+            await Parallel.ForEachAsync(messages.Value, parallelOptions, async (message, ct) =>
+            {
+                await ProcessSingleAsync(queue, poisonQueue, message, ct);
+            });
         }
     }
 
@@ -57,6 +78,7 @@ public sealed class IncomingMessageQueueWorker(
         Azure.Storage.Queues.Models.QueueMessage message,
         CancellationToken stoppingToken)
     {
+        var stopwatch = Stopwatch.StartNew();
         ProcessIncomingMessageJob? job = null;
         try
         {
@@ -79,9 +101,15 @@ public sealed class IncomingMessageQueueWorker(
 
             if (message.DequeueCount >= ProcessIncomingMessageJobRetryPolicy.MaxAttempts)
             {
+                CeoAgentTelemetry.QueuePoisonCount.Add(1);
                 await poisonQueue.SendMessageAsync(message.MessageText, stoppingToken);
                 await queue.DeleteMessageAsync(message.MessageId, message.PopReceipt, stoppingToken);
             }
+        }
+        finally
+        {
+            stopwatch.Stop();
+            CeoAgentTelemetry.QueueProcessingDuration.Record(stopwatch.ElapsedMilliseconds);
         }
     }
 

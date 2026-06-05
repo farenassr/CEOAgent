@@ -18,5 +18,7 @@ public sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .WithMany(entity => entity.Customers)
             .HasForeignKey(entity => entity.CompanyChannelId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property<uint>("xmin").IsRowVersion();
     }
 }

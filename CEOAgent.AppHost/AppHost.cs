@@ -18,6 +18,9 @@ var whatsAppAppSecret = builder.AddParameter("whatsapp-app-secret", secret: true
 var whatsAppAccessToken = builder.AddParameter("whatsapp-access-token", secret: true);
 var openAIApiKey = builder.Configuration.GetConnectionString("openai");
 
+var adminApiKey = builder.AddParameter("admin-api-key", secret: true);
+var adminCompanyId = builder.AddParameter("admin-company-id");
+
 var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: 5432)
     .WithHostPort(PostgresHostPort)
     .WithDataVolume("ceoagent-postgres-database-volume")
@@ -42,6 +45,8 @@ var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
     .WithEnvironment("WhatsApp__AppSecret", whatsAppAppSecret)
     .WithEnvironment("WhatsApp__AccessToken", whatsAppAccessToken)
     .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
+    .WithEnvironment("AdminApiKey__Key", adminApiKey)
+    .WithEnvironment("AdminApiKey__CompanyId", adminCompanyId)
     .WithUrlForEndpoint("https", url =>
     {
         url.DisplayText = "Scalar API Reference";

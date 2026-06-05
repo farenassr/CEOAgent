@@ -210,7 +210,13 @@ public sealed class ToolExecutionGatewayTests
                 DbContext,
                 Calendar,
                 new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
-            Gateway = new ToolExecutionGateway(DbContext, executor);
+            var helper = new ToolExecutionGatewayHelper(DbContext);
+            var executors = new IToolExecutor[]
+            {
+                new CheckGoogleCalendarAvailabilityExecutor(executor, helper),
+                new CreateGoogleCalendarReservationExecutor(executor, helper)
+            };
+            Gateway = new ToolExecutionGateway(executors, helper);
 
             var company = new Company
             {

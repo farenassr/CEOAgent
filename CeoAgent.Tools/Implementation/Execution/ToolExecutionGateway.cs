@@ -1,23 +1,25 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using CeoAgent.Infrastructure;
-using CeoAgent.Infrastructure.Entities;
-using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using System.Diagnostics;
+using CeoAgent.Application;
 using CeoAgent.Integrations.AI;
-using CeoAgent.Shared.Constants;
-using CeoAgent.Shared.Enums;
-using CeoAgent.Tools.Implementation.GoogleCalendar;
 using CeoAgent.Tools.Models.Execution;
-using Microsoft.EntityFrameworkCore;
 
 namespace CeoAgent.Tools.Implementation.Execution;
 
-public sealed class ToolExecutionGateway(
-    CeoAgentDbContext dbContext,
-    GoogleCalendarToolExecutor googleCalendarToolExecutor)
+public sealed class ToolExecutionGateway
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly Dictionary<string, IToolExecutor> _executors;
+    private readonly ToolExecutionGatewayHelper _helper;
+
+    public ToolExecutionGateway(
+        IEnumerable<IToolExecutor> executors,
+        ToolExecutionGatewayHelper helper)
+    {
+        _executors = executors.ToDictionary(e => e.ToolKey, StringComparer.Ordinal);
+        _helper = helper;
+    }
 
     public async Task<ToolExecutionGatewayResult> ExecuteAsync(
         ToolExecutionGatewayRequest request,
@@ -25,130 +27,70 @@ public sealed class ToolExecutionGateway(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        using var activity = CeoAgentTelemetry.ActivitySource.StartActivity("tool.execution");
+        activity?.SetTag("company.id", request.CompanyId);
+        activity?.SetTag("conversation.id", request.ConversationId);
+        activity?.SetTag("tool.key", request.ToolCall.Name);
+        activity?.SetTag("tool.side_effects_enabled", request.SideEffectsEnabled);
+        var stopwatch = Stopwatch.StartNew();
+
         var descriptor = request.EnabledTools.SingleOrDefault(tool =>
             string.Equals(tool.Name, request.ToolCall.Name, StringComparison.Ordinal));
         if (descriptor is null)
         {
+            stopwatch.Stop();
+            CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+            CeoAgentTelemetry.ToolExecutionFailures.Add(1);
+            activity?.SetTag("tool.status", "denied");
+            activity?.SetTag("tool.failure_reason", "tool_not_enabled");
+            activity?.SetStatus(ActivityStatusCode.Ok);
             return Denied(request.ToolCall, "tool_not_enabled");
         }
 
+        activity?.SetTag("tool.mutating", descriptor.IsMutating);
+        var idempotencyKey = ToolExecutionGatewayHelper.CreateIdempotencyKey(request);
+
         if (!request.SideEffectsEnabled && descriptor.IsMutating)
         {
-            return await PersistDeniedAsync(request, descriptor, "side_effects_disabled", cancellationToken);
+            var denied = await _helper.PersistDeniedAsync(request, descriptor, "side_effects_disabled", idempotencyKey, cancellationToken);
+            stopwatch.Stop();
+            CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+            CeoAgentTelemetry.ToolExecutionFailures.Add(1);
+            activity?.SetTag("tool.status", "denied");
+            activity?.SetTag("tool.failure_reason", "side_effects_disabled");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            return denied;
         }
 
-        return request.ToolCall.Name switch
+        if (_executors.TryGetValue(request.ToolCall.Name, out var executor))
         {
-            MvpToolKeys.CheckGoogleCalendarAvailability => await ExecuteAvailabilityAsync(request, descriptor, cancellationToken),
-            MvpToolKeys.CreateGoogleCalendarReservation => await ExecuteReservationAsync(request, descriptor, cancellationToken),
-            _ => Denied(request.ToolCall, "tool_not_supported"),
-        };
-    }
-
-    private async Task<ToolExecutionGatewayResult> ExecuteAvailabilityAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        CancellationToken cancellationToken)
-    {
-        if (!TryDeserialize<CheckAvailabilityRequest>(request.ToolCall.Arguments, out var arguments)
-            || !IsValid(arguments))
-        {
-            return await PersistDeniedAsync(request, descriptor, "malformed_arguments", cancellationToken);
-        }
-
-        var execution = await googleCalendarToolExecutor.CheckAvailabilityAsync(
-            request.CompanyId,
-            request.ConversationId,
-            descriptor.CompanyToolId,
-            request.TriggerMessageId,
-            arguments,
-            CreateIdempotencyKey(request),
-            cancellationToken);
-
-        return await ToGatewayResultAsync(request.ToolCall, execution, cancellationToken);
-    }
-
-    private async Task<ToolExecutionGatewayResult> ExecuteReservationAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        CancellationToken cancellationToken)
-    {
-        if (!TryDeserialize<CreateCalendarEventRequest>(request.ToolCall.Arguments, out var arguments)
-            || !IsValid(arguments))
-        {
-            return await PersistDeniedAsync(request, descriptor, "malformed_arguments", cancellationToken);
-        }
-
-        var execution = await googleCalendarToolExecutor.CreateReservationAsync(
-            request.CompanyId,
-            request.ConversationId,
-            descriptor.CompanyToolId,
-            request.TriggerMessageId,
-            arguments,
-            CreateIdempotencyKey(request),
-            cancellationToken);
-
-        return await ToGatewayResultAsync(request.ToolCall, execution, cancellationToken);
-    }
-
-    private async Task<ToolExecutionGatewayResult> PersistDeniedAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        string failureReason,
-        CancellationToken cancellationToken)
-    {
-        var idempotencyKey = CreateIdempotencyKey(request);
-        var existing = await dbContext.ToolExecutions
-            .Where(entity => entity.CompanyId == request.CompanyId && entity.IdempotencyKey == idempotencyKey)
-            .SingleOrDefaultAsync(cancellationToken);
-        if (existing is not null)
-        {
-            return await ToGatewayResultAsync(request.ToolCall, existing, cancellationToken);
-        }
-
-        var execution = new ToolExecution
-        {
-            CompanyId = request.CompanyId,
-            ConversationId = request.ConversationId,
-            CompanyToolId = descriptor.CompanyToolId,
-            TriggerMessageId = request.TriggerMessageId,
-            ToolKey = request.ToolCall.Name,
-            IdempotencyKey = idempotencyKey,
-            Status = ToolExecutionStatus.Denied,
-            FailureReason = failureReason,
-        };
-
-        dbContext.ToolExecutions.Add(execution);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return await ToGatewayResultAsync(request.ToolCall, execution, cancellationToken);
-    }
-
-    private async Task<ToolExecutionGatewayResult> ToGatewayResultAsync(
-        AgentToolCall toolCall,
-        ToolExecution execution,
-        CancellationToken cancellationToken)
-    {
-        var content = JsonSerializer.Serialize(new
-        {
-            toolKey = execution.ToolKey,
-            status = execution.Status.ToString().ToLowerInvariant(),
-            failureReason = execution.FailureReason,
-            result = execution.Result,
-        }, SerializerOptions);
-
-        if (execution.ResultMessageId is { } resultMessageId)
-        {
-            var resultMessage = await dbContext.Messages
-                .Where(entity => entity.Id == resultMessageId && entity.CompanyId == execution.CompanyId)
-                .SingleOrDefaultAsync(cancellationToken);
-            if (resultMessage is not null && resultMessage.MessageText != content)
+            try
             {
-                resultMessage.MessageText = content;
-                await dbContext.SaveChangesAsync(cancellationToken);
+                var result = await executor.ExecuteAsync(request, descriptor, idempotencyKey, cancellationToken);
+                stopwatch.Stop();
+                CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+                activity?.SetTag("tool.status", "completed");
+                activity?.SetStatus(ActivityStatusCode.Ok);
+                return result;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                stopwatch.Stop();
+                CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+                CeoAgentTelemetry.ToolExecutionFailures.Add(1);
+                activity?.SetTag("tool.status", "failed");
+                activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+                throw;
             }
         }
 
-        return new ToolExecutionGatewayResult(toolCall.Id, toolCall.Name, content);
+        stopwatch.Stop();
+        CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+        CeoAgentTelemetry.ToolExecutionFailures.Add(1);
+        activity?.SetTag("tool.status", "denied");
+        activity?.SetTag("tool.failure_reason", "tool_not_supported");
+        activity?.SetStatus(ActivityStatusCode.Ok);
+        return Denied(request.ToolCall, "tool_not_supported");
     }
 
     private static ToolExecutionGatewayResult Denied(AgentToolCall toolCall, string failureReason)
@@ -161,43 +103,5 @@ public sealed class ToolExecutionGateway(
         }, SerializerOptions);
 
         return new ToolExecutionGatewayResult(toolCall.Id, toolCall.Name, content);
-    }
-
-    private static bool TryDeserialize<TRequest>(JsonElement arguments, out TRequest request)
-        where TRequest : class
-    {
-        try
-        {
-            request = arguments.Deserialize<TRequest>(SerializerOptions)
-                ?? throw new JsonException("Tool arguments were null.");
-            return true;
-        }
-        catch (JsonException)
-        {
-            request = null!;
-            return false;
-        }
-    }
-
-    private static bool IsValid(CheckAvailabilityRequest request)
-    {
-        return request.Date != default
-            && request.PartySize > 0;
-    }
-
-    private static bool IsValid(CreateCalendarEventRequest request)
-    {
-        return request.Start != default
-            && request.End != default
-            && request.End > request.Start
-            && !string.IsNullOrWhiteSpace(request.Summary);
-    }
-
-    private static string CreateIdempotencyKey(ToolExecutionGatewayRequest request)
-    {
-        var canonicalArguments = request.ToolCall.Arguments.GetRawText();
-        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalArguments));
-        var hash = Convert.ToHexString(hashBytes);
-        return $"{request.ConversationId:N}:{request.InboundMessageId:N}:{request.ToolCall.Name}:{hash[..16]}";
     }
 }

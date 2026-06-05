@@ -121,9 +121,48 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         var request = fixture.Agent.Requests.Single();
         request.Messages[^1].Text.ShouldBe("Hola desde simulacion");
         fixture.Messaging.TextMessages.ShouldBeEmpty();
+        fixture.CompanyContext.SetCompany(fixture.CompanyId);
         var assistant = await fixture.DbContext.Messages
             .SingleAsync(message => message.Role == MessageRole.Assistant);
         assistant.MessageText.ShouldBe("Claro, reviso disponibilidad.");
+        assistant.ProviderMessageId.ShouldBe($"reply:{fixture.InboundMessage.Id}");
+        assistant.Payload!.ProviderMessageId.ShouldStartWith("simulation:");
+    }
+
+    [Test]
+    public async Task ProcessAsync_ForSimulationMessage_PersistsReplyWithSingleSaveChanges()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola desde simulacion";
+        fixture.InboundMessage.ProviderMessageId = "simulation:message-1";
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "simulation",
+            ProviderMessageId = "simulation:message-1",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        var saveChangesCount = 0;
+        fixture.DbContext.SavingChanges += (_, _) => saveChangesCount++;
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Messaging.ReadMessages.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        fixture.Agent.Requests.Count.ShouldBe(1);
+        saveChangesCount.ShouldBe(1);
+
+        var assistant = fixture.DbContext.ChangeTracker
+            .Entries<Message>()
+            .Select(entry => entry.Entity)
+            .Single(message => message.Role == MessageRole.Assistant);
         assistant.ProviderMessageId.ShouldBe($"reply:{fixture.InboundMessage.Id}");
         assistant.Payload!.ProviderMessageId.ShouldStartWith("simulation:");
     }
@@ -303,7 +342,13 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Calendar,
                 new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
             var toolRegistry = new CompanyToolRegistry(DbContext);
-            var toolGateway = new ToolExecutionGateway(DbContext, calendarExecutor);
+            var helper = new ToolExecutionGatewayHelper(DbContext);
+            var executors = new IToolExecutor[]
+            {
+                new CheckGoogleCalendarAvailabilityExecutor(calendarExecutor, helper),
+                new CreateGoogleCalendarReservationExecutor(calendarExecutor, helper)
+            };
+            var toolGateway = new ToolExecutionGateway(executors, helper);
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,

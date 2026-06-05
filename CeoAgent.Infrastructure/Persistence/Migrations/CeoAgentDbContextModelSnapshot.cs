@@ -66,6 +66,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_agent_profile");
 
@@ -402,6 +408,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Configuration", "CeoAgent.Infrastructure.Entities.CompanyTool.Configuration#ToolConfiguration", b1 =>
                         {
                             b1.Property<string>("ToolKey")
@@ -427,7 +439,8 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                             b1.ComplexProperty(typeof(Dictionary<string, object>), "GoogleCalendar", "CeoAgent.Infrastructure.Entities.CompanyTool.Configuration#ToolConfiguration.GoogleCalendar#GoogleCalendarConfig", b2 =>
                                 {
-                                    b2.Property<int>("AdvanceBookingDays");
+                                    b2.Property<int>("AdvanceBookingDays")
+                                        .HasJsonPropertyName("advanceBookingDays");
 
                                     b2.Property<int>("BufferMinutes")
                                         .HasJsonPropertyName("bufferMinutes");
@@ -436,9 +449,11 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                                         .IsRequired()
                                         .HasJsonPropertyName("calendarId");
 
-                                    b2.Property<int>("ReservationMinutes");
+                                    b2.Property<int>("ReservationMinutes")
+                                        .HasJsonPropertyName("reservationMinutes");
 
-                                    b2.Property<int>("SlotMinutes");
+                                    b2.Property<int>("SlotMinutes")
+                                        .HasJsonPropertyName("slotMinutes");
 
                                     b2.Property<string>("TimeZoneId")
                                         .IsRequired()
@@ -525,6 +540,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_conversation");
 
@@ -571,6 +592,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Snapshot", "CeoAgent.Infrastructure.Entities.ConversationState.Snapshot#ConversationStateSnapshot", b1 =>
                         {
@@ -667,6 +694,12 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
                         .HasName("pk_customer");
@@ -921,6 +954,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_message_company_id_provider_message_id")
                         .HasFilter("provider_message_id IS NOT NULL");
+
+                    b.HasIndex("CompanyId", "ConversationId", "OccurredAt", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("ix_message_company_id_conversation_id_occurred_at_id");
 
                     b.ToTable("message", "public");
                 });

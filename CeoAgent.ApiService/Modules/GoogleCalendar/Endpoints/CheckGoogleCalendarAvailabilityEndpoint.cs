@@ -19,7 +19,7 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/tools/companies/{companyId}/google-calendar/availability");
+        Post("/v1/admin/companies/{companyId}/google-calendar/availability");
     }
 
     public override async Task HandleAsync(

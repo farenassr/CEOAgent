@@ -1,7 +1,6 @@
 name = "phase-orchestrator"
 description = "Coordinates harness-engineered development phases by selecting docs, subagents, plans, implementation boundaries, and verification steps."
 
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 developer_instructions = """

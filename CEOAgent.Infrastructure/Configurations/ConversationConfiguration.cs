@@ -26,5 +26,7 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
             .WithMany(entity => entity.Conversations)
             .HasForeignKey(entity => entity.AgentProfileId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property<uint>("xmin").IsRowVersion();
     }
 }

@@ -29,4 +29,9 @@ public sealed class IncomingQueueOptions
     /// Suffix appended to the source queue name for poison messages.
     /// </summary>
     public string PoisonQueueSuffix { get; set; } = "-poison";
+
+    /// <summary>
+    /// Maximum degree of parallelism for concurrent message processing.
+    /// </summary>
+    public int MaxDegreeOfParallelism { get; set; } = 4;
 }

@@ -88,7 +88,18 @@ public sealed class SecretValueProvider : ISecretValueProvider
             Fragment = string.Empty,
         }.Uri;
 
-        var client = Clients.GetOrAdd(vaultUri, uri => new SecretClient(uri, Credential));
+        var clientOptions = new SecretClientOptions
+        {
+            Retry =
+            {
+                NetworkTimeout = TimeSpan.FromSeconds(30),
+                MaxRetries = 3,
+                Delay = TimeSpan.FromSeconds(1),
+                MaxDelay = TimeSpan.FromSeconds(10),
+                Mode = Azure.Core.RetryMode.Exponential
+            }
+        };
+        var client = Clients.GetOrAdd(vaultUri, uri => new SecretClient(uri, Credential, clientOptions));
         var secret = pathSegments.Length >= 3
             ? await client.GetSecretAsync(pathSegments[1], pathSegments[2], cancellationToken)
             : await client.GetSecretAsync(pathSegments[1], cancellationToken: cancellationToken);

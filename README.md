@@ -1,234 +1,107 @@
-# 🤖 CeoAgent
+# CeoAgent
 
-> Backend SaaS multi-tenant en .NET para conversaciones empresariales asistidas por IA.
+Backend SaaS multi-tenant in .NET for business conversations assisted by AI.
 
-CeoAgent está pensado para que restaurantes puedan atender conversaciones de negocio por WhatsApp, procesar texto o audio, ejecutar herramientas aprobadas y sincronizar acciones con sistemas externos como Google Calendar. El diseño del MVP empieza por WhatsApp, pero el núcleo está preparado para sumar otros canales como Telegram, Instagram DM o web chat sin reescribir el motor conversacional.
+CeoAgent is designed for restaurants that need to handle WhatsApp business
+conversations, process text or audio, execute approved tools, and synchronize
+actions with external systems such as Google Calendar. The MVP starts with
+WhatsApp, while the conversational core can later support channels such as
+Telegram, Instagram DM, or web chat.
 
----
+## What This Builds
 
-## ✨ Qué construye este proyecto
+CeoAgent receives inbound messages, identifies the company by channel,
+persists the conversation, runs an agent based on Microsoft Agent Framework,
+validates every model-requested action, and replies through the relevant
+channel.
 
-CeoAgent recibe mensajes entrantes, identifica la empresa por el canal, persiste la conversación, ejecuta un agente basado en Microsoft Agent Framework, valida cualquier acción solicitada por el modelo y responde por el canal correspondiente.
+MVP capabilities:
 
-Capacidades principales del MVP:
+- WhatsApp Cloud API for inbound and outbound messages.
+- Voice note support, transcription, and audio responses.
+- Multi-tenant resolution by `(provider, provider_channel_id)`.
+- Company-configurable AI profile, prompt, and model.
+- Dynamic catalog of company-enabled tools.
+- Safe tool execution: the LLM never executes side effects directly.
+- PostgreSQL persistence with global filters by `company_id`.
+- Azure Storage Queues for background jobs.
+- Azure Blob Storage for media and attachments.
+- OpenTelemetry, ZLogger, and Langfuse observability.
+- API, integration, and worker tests with TUnit.
 
-- 📲 WhatsApp Cloud API para mensajes entrantes y salientes.
-- 🎙️ Soporte para notas de voz, transcripción y respuestas de audio.
-- 🏢 Resolución multi-tenant por `(provider, provider_channel_id)`.
-- 🧠 Agente de IA con perfil, prompt y modelo configurable por empresa.
-- 🧰 Catálogo dinámico de herramientas habilitadas por empresa.
-- 🛡️ Ejecución segura: el modelo LLM nunca ejecuta lógica directamente.
-- 🗄️ Persistencia en PostgreSQL con filtros globales por `company_id`.
-- 📦 Azure Storage Queues para trabajos en background.
-- 🧾 Azure Blob Storage para media y adjuntos.
-- 📈 Observabilidad con OpenTelemetry, ZLogger y Langfuse.
-- 🧪 Tests API, integración y worker con TUnit.
+## Architecture
 
----
-
-## 🧱 Arquitectura
-
-CeoAgent es un **modular monolith**. No es un sistema de microservicios. La API y el Worker corren como procesos separados, pero comparten modelo, base de datos y contratos internos.
+CeoAgent is a modular monolith. The API and Worker run as separate processes,
+but share the domain model, database, and internal contracts.
 
 ```text
 WhatsApp Cloud
   |
   v
 CeoAgent.ApiService
-  |  valida webhook, resuelve empresa, persiste mensaje y encola trabajo
+  |  validates webhook, resolves company, persists message, enqueues work
   v
 Azure Storage Queue
   |
   v
 CeoAgent.Worker
-  |  ejecuta agente, valida herramientas, llama adaptadores y responde
+  |  runs agent, validates tools, calls adapters, sends reply
   v
-PostgreSQL + Blob Storage + Integraciones externas
+PostgreSQL + Blob Storage + external integrations
 ```
 
-Principios arquitectónicos:
+Core principles:
 
-- 🧩 **Vertical Slice Architecture** para organizar casos de uso.
-- 🏛️ **Ports and Adapters** para integraciones externas.
-- 🧠 **Microsoft Agent Framework** para runtime de agentes/LLM.
-- 🔐 **Tool handlers controlados** para cualquier efecto secundario.
-- 🧬 **AOT-aware**, priorizando mantenibilidad sin bloquear Native AOT futuro.
-- 🧭 **Options Pattern** con configuración fuertemente tipada y validación al iniciar.
+- Vertical slices for use cases.
+- Ports and adapters for external integrations.
+- Microsoft Agent Framework for agent and LLM runtime.
+- Controlled tool handlers for side effects.
+- Strongly typed options and startup validation.
 
----
+## Solution Shape
 
-## 📁 Estructura de la solución
+| Project | Role |
+| --- | --- |
+| `CeoAgent.AppHost` | Local .NET Aspire orchestration for API, Worker, PostgreSQL, queues, blobs, and Key Vault parameters. |
+| `CeoAgent.ApiService` | FastEndpoints HTTP surface, admin endpoints, webhook receiver, errors, OpenAPI, and Scalar. |
+| `CeoAgent.Worker` | Background processing, jobs, agent execution, tools, and integrations. |
+| `CeoAgent.ServiceDefaults` | Health checks, OpenTelemetry, service discovery, and baseline resilience. |
+| `CeoAgent.Application` | Shared application logic and internal business contracts. |
+| `CeoAgent.Infrastructure` | EF Core entities, configurations, DbContext, persistence, and infrastructure wiring. |
+| `CeoAgent.Integrations` | Integration ports and contracts only. |
+| `CeoAgent.Adapters` | Provider implementations for WhatsApp, calendars, AI providers, and external HTTP. |
+| `CeoAgent.Tools` | Native MVP tool handlers. |
+| `CeoAgent.Shared` | Public request/response DTOs and shared enums. |
+| `CeoAgent.Web` | Web template project; not central to the MVP backend for now. |
+| `tests/*` | API, integration, and Worker tests. |
 
-| Proyecto                   | Rol                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------- |
-| `CeoAgent.AppHost`         | Orquestación local con .NET Aspire: API, Worker, PostgreSQL, queues, blobs y Key Vault.   |
-| `CeoAgent.ApiService`      | Superficie HTTP con FastEndpoints, endpoints admin, middleware, errores y OpenAPI/Scalar. |
-| `CeoAgent.Worker`          | Procesamiento background: jobs, agente, herramientas e integraciones.                     |
-| `CeoAgent.ServiceDefaults` | Health checks, OpenTelemetry, service discovery y resiliencia base.                       |
-| `CeoAgent.Application`     | Lógica de aplicación compartida y contratos internos de negocio.                          |
-| `CeoAgent.Infrastructure`  | EF Core, entidades, DbContext, persistencia y configuración de infraestructura.           |
-| `CeoAgent.Integrations`    | Puertos/contratos de integración. No contiene implementaciones.                           |
-| `CeoAgent.Adapters`        | Implementaciones de puertos: WhatsApp, calendarios, proveedores AI, HTTP externo.         |
-| `CeoAgent.Tools`           | Tool handlers nativos del MVP.                                                            |
-| `CeoAgent.Shared`          | DTOs públicos de request/response y enums compartidos.                                    |
-| `CeoAgent.Web`             | Proyecto web template; no es parte central del MVP backend por ahora.                     |
-| `tests/*`                  | Tests API, integración y Worker.                                                          |
+## Agent And Harness Rules
 
----
+The normative guide for agents is [AGENTS.md](./AGENTS.md). Do not duplicate
+architecture, security, database, subagent, validation, or commit-message rules
+in this README.
 
-## 🔄 Flujo principal
+The harness index and progressive-disclosure docs are in
+[AIHarness/harness-engineering.md](./AIHarness/harness-engineering.md).
 
-1. 📥 WhatsApp envía un webhook al API.
-2. 🔏 El API valida firma y payload.
-3. 🏢 Se resuelve la empresa por canal, nunca por teléfono del cliente.
-4. 👤 Se identifica o crea el customer dentro de esa empresa.
-5. 💬 Se persiste el mensaje de forma idempotente.
-6. 📬 Se encola un trabajo en Azure Storage Queue.
-7. ⚙️ El Worker carga la conversación y ejecuta el agente.
-8. 🧠 El agente produce respuesta o solicita una herramienta.
-9. 🧰 El backend valida la herramienta contra el catálogo habilitado.
-10. 📤 El Worker persiste resultados y envía la respuesta por WhatsApp.
+Review prompts are indexed in [docs/reviewer.md](./docs/reviewer.md).
 
----
+## Configuration
 
-## 🧰 Stack principal
+The project uses strongly typed options with startup validation.
 
-| Tecnología                | Para qué se usa                                                  | Leer más                                                                                     |
-| ------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| .NET                      | Plataforma base del backend.                                     | [Documentación .NET](https://learn.microsoft.com/en-us/dotnet/)                              |
-| ASP.NET Core              | Hosting HTTP, middleware, health checks y pipeline web.          | [ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/)                               |
-| FastEndpoints             | Endpoints HTTP por slice, con menos ceremonia que controllers.   | [FastEndpoints Docs](https://fast-endpoints.com/docs/get-started)                            |
-| Microsoft Agent Framework | Runtime de agentes IA y abstractions para modelos/herramientas.  | [Agent Framework Docs](https://learn.microsoft.com/en-us/agent-framework/)                   |
-| .NET Aspire               | Orquestación local de API, Worker y dependencias.                | [.NET Aspire](https://learn.microsoft.com/en-us/dotnet/aspire)                               |
-| Entity Framework Core     | ORM, DbContext único, migraciones y filtros multi-tenant.        | [EF Core](https://learn.microsoft.com/en-us/ef/core/)                                        |
-| Npgsql                    | Provider PostgreSQL para EF Core.                                | [Npgsql EF Core](https://www.npgsql.org/efcore/)                                             |
-| Azure Storage Queues      | Cola de jobs entre API y Worker.                                 | [Azure Queue Storage](https://learn.microsoft.com/en-us/azure/storage/queues/)               |
-| Azure Blob Storage        | Almacenamiento de audios, TTS y media.                           | [Azure Blob Storage](https://learn.microsoft.com/en-us/azure/storage/blobs/)                 |
-| Mediator                  | Dispatch in-process de comandos/queries con source generator.    | [Mediator GitHub](https://github.com/martinothamar/Mediator)                                 |
-| FluentValidation          | Validación de requests y comandos.                               | [FluentValidation](https://docs.fluentvalidation.net/)                                       |
-| Mapperly                  | Mapeo compile-time entre entidades, requests y DTOs.             | [Mapperly Docs](https://mapperly.riok.app/docs/)                                             |
-| Refit                     | Clientes HTTP tipados para integraciones externas.               | [Refit GitHub](https://github.com/reactiveui/refit)                                          |
-| Polly                     | Resiliencia en adaptadores HTTP propios.                         | [Polly](https://www.pollydocs.org/)                                                          |
-| OpenTelemetry             | Trazas, métricas e instrumentación estándar.                     | [OpenTelemetry .NET](https://opentelemetry.io/docs/languages/net/)                           |
-| Langfuse                  | Observabilidad de prompts, completions, tool calls y costos LLM. | [Langfuse Docs](https://langfuse.com/docs)                                                   |
-| ZLogger                   | Logging estructurado de alto rendimiento.                        | [ZLogger GitHub](https://github.com/Cysharp/ZLogger)                                         |
-| Scalar                    | UI de documentación OpenAPI en desarrollo.                       | [Scalar ASP.NET Core](https://github.com/scalar/scalar/tree/main/packages/scalar.aspnetcore) |
-| TUnit                     | Framework de testing moderno para .NET.                          | [TUnit](https://tunit.dev/)                                                                  |
-| Testcontainers            | Infraestructura real para tests de integración.                  | [Testcontainers for .NET](https://dotnet.testcontainers.org/)                                |
-
----
-
-## 🛡️ Reglas importantes del proyecto
-
-Estas reglas están detalladas en [AGENTS.md](./AGENTS.md), que es la fuente normativa del proyecto.
-
-- ✅ Usar nombres descriptivos. Nada de `req`, `ct`, `ctx` en código escrito a mano.
-- ✅ Usar DTOs de API en `CeoAgent.Shared`.
-- ✅ Usar Mapperly por módulo, no un mapper global.
-- ✅ Mapear request → entity con mapper cuando el mapeo sea no trivial o cruce tipos de frontera.
-- ✅ Usar `Guid.CreateVersion7()` para identificadores.
-- ✅ Usar `TimeProvider`, no `DateTime.Now`.
-- ✅ Enforce multi-tenancy con `company_id` y filtros globales EF Core.
-- ✅ El modelo no ejecuta acciones directamente; todo pasa por tool handlers validados.
-- ✅ Los secretos reales no viven en base de datos ni en appsettings.
-
----
-
-## 🧭 Harness engineering para agentes
-
-Este repositorio usa **harness engineering**: no se espera que los agentes
-solo escriban codigo, sino que trabajen dentro de un flujo repetible para
-inspeccionar, planificar, implementar, revisar y validar cambios. El harness
-incluye reglas, prompts, subagentes, scripts, fixtures de evaluacion y trazas
-que reducen regresiones y hacen que cada fase sea verificable.
-
-Activos principales del harness:
-
-- `AGENTS.md`: reglas normativas para agentes y colaboradores.
-- `.codex/agents/*.toml`: subagentes Codex project-scoped.
-- `.claude/agents/*.md`: subagentes Claude Code en formato Markdown estandar.
-- `AIHarness/`: documentos de arquitectura, integraciones, seguridad y flujos.
-- `scripts/`: wrappers estables para build, test, format y checks de harness.
-- `evals/`: fixtures de regresion, especialmente para WhatsApp, validadas con `scripts/whatsapp-eval.ps1`.
-- `traces/`: ejemplos sanitizados de fallos reales o simulados.
-
-### Plugin recomendado: Superpowers
-
-Se recomienda usar el plugin
-[obra/superpowers](https://github.com/obra/superpowers) cuando trabajes con
-agentes de coding en este repo.
-
-Encaja bien con el harness de CeoAgent porque convierte tareas abiertas en
-fases verificables, fuerza evidencia antes de declarar un cambio terminado y
-reduce el riesgo de que el agente salte directamente a editar sin entender el
-contexto, los limites del slice o las validaciones esperadas.
-
-### Subagentes disponibles
-
-| Agente                  | Uso principal                                                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `phase-orchestrator`    | Coordina fases harness-engineered: selecciona docs, subagentes, plan, limites de implementacion y validaciones.        |
-| `codebase-scout`        | Inspecciona codigo, tests, docs y harness assets relevantes antes de planificar o codificar.                           |
-| `architecture-reviewer` | Revisa arquitectura, modular monolith, vertical slices, limites entre proyectos, tenant isolation y riesgos de diseno. |
-| `backend-engineer`      | Implementa .NET backend: FastEndpoints, Mediator, handlers, validators, DTOs, Worker jobs y DI.                        |
-| `db-specialist`         | Revisa EF Core, PostgreSQL, migraciones, indices, JSONB, query filters, tenant isolation y modelo de datos.            |
-| `integrations-engineer` | Implementa y revisa ports/adapters, WhatsApp Cloud, Google Calendar, APIs externas, SDKs y tool execution.             |
-| `ai-engineer`           | Trabaja en Microsoft Agent Framework, prompts, agent loop, structured output, tool calling, evals y seguridad LLM.     |
-| `testing-engineer`      | Define y escribe unit tests, integration tests, Aspire Testing, Testcontainers, fixtures, evals y regresiones.         |
-| `code-simplifier`       | Simplifica codigo y queries, reduce duplicacion y propone refactors behavior-preserving sin cambiar contratos.         |
-
-### Flujo recomendado de una tarea o fase
-
-1. Leer `AGENTS.md`.
-2. Revisar `git status --short`.
-3. Inspeccionar solo archivos y harness docs relevantes.
-4. Seleccionar subagentes relevantes; no usar todos por defecto.
-5. Producir un plan breve antes de editar.
-6. Implementar el cambio mas pequeno y durable.
-7. Ejecutar la validacion mas estrecha que tenga sentido.
-8. Para cambios de harness, ejecutar `scripts/harness-check.ps1` o los checks
-   especificos: `scripts/architecture-check.ps1`, `scripts/doc-gardening.ps1`
-   y `scripts/whatsapp-eval.ps1`.
-9. Antes de terminar, ejecutar la revision definida en
-   [`docs/reviewer.md`](./docs/reviewer.md), revisar el informe generado en
-   `docs/CODE_REVIEW/` y corregir o documentar los hallazgos accionables.
-
-### Como crear un commit
-
-Antes de crear un commit:
-
-#### Usa el formato de commit del proyecto:
-
-```text
-<ProjectOrArea>/<ProjectOrArea>/...: [<GitHubIssueId>] <Concise change summary>
-```
-
-Ejemplo:
-
-```text
-Repo/AIHarness/.claude/.codex: [#0] Add harness docs and agent definitions
-```
-
-Si no hay issue de GitHub asociado, usa `[#0]`.
-
----
-
-## ⚙️ Configuración
-
-El proyecto usa **Options Pattern** con clases fuertemente tipadas y validación al iniciar.
-
-Secciones relevantes:
+Relevant sections:
 
 - `Api`
   - CORS.
   - Rate limiting.
 - `Persistence`
-  - Modo PostgreSQL.
+  - PostgreSQL mode.
 - `ServiceDefaults`
   - OTLP.
   - Langfuse.
 
-Ejemplo de configuración local:
+Local example:
 
 ```json
 {
@@ -250,84 +123,67 @@ Ejemplo de configuración local:
 }
 ```
 
----
+## Local Development
 
-## 🚀 Desarrollo local
+Requirements:
 
-### Requisitos
+- .NET SDK compatible with `net10.0`.
+- Docker Desktop or a compatible container runtime for Aspire.
+- PowerShell, Windows Terminal, or equivalent shell.
 
-- .NET SDK compatible con `net10.0`.
-- Docker Desktop o runtime de contenedores compatible para Aspire.
-- PowerShell, Windows Terminal o shell equivalente.
-
-### Restaurar y compilar
+Restore and build:
 
 ```powershell
 dotnet restore CeoAgent.slnx
 dotnet build CeoAgent.slnx
 ```
 
-### Ejecutar tests
+Run tests:
 
 ```powershell
 dotnet test CeoAgent.slnx
 ```
 
-### Ejecutar con Aspire
+Run with Aspire:
 
 ```powershell
 dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
 ```
 
-El API expone:
+The API exposes:
 
 ```text
 /health
-```
-
-La configuracion de infraestructura local/Azure de fase 3 esta documentada en
-[docs/azure-infrastructure.md](./docs/azure-infrastructure.md). El desarrollo
-local usa Aspire con PostgreSQL y Azurite para Queue/Blob; Azure Key Vault se
-reserva para secretos compartidos en publish/deploy.
-
-En desarrollo, la referencia OpenAPI está disponible en:
-
-```text
 /scalar
 ```
 
-### 🔑 Secretos y base de datos local
+Local infrastructure and Azure phase notes live in
+[docs/azure-infrastructure.md](./docs/azure-infrastructure.md). Local
+development uses Aspire with PostgreSQL and Azurite for Queue/Blob. Azure Key
+Vault is reserved for shared publish/deploy secrets.
 
-Para desarrollo local, primero levanta Aspire. El AppHost crea PostgreSQL,
-queues, blobs y expone el puerto PostgreSQL local configurado para el MVP.
+## Local Secrets
 
-```powershell
-dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
-```
-
-Secretos/parámetros usados actualmente:
-
-| Proyecto                  | Clave                            | Uso                                                            |
-| ------------------------- | -------------------------------- | -------------------------------------------------------------- |
-| `CeoAgent.AppHost`        | `Parameters:postgres-password`   | Password local leído por Aspire para el contenedor PostgreSQL. |
-| `CeoAgent.AppHost`        | `Parameters:langfuse-host`       | Host de Langfuse, por ejemplo `https://cloud.langfuse.com`.    |
-| `CeoAgent.AppHost`        | `Parameters:langfuse-public-key` | Public key de Langfuse para trazas GenAI.                      |
-| `CeoAgent.AppHost`        | `Parameters:langfuse-secret-key` | Secret key de Langfuse para trazas GenAI.                      |
-| `CeoAgent.Infrastructure` | `ConnectionStrings:CeoAgent`     | Connection string de diseño para comandos `dotnet ef`.         |
-
-Configurar el password local de PostgreSQL para Aspire:
+Configure the local PostgreSQL password for Aspire:
 
 ```powershell
 dotnet user-secrets set "Parameters:postgres-password" "postgres" --project CeoAgent.AppHost
 ```
 
-Configurar la conexión local para EF Core:
+Configure local admin authentication for Aspire:
+
+```powershell
+dotnet user-secrets set "Parameters:admin-api-key" "dev-admin-key-change-me" --project CeoAgent.AppHost
+dotnet user-secrets set "Parameters:admin-company-id" "018f5c7a-1234-7890-abcd-000000000001" --project CeoAgent.AppHost
+```
+
+Configure the local EF Core design-time connection string:
 
 ```powershell
 dotnet user-secrets set "ConnectionStrings:CeoAgent" "Host=localhost;Port=5432;Database=CeoAgent;Username=postgres;Password=postgres" --project CeoAgent.Infrastructure
 ```
 
-Configurar Langfuse para Aspire:
+Configure Langfuse for Aspire:
 
 ```powershell
 dotnet user-secrets set "Parameters:langfuse-host" "https://cloud.langfuse.com" --project CeoAgent.AppHost
@@ -335,82 +191,64 @@ dotnet user-secrets set "Parameters:langfuse-public-key" "<langfuse-public-key>"
 dotnet user-secrets set "Parameters:langfuse-secret-key" "<langfuse-secret-key>" --project CeoAgent.AppHost
 ```
 
-Con Aspire levantado y el connection string configurado, aplicar las
-migraciones es una acción manual:
+With Aspire running and the connection string configured, applying migrations
+is a manual action:
 
 ```powershell
 dotnet ef database update --project CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj
 ```
 
-Si PostgreSQL usa otro puerto, copia el puerto real desde el Aspire Dashboard
-y reemplaza `Port=5432` en `ConnectionStrings:CeoAgent`.
+For publish/runtime, API and Worker receive connection strings through Aspire or
+Azure via `.WithReference(...)`; they should not depend on local user-secrets.
 
-En publicación, el runtime no debe depender de estos user-secrets locales.
-API y Worker reciben sus connection strings desde Aspire/Azure mediante
-`.WithReference(...)`. Azure Key Vault queda reservado para secretos
-compartidos como claves de proveedores, Langfuse y API keys, no para el
-connection string local de desarrollo. Para comandos `dotnet ef`, el
-connection string manual vive solo en `CeoAgent.Infrastructure` user-secrets.
+## Testing
 
----
+Test projects:
 
-## 🧪 Testing
+- `tests/CeoAgent.ApiService.Tests`: endpoints, errors, mappers, and HTTP contracts.
+- `tests/CeoAgent.IntegrationTests`: EF Core, relational model, JSONB, and multi-tenant isolation.
+- `tests/CeoAgent.Worker.Tests`: Worker processing and tool execution coverage.
 
-El repo incluye:
-
-- 🧩 `tests/CeoAgent.ApiService.Tests`: endpoints, errores, mappers y contratos HTTP.
-- 🗄️ `tests/CeoAgent.IntegrationTests`: EF Core, modelo relacional, JSONB, aislamiento multi-tenant.
-- ⚙️ `tests/CeoAgent.Worker.Tests`: base para pruebas del Worker.
-
-Comando recomendado:
+Recommended command:
 
 ```powershell
 dotnet test CeoAgent.slnx --no-build
 ```
 
----
+## Observability
 
-## 📊 Observabilidad
+CeoAgent separates general observability from LLM observability:
 
-CeoAgent separa observabilidad general y observabilidad LLM:
+- OpenTelemetry for standard traces, metrics, and instrumentation.
+- ZLogger for structured logging.
+- Langfuse for GenAI traces, prompts, tool calls, token usage, latency, and cost.
 
-- OpenTelemetry para trazas, métricas e instrumentación estándar.
-- ZLogger para logs estructurados.
-- Langfuse para trazas GenAI, prompts, tool calls, tokens, latencia y costos.
+In production, textual prompt and completion content should be disabled by
+default to reduce PII exposure.
 
-En producción, el contenido textual de prompts/completions debe estar deshabilitado por defecto para reducir exposición de PII.
+## Security And Multi-Tenancy
 
----
+- Company-owned tables contain `company_id`.
+- Customer phone numbers do not identify companies.
+- Companies are resolved by channel, such as WhatsApp `phone_number_id`.
+- Admin endpoints use a static API key in the MVP.
+- Webhooks are authorized by provider HMAC signatures.
+- Provider credentials are stored as references such as `kv://...`, never raw secrets.
 
-## 🔐 Seguridad y multi-tenancy
+## Current Focus
 
-- Cada tabla propiedad de una empresa contiene `company_id`.
-- El teléfono del cliente no identifica la empresa.
-- La empresa se resuelve por canal, por ejemplo WhatsApp `phone_number_id`.
-- Los endpoints admin usan API key estática en el MVP.
-- Los webhooks se autorizan por firma HMAC del proveedor.
-- Las credenciales de proveedores se guardan como referencias, por ejemplo `kv://...`, nunca como secretos crudos.
+The immediate backend focus remains the MVP flow:
 
----
-
-## 🧭 Estado actual
-
-El proyecto ya tiene la base de solución, proyectos principales, configuración fuerte, endpoints admin iniciales de Companies, mappers por módulo, persistencia EF Core, tests y reglas de ingeniería en [AGENTS.md](./AGENTS.md).
-
-El foco inmediato sigue siendo completar el flujo MVP:
-
-- Webhook WhatsApp.
-- Persistencia conversacional.
+- WhatsApp webhook.
+- Conversational persistence.
 - Queue processing.
 - Agent runner.
 - Tool handlers.
-- Adaptadores reales.
-- Integración Google Calendar.
-- Observabilidad LLM end-to-end.
+- Real adapters.
+- Google Calendar integration.
+- End-to-end LLM observability.
 
----
-
-## 📚 Links útiles
+## Useful Links
 
 - [.NET](https://learn.microsoft.com/en-us/dotnet/)
 - [.NET Aspire](https://learn.microsoft.com/en-us/dotnet/aspire)
@@ -428,45 +266,7 @@ El foco inmediato sigue siendo completar el flujo MVP:
 - [TUnit](https://tunit.dev/)
 - [Testcontainers for .NET](https://dotnet.testcontainers.org/)
 
----
+## Contributing
 
-## 🤝 Cómo contribuir
-
-Antes de tocar código:
-
-1. Lee [AGENTS.md](./AGENTS.md).
-2. Mantén los cambios pequeños y alineados con el slice correspondiente.
-3. Usa nombres descriptivos.
-4. Añade tests proporcionales al riesgo.
-5. Ejecuta build y tests antes de cerrar el cambio.
-6. **Antes de dar una tarea por terminada**, abre [docs/reviewer.md](./docs/reviewer.md) y usa el prompt que contiene para pedirle a la AI que revise los cambios actuales contra el proyecto. Esta revisión es una ayuda para detectar problemas serios, no una camisa de fuerza: algunos warnings pueden no ser relevantes y se pueden ignorar con criterio.
-
-### 📝 Mensajes de commit
-
-Este repo usa un formato descriptivo basado en el historial del proyecto:
-
-```text
-Area/Subarea/tests/docs: [#issue] Resumen imperativo del cambio
-```
-
-Reglas:
-
-- Usa las áreas tocadas como prefijo, separadas por `/`: `ApiService/Shared/tests/docs`.
-- Usa `[#n]` para el issue o tarea relacionada.
-- Usa `[#0]` cuando no exista issue asociado.
-- Escribe el resumen en inglés, en modo imperativo: `Add`, `Fix`, `Move`, `Rename`, `Align`.
-- No uses punto final.
-- Mantén el mensaje concreto: qué cambió y en qué área.
-
-Ejemplos:
-
-```text
-ApiService/Shared/tests/docs: [#0] Add typed config validation and Company response mappings
-Infrastructure/ApiService/tests/docs: [#0] Add typed JSONB entity models and document manual migration policy
-ApiService/AppHost/Infrastructure/Worker/tests/docs: [#6] Add MVP persistence, admin auth, tenant isolation, Aspire setup, and agent rules
-```
-
-```powershell
-dotnet build CeoAgent.slnx
-dotnet test CeoAgent.slnx --no-build
-```
+Before changing code, read [AGENTS.md](./AGENTS.md). It contains the project
+workflow, validation commands, commit-message format, and completion rules.

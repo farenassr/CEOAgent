@@ -34,6 +34,8 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasIndex(entity => new { entity.CompanyId, entity.ProviderMessageId }).IsUnique()
             .HasFilter("provider_message_id IS NOT NULL");
         builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.CompanyId, entity.ConversationId, entity.OccurredAt, entity.Id })
+            .IsDescending(false, false, true, true);
         builder.HasOne(entity => entity.Conversation)
             .WithMany(entity => entity.Messages)
             .HasForeignKey(entity => entity.ConversationId)

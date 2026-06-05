@@ -21,7 +21,14 @@ internal sealed class OpenAIResponsesClientFactory(
         }
 
         var apiKey = await secrets.GetSecretValueAsync(options.Value.ApiKeyReference, cancellationToken);
-        return clients.GetOrAdd(apiKey, static key => new ResponsesClient(key));
+        return clients.GetOrAdd(apiKey, static key =>
+        {
+            var clientOptions = new global::OpenAI.OpenAIClientOptions
+            {
+                NetworkTimeout = TimeSpan.FromSeconds(30)
+            };
+            return new ResponsesClient(new System.ClientModel.ApiKeyCredential(key), clientOptions);
+        });
     }
 }
 

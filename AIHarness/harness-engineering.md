@@ -13,7 +13,7 @@ backlog for improving repeatability.
 | `AIHarness/integration-model.md` | Changing ports, adapters, provider selection, credentials, or external SDK usage. |
 | `AIHarness/whatsapp-flow.md` | Changing WhatsApp webhook ingestion, idempotency, message parsing, media, or outbound replies. |
 | `AIHarness/google-calendar-integration.md` | Changing availability, booking, calendar tool execution, or Google Calendar adapter behavior. |
-| `AIHarness/security-rules.md` | Changing secrets, authentication, authorization, webhook signatures, tenant isolation, logging, AI safety, or PII handling. |
+| `AIHarness/security-rules.md` | Changing secrets, authentication, authorization, webhook signatures, company isolation, logging, AI safety, or PII handling. |
 
 ## Executable Harness Checks
 
@@ -22,7 +22,7 @@ Run focused checks first, then broaden when risk warrants it.
 | Script | Purpose |
 | --- | --- |
 | `scripts/architecture-check.ps1` | Enforces project references, no MediatR, no MVC controllers, provider SDK isolation, `/v1` FastEndpoints routes, critical contract uniqueness, scoped folder conventions, and namespace/folder alignment. |
-| `scripts/doc-gardening.ps1` | Checks markdown links, stale references to missing instruction files, PromptTemplate usage, and AIHarness index freshness. |
+| `scripts/doc-gardening.ps1` | Checks markdown links, stale references to missing instruction files, scratch-doc references, and AIHarness index freshness. |
 | `scripts/whatsapp-eval.ps1` | Validates WhatsApp eval fixture structure, required invariants, and expected outcomes. |
 | `scripts/harness-check.ps1` | Runs doc gardening, WhatsApp eval validation, and architecture checks. Use `-IncludeFormat`, `-IncludeBuild`, or `-IncludeTests` to broaden. |
 | `scripts/review-current-branch.ps1` | Generates a review context file for `docs/reviewer.md` using the current branch diff. |
@@ -70,7 +70,7 @@ steps:
 | Skill | Trigger | Outcome |
 | --- | --- | --- |
 | `ceoagent-whatsapp-eval` | Review or test WhatsApp flow changes. | Runs focused tests, compares eval fixtures, checks idempotency/signature invariants. |
-| `ceoagent-ef-migration-review` | Entity, DbContext, JSONB, or migration changes. | Reviews tenant filters, JSONB mapping, migration SQL, and no-apply policy. |
+| `ceoagent-ef-migration-review` | Entity, DbContext, JSONB, or migration changes. | Reviews company filters, JSONB mapping, migration SQL, and no-apply policy. |
 | `ceoagent-aspire-smoke` | Local runtime or health check work. | Starts AppHost or reads status, verifies `/health`, reports dependencies. |
 | `ceoagent-provider-contract-review` | Adapter or integration port changes. | Confirms provider SDK isolation, retries, secrets, and no-live-call test strategy. |
 

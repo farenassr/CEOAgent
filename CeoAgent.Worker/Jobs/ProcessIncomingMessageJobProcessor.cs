@@ -1,3 +1,4 @@
+using CeoAgent.Application;
 using CeoAgent.Application.Agents;
 using CeoAgent.Application.Company.Abstractions;
 using CeoAgent.Application.Company.Implementation;
@@ -56,10 +57,25 @@ public sealed class ProcessIncomingMessageJobProcessor(
         {
             var context = await LoadContextAsync(job, cancellationToken);
             var replyClientMessageId = ReplyClientMessageId(context.Inbound);
-            if (await HasProcessedReplyAsync(context.Conversation.Id, replyClientMessageId, cancellationToken))
+
+            var existingReply = await dbContext.Messages
+                .IgnoreQueryFilters()
+                .Where(m => m.ConversationId == context.Conversation.Id
+                    && m.Role == MessageRole.Assistant
+                    && m.ProviderMessageId == replyClientMessageId)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (existingReply is not null)
             {
+                if (!string.IsNullOrEmpty(existingReply.Payload?.ProviderMessageId))
+                {
+                    return;
+                }
+
+                await SendExistingReplyAsync(context, existingReply, replyClientMessageId, IsSimulation(context.Inbound), cancellationToken);
                 return;
             }
+
             var isSimulation = IsSimulation(context.Inbound);
 
             if (ShouldMarkInboundRead(context.Inbound))
@@ -75,7 +91,43 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
             if (!isSimulation && context.Inbound.Type == MessageType.Audio)
             {
-                await ProcessInboundAudioAsync(context, cancellationToken);
+                bool sttSuccess = await ProcessInboundAudioAsync(context, cancellationToken);
+                if (!sttSuccess)
+                {
+                    var fallbackText = "No pude procesar tu audio. Un agente humano se comunicará contigo pronto.";
+                    var assistantMessage = new Message
+                    {
+                        CompanyId = context.Company.Id,
+                        ConversationId = context.Conversation.Id,
+                        Role = MessageRole.Assistant,
+                        Type = MessageType.Text,
+                        MessageText = fallbackText,
+                        ProviderMessageId = replyClientMessageId,
+                        Payload = new MessagePayload
+                        {
+                            ProviderType = "text",
+                        },
+                        OccurredAt = timeProvider.GetUtcNow().UtcDateTime,
+                    };
+
+                    dbContext.Messages.Add(assistantMessage);
+
+                    var sentMessage = await messaging.SendTextAsync(
+                        new ChannelTextMessage(
+                            context.Company.Id,
+                            context.Channel.Id,
+                            context.Conversation.Id,
+                            assistantMessage.Id,
+                            context.Customer.ExternalCustomerId,
+                            fallbackText,
+                            replyClientMessageId),
+                        cancellationToken);
+
+                    MarkAssistantSent(assistantMessage, sentMessage);
+                    context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
+                    await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
+                    return;
+                }
             }
 
             var prompt = AgentPromptBuilder.Build(new AgentPromptContext
@@ -112,6 +164,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
             };
 
             dbContext.Messages.Add(assistant);
+            context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
 
             SentMessageReference sent;
             if (isSimulation)
@@ -137,8 +190,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
             }
 
             MarkAssistantSent(assistant, sent);
-            context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
         }
         finally
         {
@@ -159,78 +211,94 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 || inbound.ProviderMessageId.StartsWith(SimulationProvider + ":", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task ProcessInboundAudioAsync(ProcessorContext context, CancellationToken cancellationToken)
+    private async Task<bool> ProcessInboundAudioAsync(ProcessorContext context, CancellationToken cancellationToken)
     {
-        await messaging.SendTextAsync(
-            new ChannelTextMessage(
-                context.Company.Id,
-                context.Channel.Id,
-                context.Conversation.Id,
-                Guid.CreateVersion7(),
-                context.Customer.ExternalCustomerId,
-                AudioAckText,
-                AudioAckClientMessageId(context.Inbound)),
-            cancellationToken);
-
-        var audioPayload = context.Inbound.Payload?.Audio
-            ?? throw new InvalidOperationException("Inbound audio message requires audio payload.");
-
-        var providerMediaId = audioPayload.ProviderMediaId ?? audioPayload.BlobUri;
-        audioPayload.SttStatus = SpeechProcessingStatus.Processing;
-
-        var media = await messaging.DownloadMediaAsync(
-            new ChannelMediaReference(
-                context.Company.Id,
-                context.Channel.Id,
-                WhatsAppProvider,
-                providerMediaId),
-            cancellationToken);
-        await using var mediaContent = media.Content;
-
-        var blobPath = AudioBlobNaming.CreatePath(
-            context.Company.Name,
-            context.Company.Id,
-            AudioBlobDirection.Inbound,
-            timeProvider.GetUtcNow(),
-            context.Inbound.Id,
-            media.OriginalExtension);
-
-        var sizeBytes = media.SizeBytes
-            ?? (mediaContent.CanSeek
-                ? mediaContent.Length
-                : throw new InvalidOperationException("Inbound audio stream size is required when the stream cannot be measured."));
-        var stored = await audioBlobStore.StoreAsync(
-            new AudioBlobStoreRequest(
-                blobPath,
-                mediaContent,
-                media.ContentType,
-                sizeBytes,
-                AudioBlobDirection.Inbound),
-            cancellationToken);
-
-        audioPayload.BlobUri = stored.BlobUri.ToString();
-        audioPayload.ContentType = media.ContentType;
-        audioPayload.SizeBytes = stored.SizeBytes;
-
-        if (!mediaContent.CanSeek)
+        try
         {
-            throw new InvalidOperationException("Inbound audio stream must be seekable or buffered once before reuse.");
+            await messaging.SendTextAsync(
+                new ChannelTextMessage(
+                    context.Company.Id,
+                    context.Channel.Id,
+                    context.Conversation.Id,
+                    Guid.CreateVersion7(),
+                    context.Customer.ExternalCustomerId,
+                    AudioAckText,
+                    AudioAckClientMessageId(context.Inbound)),
+                cancellationToken);
+
+            var audioPayload = context.Inbound.Payload?.Audio
+                ?? throw new InvalidOperationException("Inbound audio message requires audio payload.");
+
+            var providerMediaId = audioPayload.ProviderMediaId ?? audioPayload.BlobUri;
+            audioPayload.SttStatus = SpeechProcessingStatus.Processing;
+
+            var media = await messaging.DownloadMediaAsync(
+                new ChannelMediaReference(
+                    context.Company.Id,
+                    context.Channel.Id,
+                    WhatsAppProvider,
+                    providerMediaId),
+                cancellationToken);
+            await using var mediaContent = media.Content;
+
+            var blobPath = AudioBlobNaming.CreatePath(
+                context.Company.Name,
+                context.Company.Id,
+                AudioBlobDirection.Inbound,
+                timeProvider.GetUtcNow(),
+                context.Inbound.Id,
+                media.OriginalExtension);
+
+            var sizeBytes = media.SizeBytes
+                ?? (mediaContent.CanSeek
+                    ? mediaContent.Length
+                    : throw new InvalidOperationException("Inbound audio stream size is required when the stream cannot be measured."));
+            var stored = await audioBlobStore.StoreAsync(
+                new AudioBlobStoreRequest(
+                    blobPath,
+                    mediaContent,
+                    media.ContentType,
+                    sizeBytes,
+                    AudioBlobDirection.Inbound),
+                cancellationToken);
+
+            audioPayload.BlobUri = stored.BlobUri.ToString();
+            audioPayload.ContentType = media.ContentType;
+            audioPayload.SizeBytes = stored.SizeBytes;
+
+            if (!mediaContent.CanSeek)
+            {
+                throw new InvalidOperationException("Inbound audio stream must be seekable or buffered once before reuse.");
+            }
+
+            mediaContent.Position = 0;
+
+            var transcript = await transcription.TranscribeAsync(
+                new TranscriptionRequest(
+                    mediaContent,
+                    media.ContentType,
+                    audioPayload.Language,
+                    context.AgentProfile.ModelName),
+                cancellationToken);
+
+            context.Inbound.MessageText = transcript.Text;
+            audioPayload.Language = transcript.Language ?? audioPayload.Language;
+            audioPayload.DurationMs = transcript.Duration is null ? audioPayload.DurationMs : (int)transcript.Duration.Value.TotalMilliseconds;
+            audioPayload.SttStatus = SpeechProcessingStatus.Completed;
+            return true;
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.ZLogError(ex, $"InboundAudioSttFailed company_id={context.Company.Id} conversation_id={context.Conversation.Id} message_id={context.Inbound.Id}");
 
-        mediaContent.Position = 0;
+            if (context.Inbound.Payload?.Audio is { } audioPayload)
+            {
+                audioPayload.SttStatus = SpeechProcessingStatus.Failed;
+            }
 
-        var transcript = await transcription.TranscribeAsync(
-            new TranscriptionRequest(
-                mediaContent,
-                media.ContentType,
-                audioPayload.Language,
-                context.AgentProfile.ModelName),
-            cancellationToken);
-
-        context.Inbound.MessageText = transcript.Text;
-        audioPayload.Language = transcript.Language ?? audioPayload.Language;
-        audioPayload.DurationMs = transcript.Duration is null ? audioPayload.DurationMs : (int)transcript.Duration.Value.TotalMilliseconds;
-        audioPayload.SttStatus = SpeechProcessingStatus.Completed;
+            context.Conversation.Status = ConversationStatus.HandedOff;
+            return false;
+        }
     }
 
     private async Task<SentMessageReference> SendAudioReplyAsync(
@@ -322,16 +390,56 @@ public sealed class ProcessIncomingMessageJobProcessor(
         }
     }
 
-    private async Task<bool> HasProcessedReplyAsync(
-        Guid conversationId,
+    private async Task SendExistingReplyAsync(
+        ProcessorContext context,
+        Message existingReply,
         string replyClientMessageId,
+        bool isSimulation,
         CancellationToken cancellationToken)
     {
-        return await dbContext.Messages.AnyAsync(
-            message => message.ConversationId == conversationId
-                && message.Role == MessageRole.Assistant
-                && message.ProviderMessageId == replyClientMessageId,
-            cancellationToken);
+        SentMessageReference sent;
+        if (isSimulation)
+        {
+            sent = new SentMessageReference($"simulation:{existingReply.Id}");
+        }
+        else if (context.Inbound.Type == MessageType.Audio)
+        {
+            sent = await SendAudioReplyAsync(context, existingReply, existingReply.MessageText ?? string.Empty, replyClientMessageId, cancellationToken);
+        }
+        else
+        {
+            sent = await messaging.SendTextAsync(
+                new ChannelTextMessage(
+                    context.Company.Id,
+                    context.Channel.Id,
+                    context.Conversation.Id,
+                    existingReply.Id,
+                    context.Customer.ExternalCustomerId,
+                    existingReply.MessageText ?? string.Empty,
+                    replyClientMessageId),
+                cancellationToken);
+        }
+
+        MarkAssistantSent(existingReply, sent);
+        context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
+        await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, null, cancellationToken);
+    }
+
+    private async Task SaveFinalStateAsync(
+        Guid companyId,
+        Guid conversationId,
+        Guid? jobId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            logger.ZLogWarning($"ConversationConcurrencyConflict company_id={companyId} conversation_id={conversationId} job_id={jobId}");
+            throw;
+        }
     }
 
     private IDisposable? BeginJobScope(ProcessIncomingMessageJob job)
@@ -376,12 +484,25 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 entity => entity.Id == conversation.AgentProfileId
                     && entity.CompanyId == job.CompanyId,
                 cancellationToken);
-        var channel = await dbContext.CompanyChannels.FindAsync([conversation.CompanyChannelId], cancellationToken)
+        var channel = await dbContext.CompanyChannels
+            .SingleOrDefaultAsync(
+                entity => entity.Id == conversation.CompanyChannelId
+                    && entity.CompanyId == job.CompanyId,
+                cancellationToken)
             ?? throw new InvalidOperationException($"Company channel '{conversation.CompanyChannelId}' was not found.");
-        var customer = await dbContext.Customers.FindAsync([conversation.CustomerId], cancellationToken)
+        var customer = await dbContext.Customers
+            .SingleOrDefaultAsync(
+                entity => entity.Id == conversation.CustomerId
+                    && entity.CompanyId == job.CompanyId,
+                cancellationToken)
             ?? throw new InvalidOperationException($"Customer '{conversation.CustomerId}' was not found.");
 
-        var inbound = await dbContext.Messages.FindAsync([job.MessageId], cancellationToken)
+        var inbound = await dbContext.Messages
+            .SingleOrDefaultAsync(
+                entity => entity.Id == job.MessageId
+                    && entity.CompanyId == job.CompanyId
+                    && entity.ConversationId == job.ConversationId,
+                cancellationToken)
             ?? throw new InvalidOperationException($"Message '{job.MessageId}' was not found.");
 
         var messageHistory = await dbContext.Messages
@@ -391,6 +512,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 || (entity.Role == MessageRole.Assistant
                     && !dbContext.ToolExecutions.Any(execution => execution.TriggerMessageId == entity.Id)))
             .OrderByDescending(entity => entity.OccurredAt)
+            .ThenByDescending(entity => entity.Id)
             .Take(8)
             .Select(entity => new MessageHistoryItem(entity.Role, entity.MessageText))
             .ToArrayAsync(cancellationToken);
@@ -421,6 +543,15 @@ public sealed class ProcessIncomingMessageJobProcessor(
         for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
         {
             AgentRunResult agentResult;
+            using var activity = CeoAgentTelemetry.ActivitySource.StartActivity("agent.run");
+            activity?.SetTag("company.id", context.Company.Id);
+            activity?.SetTag("conversation.id", context.Conversation.Id);
+            activity?.SetTag("channel", context.Channel.Provider.ToString());
+            activity?.SetTag("llm.provider", context.AgentProfile.LlmProvider.ToString());
+            activity?.SetTag("llm.model", context.AgentProfile.ModelName);
+            activity?.SetTag("agent.iteration", iteration);
+            activity?.SetTag("tool.count", context.Tools.Count);
+            var stopwatch = Stopwatch.StartNew();
             try
             {
                 agentResult = await agentRuntime.RunAsync(
@@ -431,9 +562,18 @@ public sealed class ProcessIncomingMessageJobProcessor(
                         messages.ToArray(),
                         context.Tools),
                     cancellationToken);
+                stopwatch.Stop();
+                CeoAgentTelemetry.LlmCallDuration.Record(stopwatch.ElapsedMilliseconds);
+                activity?.SetTag("llm.response.id", agentResult.ResponseId);
+                activity?.SetTag("llm.finish_reason", agentResult.FinishReason);
+                activity?.SetTag("llm.tool_call_count", agentResult.ToolCalls.Count);
+                activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                stopwatch.Stop();
+                CeoAgentTelemetry.LlmCallDuration.Record(stopwatch.ElapsedMilliseconds);
+                activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
                 logger.ZLogError(
                     exception,
                     $"AgentRuntimeFailed conversation_id={context.Conversation.Id} company_id={context.Company.Id} iteration={iteration}");

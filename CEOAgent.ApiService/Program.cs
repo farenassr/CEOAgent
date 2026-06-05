@@ -4,6 +4,7 @@ using CeoAgent.ApiService.Infrastructure.Company;
 using CeoAgent.ApiService.Infrastructure.Correlation;
 using CeoAgent.ApiService.Infrastructure.ErrorHandling;
 using CeoAgent.ApiService.Infrastructure.Queues;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
 using CeoAgent.ApiService.Infrastructure.Queues.Implementation;
 using CeoAgent.ApiService.Modules.WhatsApp;
@@ -62,6 +63,9 @@ if (!builder.Environment.IsEnvironment("Testing"))
 }
 
 // Add services to the container.
+builder.Services.Configure<AdminApiKeyOptions>(
+    builder.Configuration.GetSection("AdminApiKey"));
+
 builder.Services.AddOptions<QueueDiagnosticsOptions>()
     .BindConfiguration(QueueDiagnosticsOptions.SectionName)
     .Validate(options => options.DefaultMaxMessages > 0 && options.DefaultMaxQueues > 0, "Queue diagnostics limits must be positive.")
@@ -70,6 +74,7 @@ builder.Services.TryAddSingleton<IIncomingMessageJobEnqueuer, UnavailableIncomin
 builder.Services.TryAddSingleton<IQueueDiagnosticsService, UnavailableQueueDiagnosticsService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -96,9 +101,11 @@ if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
+app.UseAdminApiKey();
 app.UseMiddleware<CompanyContextMiddleware>();
 app.UseConfiguredCors();
 app.UseRateLimiter();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -117,6 +124,6 @@ if (app.Environment.IsEnvironment("Testing"))
 }
 
 app.MapDefaultEndpoints();
-app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
+app.UseFastEndpoints();
 
 await app.RunAsync();
