@@ -5,7 +5,6 @@ using CeoAgent.Integrations.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Refit;
-using System.Security.Cryptography;
 
 namespace CeoAgent.Adapters.WhatsApp;
 
@@ -163,30 +162,17 @@ public sealed class WhatsAppCloudIntegration(
         string? idempotencyKey,
         CancellationToken cancellationToken)
     {
-        var url = BuildMessagesUrl(credential.PhoneNumberId);
         logger.LogInformation(
             MessageSendStartingEvent,
-            "WhatsAppCloudMessageSendStarting Url={Url} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} PhoneNumberId={PhoneNumberId} BusinessAccountId={BusinessAccountId} RecipientExternalId={RecipientExternalId} IdempotencyKey={IdempotencyKey} CredentialReference={CredentialReference} AccessTokenLength={AccessTokenLength} AccessTokenSha256Prefix={AccessTokenSha256Prefix} MessagingProduct={MessagingProduct} RecipientType={RecipientType} MessageType={MessageType} TextLength={TextLength} AudioLink={AudioLink} Status={Status} ProviderMessageId={ProviderMessageId} BizOpaqueCallbackData={BizOpaqueCallbackData}",
-            url,
+            "WhatsAppCloudMessageSendStarting CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} Provider={Provider} MessageType={MessageType} Status={Status} HasIdempotencyKey={HasIdempotencyKey}",
             companyId,
             companyChannelId,
             conversationId,
             messageId,
-            credential.PhoneNumberId,
-            credential.BusinessAccountId,
-            recipientExternalId ?? request.To,
-            idempotencyKey,
-            credential.CredentialReference,
-            credential.AccessToken.Length,
-            HashPrefix(credential.AccessToken),
-            request.MessagingProduct,
-            request.RecipientType,
+            "whatsapp_cloud",
             request.Type,
-            request.Text?.Body.Length,
-            request.Audio?.Link,
             request.Status,
-            request.MessageId,
-            request.BizOpaqueCallbackData);
+            !string.IsNullOrWhiteSpace(idempotencyKey));
 
         try
         {
@@ -201,19 +187,15 @@ public sealed class WhatsAppCloudIntegration(
             logger.LogWarning(
                 MessageSendFailedEvent,
                 exception,
-                "WhatsAppCloudMessageSendFailed Url={Url} StatusCode={StatusCode} ResponseContent={ResponseContent} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} PhoneNumberId={PhoneNumberId} BusinessAccountId={BusinessAccountId} RecipientExternalId={RecipientExternalId} IdempotencyKey={IdempotencyKey} CredentialReference={CredentialReference} AccessTokenLength={AccessTokenLength} AccessTokenSha256Prefix={AccessTokenSha256Prefix}",
-                url,
+                "WhatsAppCloudMessageSendFailed StatusCode={StatusCode} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} Provider={Provider} MessageType={MessageType} HasIdempotencyKey={HasIdempotencyKey}",
                 (int)exception.StatusCode,
-                exception.Content,
                 companyId,
                 companyChannelId,
-                credential.PhoneNumberId,
-                credential.BusinessAccountId,
-                recipientExternalId ?? request.To,
-                idempotencyKey,
-                credential.CredentialReference,
-                credential.AccessToken.Length,
-                HashPrefix(credential.AccessToken));
+                conversationId,
+                messageId,
+                "whatsapp_cloud",
+                request.Type,
+                !string.IsNullOrWhiteSpace(idempotencyKey));
 
             throw;
         }
@@ -265,12 +247,6 @@ public sealed class WhatsAppCloudIntegration(
             ? baseUrl
             : $"{baseUrl}/";
         return new Uri(new Uri(normalizedBaseUrl), $"{Uri.EscapeDataString(phoneNumberId)}/messages").ToString();
-    }
-
-    private static string HashPrefix(string value)
-    {
-        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
-        return Convert.ToHexString(hash)[..12];
     }
 
     private sealed record WhatsAppCredential(

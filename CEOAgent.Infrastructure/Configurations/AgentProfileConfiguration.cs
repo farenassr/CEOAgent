@@ -19,5 +19,7 @@ public sealed class AgentProfileConfiguration : IEntityTypeConfiguration<AgentPr
             .WithOne(entity => entity.AgentProfile)
             .HasForeignKey<AgentProfile>(entity => entity.CompanyId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property<uint>("xmin").IsRowVersion();
     }
 }

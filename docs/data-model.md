@@ -111,7 +111,7 @@ En los diagramas, estos tipos aparecen como `CT_*` o cajas punteadas para distin
 | ---- | ------ |
 | `CheckAvailabilityConfig` | `MaxPartySize : int`, `MinPartySize : int`, `SlotMinutes : int`, `AdvanceBookingDays : int` |
 | `RequestHumanHandoffConfig` | `EscalationChannel : string?`, `NotifyUsers : List<string>`, `TimeoutMinutes : int` |
-| `GoogleCalendarConfig` | `CalendarId : string`, `TimeZoneId : string`, `BufferMinutes : int` |
+| `GoogleCalendarConfig` | `CalendarId : string`, `TimeZoneId : string`, `BufferMinutes : int`, `ReservationMinutes : int`, `AdvanceBookingDays : int`, `SlotMinutes : int` |
 
 #### `ConversationStateSnapshot`
 
@@ -473,6 +473,8 @@ Esta tabla es el historial principal. Contiene lo que dijo el usuario, lo que re
 
 Hay un indice unico sobre `CompanyId + ProviderMessageId`, filtrado para cuando `ProviderMessageId` no es null. El canal se deriva por `Message -> Conversation -> CompanyChannel`. Esto evita guardar dos veces el mismo webhook entrante sin duplicar el canal en `message`.
 
+El historial usado por el Worker consulta los ultimos turnos elegibles por `ConversationId`, ordenados por `OccurredAt` y `Id` descendente para desempate estable. El modelo debe mantener un indice compuesto por `CompanyId + ConversationId + OccurredAt DESC + Id DESC` para evitar degradacion en conversaciones largas. La migracion fisica de ese indice sigue siendo una operacion manual del propietario del proyecto.
+
 ---
 
 ## 🛠️ `tool_execution`
@@ -543,6 +545,7 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 | `conversation`                     | Unico por `CompanyId + CustomerId + CompanyChannelId` cuando `Status = Open`                 | Evita dos conversaciones abiertas para el mismo cliente en el mismo canal. |
 | `conversation_state`               | Unico por `ConversationId`                                                                    | Una conversacion tiene un unico estado temporal activo.               |
 | `message`                          | Unico por `CompanyId + ProviderMessageId` cuando `ProviderMessageId` no es null              | Hace idempotente la ingesta de webhooks.                              |
+| `message`                          | Indice por `CompanyId + ConversationId + OccurredAt DESC + Id DESC`                         | Mantiene eficiente la carga de los ultimos turnos del agente.         |
 | `tool_execution`                   | Unico por `CompanyId + IdempotencyKey`                                                        | Hace idempotente la ejecucion de herramientas.                        |
 
 ---
@@ -568,3 +571,7 @@ El modelo evita sobre-normalizar configuraciones que cambian por proveedor o her
 ## Herramientas auditables
 
 Toda accion solicitada por el agente debe pasar por `tool_execution`. Esto ayuda a seguridad, trazabilidad, reintentos e investigacion de fallos.
+
+## Concurrencia optimista
+
+Los agregados mutables clave deben usar tokens reales de concurrencia. En PostgreSQL el modelo usa `xmin` como row version en conversaciones, estado de conversacion, perfiles, clientes y herramientas configurables. Esto permite detectar escrituras concurrentes en flujos sensibles del Worker, aunque no reemplaza una outbox durable para envios externos.

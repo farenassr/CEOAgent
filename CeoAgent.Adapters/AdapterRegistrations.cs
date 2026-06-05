@@ -34,9 +34,14 @@ public static class AdapterRegistrations
                 client.BaseAddress = new Uri(
                     configuration["WhatsApp:GraphApiBaseUrl"]
                     ?? "https://graph.facebook.com/v25.0");
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
 
-        services.AddHttpClient<WhatsAppCloudIntegration>();
+        services.AddHttpClient<WhatsAppCloudIntegration>()
+            .ConfigureHttpClient(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
         services.AddMemoryCache();
         services.AddOptions<OpenAIAgentRuntimeOptions>()
             .BindConfiguration(OpenAIAgentRuntimeOptions.SectionName);

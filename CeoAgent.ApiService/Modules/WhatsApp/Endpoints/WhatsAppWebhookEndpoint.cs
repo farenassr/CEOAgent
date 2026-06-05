@@ -1,6 +1,5 @@
 using FastEndpoints;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Primitives;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
@@ -42,33 +41,25 @@ public sealed class WhatsAppWebhookEndpoint(
 
         logger.LogInformation(
             WebhookReceivedEvent,
-            "WhatsAppWebhookReceived Method={Method} Path={Path} QueryString={QueryString} ContentType={ContentType} ContentLength={ContentLength} RemoteIpAddress={RemoteIpAddress} UserAgent={UserAgent} SignaturePresent={SignaturePresent} SignatureLength={SignatureLength} SignaturePrefix={SignaturePrefix} BodyLength={BodyLength}",
+            "WhatsAppWebhookReceived Method={Method} Path={Path} ContentType={ContentType} ContentLength={ContentLength} SignaturePresent={SignaturePresent} SignatureLength={SignatureLength} BodyLength={BodyLength}",
             request.Method,
             request.Path.Value,
-            request.QueryString.Value,
             request.ContentType,
             request.ContentLength,
-            HttpContext.Connection.RemoteIpAddress?.ToString(),
-            HeaderValue(request.Headers.UserAgent),
             !string.IsNullOrWhiteSpace(signature),
             signature.Length,
-            Prefix(signature),
             body.Length);
 
-        if (logger.IsEnabled(LogLevel.Debug))
-        {
-            logger.LogDebug("WhatsAppWebhookReceived Body={Body}", body);
-        }
+
 
         if (!signatureValidator.IsValid(body, signature, appSecret ?? string.Empty))
         {
             logger.LogWarning(
                 WebhookSignatureRejectedEvent,
-                "WhatsAppWebhookSignatureRejected Path={Path} SignaturePresent={SignaturePresent} SignatureLength={SignatureLength} SignaturePrefix={SignaturePrefix} BodyLength={BodyLength}",
+                "WhatsAppWebhookSignatureRejected Path={Path} SignaturePresent={SignaturePresent} SignatureLength={SignatureLength} BodyLength={BodyLength}",
                 request.Path.Value,
                 !string.IsNullOrWhiteSpace(signature),
                 signature.Length,
-                Prefix(signature),
                 body.Length);
 
             await Send.ForbiddenAsync(cancellationToken);
@@ -80,18 +71,4 @@ public sealed class WhatsAppWebhookEndpoint(
         await Send.OkAsync(result, cancellationToken);
     }
 
-    private static string? HeaderValue(StringValues value)
-    {
-        return value.Count == 0 ? null : value.ToString();
-    }
-
-    private static string? Prefix(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Length <= 16 ? value : value[..16];
-    }
 }

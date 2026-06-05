@@ -10,6 +10,9 @@ public static class ToolsRegistrations
     {
         services.AddScoped<CompanyToolRegistry>();
         services.AddScoped<GoogleCalendarToolExecutor>();
+        services.AddScoped<ToolExecutionGatewayHelper>();
+        services.AddScoped<IToolExecutor, CheckGoogleCalendarAvailabilityExecutor>();
+        services.AddScoped<IToolExecutor, CreateGoogleCalendarReservationExecutor>();
         services.AddScoped<ToolExecutionGateway>();
 
         return services;

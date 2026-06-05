@@ -20,7 +20,7 @@ public sealed class CreateGoogleCalendarReservationEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/tools/companies/{companyId}/google-calendar/reservations");
+        Post("/v1/admin/companies/{companyId}/google-calendar/reservations");
     }
 
     public override async Task HandleAsync(

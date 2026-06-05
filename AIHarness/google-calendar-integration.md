@@ -29,9 +29,16 @@ Do not use Google Calendar SDK types outside `CeoAgent.Adapters`.
 - Validate model-requested tool names against enabled `company_tool` rows before execution.
 - Validate working hours and advance booking windows before provider calls.
 - Store idempotency keys so retries do not duplicate reservations.
+- HTTP admin endpoints for Google Calendar are operational/admin surfaces under
+  `/v1/admin`. Mutating business tool paths must remain auditable through
+  `ToolExecutionGateway` or provide equivalent `ToolExecution` persistence
+  before they are exposed beyond admin diagnostics.
 - Map provider failures to recoverable integration errors where possible.
 - Do not store Google access tokens or service account material in database
   rows; store only references.
+- Adapter client caches must not use raw credential material as cache keys.
+  Prefer stable hashed keys, bounded TTLs, explicit timeouts, and disposal on
+  eviction.
 
 ## Review Checklist
 

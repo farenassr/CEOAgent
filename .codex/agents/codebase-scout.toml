@@ -1,7 +1,6 @@
 name = "codebase-scout"
 description = "Inspects relevant code, tests, docs, and harness assets, then summarizes the current implementation before planning or coding."
 
-model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 
 developer_instructions = """

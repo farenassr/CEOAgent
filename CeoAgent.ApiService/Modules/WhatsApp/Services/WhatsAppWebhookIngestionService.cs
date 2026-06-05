@@ -58,16 +58,15 @@ public sealed class WhatsAppWebhookIngestionService(
 
         logger.LogInformation(
             WebhookMessageParsedEvent,
-            "WhatsAppWebhookMessageParsed CorrelationId={CorrelationId} PhoneNumberId={PhoneNumberId} ProviderMessageId={ProviderMessageId} From={From} ContactName={ContactName} MessageType={MessageType} Text={Text} TextLength={TextLength} MediaId={MediaId} MediaMimeType={MediaMimeType} OccurredAtUtc={OccurredAtUtc}",
+            "WhatsAppWebhookMessageParsed CorrelationId={CorrelationId} PhoneNumberId={PhoneNumberId} ProviderMessageId={ProviderMessageId} FromLength={FromLength} HasContactName={HasContactName} MessageType={MessageType} TextLength={TextLength} HasMediaId={HasMediaId} MediaMimeType={MediaMimeType} OccurredAtUtc={OccurredAtUtc}",
             correlationId,
             message.PhoneNumberId,
             message.ProviderMessageId,
-            message.From,
-            message.ContactName,
+            message.From.Length,
+            !string.IsNullOrWhiteSpace(message.ContactName),
             message.Type,
-            message.Text,
             message.Text?.Length,
-            message.MediaId,
+            !string.IsNullOrWhiteSpace(message.MediaId),
             message.MediaMimeType,
             message.OccurredAtUtc);
 
@@ -89,14 +88,14 @@ public sealed class WhatsAppWebhookIngestionService(
             message.PhoneNumberId,
             null);
 
-        var duplicate = await dbContext.Messages
+        var existingMessage = await dbContext.Messages
             .IgnoreQueryFilters()
-            .AnyAsync(
+            .FirstOrDefaultAsync(
                 entity => entity.CompanyId == channel.CompanyId
                     && entity.ProviderMessageId == message.ProviderMessageId,
                 cancellationToken);
 
-        if (duplicate)
+        if (existingMessage is not null)
         {
             logger.LogInformation(
                 WebhookDuplicateMessageEvent,
@@ -106,11 +105,39 @@ public sealed class WhatsAppWebhookIngestionService(
                 channel.Id,
                 message.ProviderMessageId);
 
+            var replyClientMessageId = $"reply:{existingMessage.Id}";
+            var hasReply = await dbContext.Messages
+                .IgnoreQueryFilters()
+                .AnyAsync(
+                    entity => entity.CompanyId == channel.CompanyId
+                        && entity.ConversationId == existingMessage.ConversationId
+                        && entity.Role == MessageRole.Assistant
+                        && entity.ProviderMessageId == replyClientMessageId,
+                    cancellationToken);
+
+            if (!hasReply)
+            {
+                logger.LogInformation(
+                    "Re-enqueueing unprocessed duplicate webhook message. CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId}",
+                    channel.CompanyId,
+                    existingMessage.ConversationId,
+                    existingMessage.Id);
+
+                var retryJob = new ProcessIncomingMessageJob(channel.CompanyId, existingMessage.ConversationId, existingMessage.Id, correlationId);
+                await incomingMessageJobEnqueuer.EnqueueAsync(retryJob, cancellationToken);
+
+                return new WhatsAppWebhookIngestionResult(
+                    Enqueued: true,
+                    CompanyId: channel.CompanyId,
+                    ConversationId: existingMessage.ConversationId,
+                    MessageId: existingMessage.Id);
+            }
+
             return new WhatsAppWebhookIngestionResult(
                 Enqueued: false,
                 CompanyId: channel.CompanyId,
-                ConversationId: null,
-                MessageId: null);
+                ConversationId: existingMessage.ConversationId,
+                MessageId: existingMessage.Id);
         }
 
         var customer = await ResolveCustomerAsync(channel, message, cancellationToken);
@@ -138,6 +165,34 @@ public sealed class WhatsAppWebhookIngestionService(
                 channel.CompanyId,
                 channel.Id,
                 message.ProviderMessageId);
+
+            var replyClientMessageId = $"reply:{existing.Id}";
+            var hasReply = await dbContext.Messages
+                .IgnoreQueryFilters()
+                .AnyAsync(
+                    entity => entity.CompanyId == channel.CompanyId
+                        && entity.ConversationId == existing.ConversationId
+                        && entity.Role == MessageRole.Assistant
+                        && entity.ProviderMessageId == replyClientMessageId,
+                    cancellationToken);
+
+            if (!hasReply)
+            {
+                logger.LogInformation(
+                    "Re-enqueueing unprocessed duplicate webhook message after DB concurrency. CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId}",
+                    channel.CompanyId,
+                    existing.ConversationId,
+                    existing.Id);
+
+                var retryJob = new ProcessIncomingMessageJob(channel.CompanyId, existing.ConversationId, existing.Id, correlationId);
+                await incomingMessageJobEnqueuer.EnqueueAsync(retryJob, cancellationToken);
+
+                return new WhatsAppWebhookIngestionResult(
+                    Enqueued: true,
+                    CompanyId: channel.CompanyId,
+                    ConversationId: existing.ConversationId,
+                    MessageId: existing.Id);
+            }
 
             return new WhatsAppWebhookIngestionResult(
                 Enqueued: false,

@@ -26,7 +26,6 @@ function Test-IgnoredMarkdownPath {
     $relativePath = Get-RepoRelativePath -Path $Path
     return $relativePath -match "^(bin|obj|TestResults|\.git)[\\/]" -or
         $relativePath -match "^\.codex[\\/]skills[\\/]" -or
-        $relativePath -match "^\.claude[\\/]skills[\\/]" -or
         $relativePath -match "[\\/]bin[\\/]|[\\/]obj[\\/]|[\\/]TestResults[\\/]"
 }
 
@@ -36,10 +35,6 @@ $markdownFiles = Get-ChildItem -LiteralPath $repoRoot -Recurse -File -Filter "*.
 foreach ($file in $markdownFiles) {
     $relativePath = Get-RepoRelativePath -Path $file.FullName
     $content = Get-Content -LiteralPath $file.FullName -Raw
-
-    if ($relativePath -notmatch "(^|[\\/])AGENTS\.md$" -and $content.Contains("PromptTemplate.md")) {
-        Add-Violation "$relativePath references PromptTemplate.md; it is scratch material and must be ignored."
-    }
 
     if ($content.Contains(".agents/AGENTS.md") -or $content.Contains(".agents\AGENTS.md")) {
         Add-Violation "$relativePath references missing .agents/AGENTS.md"

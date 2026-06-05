@@ -16,16 +16,27 @@ public sealed class QueueDiagnosticsEndpointTests
     public async Task PostMessage_AddsMessageToRequestedQueue()
     {
         var queueDiagnostics = new FakeQueueDiagnosticsService();
+        const string adminKey = "test-admin-key";
         await using var factory = new ApiFactory(configureServices: services =>
         {
             services.RemoveAll<IQueueDiagnosticsService>();
             services.AddSingleton<IQueueDiagnosticsService>(queueDiagnostics);
+            services.Configure<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>(options =>
+            {
+                options.Key = adminKey;
+            });
         });
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsJsonAsync(
-            "/v1/admin/queues/process-incoming-message/messages",
-            new { messageText = "{\"hello\":\"queue\"}" });
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/v1/admin/queues/process-incoming-message/messages")
+        {
+            Content = JsonContent.Create(new { messageText = "{\"hello\":\"queue\"}" }),
+        };
+        request.Headers.Add("X-Admin-Api-Key", adminKey);
+
+        using var response = await client.SendAsync(request);
         var body = await response.Content.ReadFromJsonAsync<QueueMessageEnqueuedResponse>();
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -40,6 +51,7 @@ public sealed class QueueDiagnosticsEndpointTests
     public async Task GetQueues_ReturnsQueuesWithPeekedMessages()
     {
         var queueDiagnostics = new FakeQueueDiagnosticsService();
+        const string adminKey = "test-admin-key";
         queueDiagnostics.Queues.Add(new QueueDiagnosticsInfo(
             "process-incoming-message",
             1L,
@@ -56,10 +68,17 @@ public sealed class QueueDiagnosticsEndpointTests
         {
             services.RemoveAll<IQueueDiagnosticsService>();
             services.AddSingleton<IQueueDiagnosticsService>(queueDiagnostics);
+            services.Configure<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>(options =>
+            {
+                options.Key = adminKey;
+            });
         });
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/v1/admin/queues?maxMessages=5");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/admin/queues?maxMessages=5");
+        request.Headers.Add("X-Admin-Api-Key", adminKey);
+
+        using var response = await client.SendAsync(request);
         var body = await response.Content.ReadFromJsonAsync<QueuesDiagnosticsResponse>();
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -74,6 +93,7 @@ public sealed class QueueDiagnosticsEndpointTests
     public async Task GetQueueMessages_ReturnsPeekedMessagesForSingleQueue()
     {
         var queueDiagnostics = new FakeQueueDiagnosticsService();
+        const string adminKey = "test-admin-key";
         queueDiagnostics.QueueMessages["process-incoming-message"] =
         [
             new QueueDiagnosticsMessage(
@@ -88,10 +108,17 @@ public sealed class QueueDiagnosticsEndpointTests
         {
             services.RemoveAll<IQueueDiagnosticsService>();
             services.AddSingleton<IQueueDiagnosticsService>(queueDiagnostics);
+            services.Configure<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>(options =>
+            {
+                options.Key = adminKey;
+            });
         });
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/v1/admin/queues/process-incoming-message/messages?maxMessages=3");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/admin/queues/process-incoming-message/messages?maxMessages=3");
+        request.Headers.Add("X-Admin-Api-Key", adminKey);
+
+        using var response = await client.SendAsync(request);
         var body = await response.Content.ReadFromJsonAsync<QueueMessagesResponse>();
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);

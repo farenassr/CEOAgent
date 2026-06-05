@@ -24,7 +24,13 @@ WhatsApp Cloud webhook
 - Use constant-time signature comparison.
 - Resolve company by provider channel ID, not customer phone number.
 - Persist inbound messages idempotently by provider message ID.
-- Duplicate webhook delivery returns 200 and does not enqueue duplicate work.
+- Duplicate webhook delivery returns 200. If the inbound message already has a
+  persisted assistant reply, do not enqueue duplicate work. If the inbound
+  message exists but no assistant reply exists, re-enqueue the existing message
+  as a recovery path for a prior enqueue failure.
+- The recovery path is not a substitute for a durable outbox. If webhook save
+  and queue enqueue must be guaranteed without provider retry, add a
+  transactionally persisted processing marker or outbox row.
 - Keep webhook response fast; long work belongs in Worker jobs.
 - Do not log secrets or raw payloads by default.
 
@@ -46,11 +52,15 @@ WhatsApp voice note
 Worker result
   -> persist assistant message
   -> send text via IMessageChannelIntegration
+  -> persist provider send reference
   -> optionally synthesize voice
   -> send audio if synthesis succeeds
 ```
 
 TTS failure must not block a text reply.
+Outbound sends must not rely on provider retries for idempotency. The Worker
+uses deterministic client message ids, but a durable outbound-send ledger or
+outbox is still required before claiming exactly-once customer-visible sends.
 
 ## Simulation Flow
 

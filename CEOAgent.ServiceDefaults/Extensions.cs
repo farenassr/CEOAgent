@@ -64,7 +64,8 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    .AddMeter("CeoAgent.Application");
 
                 if (useOtlpExporter)
                 {
@@ -77,11 +78,13 @@ public static class Extensions
                     .AddSource("Microsoft.AgentFramework*")
                     .AddSource("Microsoft.Extensions.AI*")
                     .AddSource("CeoAgent.*")
+                    .AddSource("CeoAgent.Application")
                     .AddAspNetCoreInstrumentation(tracing =>
                     {
                         tracing.Filter = context =>
                             !context.Request.Path.StartsWithSegments(HealthEndpointPath, StringComparison.Ordinal)
-                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath, StringComparison.Ordinal);
+                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath, StringComparison.Ordinal)
+                            && !context.Request.Path.StartsWithSegments("/ready", StringComparison.Ordinal);
                     })
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
@@ -146,14 +149,15 @@ public static class Extensions
     {
         app.MapHealthChecks(HealthEndpointPath);
 
-        if (app.Environment.IsDevelopment())
+        app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
-            // Only health checks tagged with the "live" tag must pass for app to be considered alive
-            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
-            {
-                Predicate = r => r.Tags.Contains("live"),
-            });
-        }
+            Predicate = r => r.Tags.Contains("live"),
+        });
+
+        app.MapHealthChecks("/ready", new HealthCheckOptions
+        {
+            Predicate = r => !r.Tags.Contains("live"),
+        });
 
         return app;
     }

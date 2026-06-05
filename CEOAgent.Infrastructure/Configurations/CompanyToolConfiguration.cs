@@ -40,6 +40,9 @@ public sealed class CompanyToolConfiguration : IEntityTypeConfiguration<CompanyT
             googleCalendar.Property(entity => entity.CalendarId).HasJsonPropertyName("calendarId");
             googleCalendar.Property(entity => entity.TimeZoneId).HasJsonPropertyName("timeZoneId");
             googleCalendar.Property(entity => entity.BufferMinutes).HasJsonPropertyName("bufferMinutes");
+            googleCalendar.Property(entity => entity.ReservationMinutes).HasJsonPropertyName("reservationMinutes");
+            googleCalendar.Property(entity => entity.AdvanceBookingDays).HasJsonPropertyName("advanceBookingDays");
+            googleCalendar.Property(entity => entity.SlotMinutes).HasJsonPropertyName("slotMinutes");
         });
         builder.HasOne(entity => entity.Company)
             .WithMany(entity => entity.Tools)
@@ -49,5 +52,7 @@ public sealed class CompanyToolConfiguration : IEntityTypeConfiguration<CompanyT
             .WithMany(entity => entity.CompanyTools)
             .HasForeignKey(entity => entity.CredentialReferenceId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property<uint>("xmin").IsRowVersion();
     }
 }

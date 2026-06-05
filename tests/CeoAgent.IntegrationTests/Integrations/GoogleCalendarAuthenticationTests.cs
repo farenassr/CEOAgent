@@ -1,6 +1,7 @@
 using CeoAgent.Adapters.GoogleCalendar.Service;
 using CeoAgent.Adapters.Secrets;
 using Google.Apis.Calendar.v3;
+using Microsoft.Extensions.Caching.Memory;
 using Shouldly;
 
 namespace CeoAgent.IntegrationTests.Integrations;
@@ -24,7 +25,8 @@ public sealed class GoogleCalendarAuthenticationTests
         {
             SecretValue = "{}",
         };
-        var factory = new GoogleCalendarServiceFactory(secrets);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var factory = new GoogleCalendarServiceFactory(secrets, cache);
 
         await Should.ThrowAsync<InvalidOperationException>(
             factory.CreateAsync("config://GoogleCalendar:ServiceAccountJson", CancellationToken.None));
@@ -39,7 +41,8 @@ public sealed class GoogleCalendarAuthenticationTests
         {
             SecretValue = "{}",
         };
-        var factory = new GoogleCalendarServiceFactory(secrets);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var factory = new GoogleCalendarServiceFactory(secrets, cache);
 
         await Should.ThrowAsync<InvalidOperationException>(
             factory.CreateAsync("{}", CancellationToken.None));
@@ -54,7 +57,8 @@ public sealed class GoogleCalendarAuthenticationTests
         {
             SecretValue = "{}",
         };
-        var factory = new GoogleCalendarServiceFactory(secrets);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var factory = new GoogleCalendarServiceFactory(secrets, cache);
         const string reference = "https://kv-ceo-agent-dev.vault.azure.net/secrets/GoogleCalendarServiceAccount";
 
         await Should.ThrowAsync<InvalidOperationException>(

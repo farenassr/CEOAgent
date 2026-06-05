@@ -33,5 +33,7 @@ public sealed class ConversationStateConfiguration : IEntityTypeConfiguration<Co
             .WithOne(entity => entity.State)
             .HasForeignKey<ConversationState>(entity => entity.ConversationId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property<uint>("xmin").IsRowVersion();
     }
 }

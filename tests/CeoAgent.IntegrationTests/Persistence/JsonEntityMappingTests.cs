@@ -75,6 +75,25 @@ public sealed class JsonEntityMappingTests
     }
 
     [Test]
+    public void CompanyToolModel_MapsGoogleCalendarSchedulingConfigProperties()
+    {
+        using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
+            new CompanyContextAccessor());
+        var entityType = dbContext.Model.FindEntityType(typeof(CompanyTool));
+        entityType.ShouldNotBeNull();
+
+        var configuration = entityType.FindComplexProperty(nameof(CompanyTool.Configuration));
+        configuration.ShouldNotBeNull();
+        var googleCalendar = configuration.ComplexType.FindComplexProperty(nameof(ToolConfiguration.GoogleCalendar));
+        googleCalendar.ShouldNotBeNull();
+
+        googleCalendar.ComplexType.FindProperty(nameof(GoogleCalendarConfig.ReservationMinutes)).ShouldNotBeNull();
+        googleCalendar.ComplexType.FindProperty(nameof(GoogleCalendarConfig.AdvanceBookingDays)).ShouldNotBeNull();
+        googleCalendar.ComplexType.FindProperty(nameof(GoogleCalendarConfig.SlotMinutes)).ShouldNotBeNull();
+    }
+
+    [Test]
     public void Model_DoesNotMapAudioAssetAsASeparateTable()
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(

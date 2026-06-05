@@ -82,12 +82,16 @@ public sealed class WhatsAppCloudIntegrationTests
         client.Request.BizOpaqueCallbackData.ShouldBe("reply:1");
 
         var log = logger.Entries.Single(entry => entry.EventId.Name == "WhatsAppCloudMessageSendStarting");
-        log.Message.ShouldContain("https://graph.facebook.com/v99.0/1152556904604978/messages");
-        log.Message.ShouldContain("573001112233");
-        log.Message.ShouldContain("reply:1");
-        log.Message.ShouldContain("840790722416204");
-        log.Message.ShouldContain("CredentialReference=https://kv-ceo-agent-dev.vault.azure.net/secrets/WhatsappAccessToken");
-        log.Message.ShouldContain("AccessTokenLength=20");
+        log.Message.ShouldContain(companyId.ToString());
+        log.Message.ShouldContain(channelId.ToString());
+        log.Message.ShouldContain("Provider=whatsapp_cloud");
+        log.Message.ShouldContain("HasIdempotencyKey=True");
+        log.Message.ShouldNotContain("https://graph.facebook.com/v99.0/1152556904604978/messages");
+        log.Message.ShouldNotContain("573001112233");
+        log.Message.ShouldNotContain("reply:1");
+        log.Message.ShouldNotContain("840790722416204");
+        log.Message.ShouldNotContain("CredentialReference=https://kv-ceo-agent-dev.vault.azure.net/secrets/WhatsappAccessToken");
+        log.Message.ShouldNotContain("AccessTokenLength=20");
         log.Message.ShouldNotContain("token-from-key-vault");
         log.Message.ShouldNotContain("Bearer token-from-key-vault");
     }
