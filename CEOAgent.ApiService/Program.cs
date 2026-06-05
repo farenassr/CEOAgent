@@ -99,6 +99,11 @@ if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"
     app.UseHsts();
 }
 
+// Explicit UseRouting must come before other middleware so that ShortCircuit()
+// on health check endpoints bypasses exception handling, auth, rate limiting, etc.
+app.UseRouting();
+app.MapDefaultEndpoints();
+
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
 app.UseAdminApiKey();
@@ -123,7 +128,6 @@ if (app.Environment.IsEnvironment("Testing"))
     app.MapGet("/__test/unexpected", _ => throw new InvalidOperationException("Unexpected failure."));
 }
 
-app.MapDefaultEndpoints();
 app.UseFastEndpoints();
 
 await app.RunAsync();

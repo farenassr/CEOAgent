@@ -16,6 +16,7 @@ const string BlobsResourceName = "blobs";
 var postgresPassword = builder.AddParameter("postgres-password", "postgres", secret: true);
 var whatsAppAppSecret = builder.AddParameter("whatsapp-app-secret", secret: true);
 var whatsAppAccessToken = builder.AddParameter("whatsapp-access-token", secret: true);
+var laTerrazaGoogleCalendar = builder.AddParameter("la-terraza-google-calendar", secret: true);
 var openAIApiKey = builder.Configuration.GetConnectionString("openai");
 
 var adminApiKey = builder.AddParameter("admin-api-key", secret: true);
@@ -44,6 +45,7 @@ var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
     .WithReference(blobs)
     .WithEnvironment("WhatsApp__AppSecret", whatsAppAppSecret)
     .WithEnvironment("WhatsApp__AccessToken", whatsAppAccessToken)
+    .WithEnvironment("GoogleCalendar__ServiceAccountJson", laTerrazaGoogleCalendar)
     .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
     .WithEnvironment("AdminApiKey__Key", adminApiKey)
     .WithEnvironment("AdminApiKey__CompanyId", adminCompanyId)
@@ -59,6 +61,7 @@ var worker = builder.AddProject<Projects.CeoAgent_Worker>("worker")
     .WithReference(queues)
     .WithReference(blobs)
     .WithEnvironment("WhatsApp__AccessToken", whatsAppAccessToken)
+    .WithEnvironment("GoogleCalendar__ServiceAccountJson", laTerrazaGoogleCalendar)
     .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
     .WaitFor(apiService);
 

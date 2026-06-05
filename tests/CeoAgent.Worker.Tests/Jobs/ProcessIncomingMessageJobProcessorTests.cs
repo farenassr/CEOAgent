@@ -96,16 +96,15 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
-    public async Task ProcessAsync_ForSimulationMessage_SkipsWhatsAppReadReceiptAndRunsAgent()
+    public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_SkipsReadReceiptAndSendsWhatsAppReply()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Hola desde simulacion";
-        fixture.InboundMessage.ProviderMessageId = "simulation:message-1";
+        fixture.InboundMessage.MessageText = "Hola desde WhatsApp admin";
+        fixture.InboundMessage.ProviderMessageId = null;
         fixture.InboundMessage.Payload = new MessagePayload
         {
-            ProviderType = "simulation",
-            ProviderMessageId = "simulation:message-1",
+            ProviderType = "whatsapp_cloud",
         };
         await fixture.DbContext.SaveChangesAsync();
 
@@ -119,27 +118,26 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         fixture.Messaging.ReadMessages.ShouldBeEmpty();
         var request = fixture.Agent.Requests.Single();
-        request.Messages[^1].Text.ShouldBe("Hola desde simulacion");
-        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        request.Messages[^1].Text.ShouldBe("Hola desde WhatsApp admin");
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
         fixture.CompanyContext.SetCompany(fixture.CompanyId);
         var assistant = await fixture.DbContext.Messages
             .SingleAsync(message => message.Role == MessageRole.Assistant);
         assistant.MessageText.ShouldBe("Claro, reviso disponibilidad.");
         assistant.ProviderMessageId.ShouldBe($"reply:{fixture.InboundMessage.Id}");
-        assistant.Payload!.ProviderMessageId.ShouldStartWith("simulation:");
+        assistant.Payload!.ProviderMessageId.ShouldBe("sent-text-1");
     }
 
     [Test]
-    public async Task ProcessAsync_ForSimulationMessage_PersistsReplyWithSingleSaveChanges()
+    public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_PersistsReplyWithSingleSaveChanges()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Hola desde simulacion";
-        fixture.InboundMessage.ProviderMessageId = "simulation:message-1";
+        fixture.InboundMessage.MessageText = "Hola desde WhatsApp admin";
+        fixture.InboundMessage.ProviderMessageId = null;
         fixture.InboundMessage.Payload = new MessagePayload
         {
-            ProviderType = "simulation",
-            ProviderMessageId = "simulation:message-1",
+            ProviderType = "whatsapp_cloud",
         };
         await fixture.DbContext.SaveChangesAsync();
 
@@ -155,7 +153,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             CancellationToken.None);
 
         fixture.Messaging.ReadMessages.ShouldBeEmpty();
-        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
         fixture.Agent.Requests.Count.ShouldBe(1);
         saveChangesCount.ShouldBe(1);
 
@@ -164,20 +162,19 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             .Select(entry => entry.Entity)
             .Single(message => message.Role == MessageRole.Assistant);
         assistant.ProviderMessageId.ShouldBe($"reply:{fixture.InboundMessage.Id}");
-        assistant.Payload!.ProviderMessageId.ShouldStartWith("simulation:");
+        assistant.Payload!.ProviderMessageId.ShouldBe("sent-text-1");
     }
 
     [Test]
-    public async Task ProcessAsync_ForSimulationMessage_DoesNotExecuteMutatingTool()
+    public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_ExecutesMutatingTool()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         fixture.InboundMessage.Type = MessageType.Text;
         fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
-        fixture.InboundMessage.ProviderMessageId = "simulation:message-1";
+        fixture.InboundMessage.ProviderMessageId = null;
         fixture.InboundMessage.Payload = new MessagePayload
         {
-            ProviderType = "simulation",
-            ProviderMessageId = "simulation:message-1",
+            ProviderType = "whatsapp_cloud",
         };
         await fixture.DbContext.SaveChangesAsync();
 
@@ -195,7 +192,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                         summary = "Reservation for 2",
                     })),
             ]));
-        fixture.Agent.Results.Enqueue(new AgentRunResult("No puedo crear reservas en simulacion.", []));
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
@@ -205,13 +202,14 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 "correlation-123"),
             CancellationToken.None);
 
-        fixture.Calendar.ReservationRequests.ShouldBeEmpty();
-        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Reserva creada.");
         fixture.Agent.Requests.Count.ShouldBe(2);
         fixture.Agent.Requests[1].Messages.Any(message =>
             message.Role == "tool"
             && message.Text != null
-            && message.Text.Contains("\"failureReason\":\"side_effects_disabled\"", StringComparison.Ordinal)).ShouldBeTrue();
+            && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)
+            && message.Text.Contains("\"eventId\":\"event-123\"", StringComparison.Ordinal)).ShouldBeTrue();
     }
 
     [Test]

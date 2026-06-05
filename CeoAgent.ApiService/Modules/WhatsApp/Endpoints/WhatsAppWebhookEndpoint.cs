@@ -14,7 +14,7 @@ public sealed class WhatsAppWebhookEndpoint(
 
     public override void Configure()
     {
-        Post("/v1/webhooks/whatsapp");
+        Post("/v1/whatsapp");
         AllowAnonymous();
     }
 

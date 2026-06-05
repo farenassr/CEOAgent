@@ -62,7 +62,7 @@ public sealed class IncomingMessageQueueWorker(
             var parallelOptions = new ParallelOptions
             {
                 MaxDegreeOfParallelism = settings.MaxDegreeOfParallelism > 0 ? settings.MaxDegreeOfParallelism : 1,
-                CancellationToken = stoppingToken
+                CancellationToken = stoppingToken,
             };
 
             await Parallel.ForEachAsync(messages.Value, parallelOptions, async (message, ct) =>
