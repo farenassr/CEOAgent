@@ -5,9 +5,12 @@ future evals.
 
 ## Inbound Text Flow
 
+Webhook verification uses `GET /v1/whatsapp/webhook` with Meta's
+`hub.mode`, `hub.verify_token`, and `hub.challenge` query parameters.
+
 ```text
 WhatsApp Cloud webhook
-  -> ApiService /v1/webhooks/whatsapp
+  -> ApiService /v1/whatsapp
   -> signature validation
   -> parse payload
   -> resolve company by phone_number_id
@@ -62,19 +65,20 @@ Outbound sends must not rely on provider retries for idempotency. The Worker
 uses deterministic client message ids, but a durable outbound-send ledger or
 outbox is still required before claiming exactly-once customer-visible sends.
 
-## Simulation Flow
+## Admin WhatsApp Entry Flow
 
-Agent simulation messages use the normal Worker prompt and tool-loop path, but
-they are a dry run for external side effects:
+Admin WhatsApp entry messages use the normal Worker prompt and tool-loop path
+and are treated as real WhatsApp inbound turns:
 
-- no WhatsApp read receipt is sent,
-- no outbound WhatsApp text or audio is sent,
-- mutating tools are denied by the tool gateway,
-- assistant output is persisted with a synthetic `simulation:*` provider result.
+- `POST /v1/admin/companies/{companyId}/whatsapp` accepts `messageText` and
+  `externalCustomerId`,
+- the inbound message is persisted with `providerType` set to `whatsapp_cloud`,
+- no read receipt is sent because there is no provider-side `wamid`,
+- the Worker sends the assistant reply through `IMessageChannelIntegration`,
+- mutating tools are enabled the same way as normal WhatsApp webhook traffic.
 
-Simulation can still call non-mutating tools when they are enabled for the
-company, because those calls are useful for validating prompt and availability
-behavior without sending customer-visible messages.
+The company must have a registered WhatsApp Cloud channel with credentials for
+the outbound reply to reach the provider.
 
 ## Existing Regression Tests
 

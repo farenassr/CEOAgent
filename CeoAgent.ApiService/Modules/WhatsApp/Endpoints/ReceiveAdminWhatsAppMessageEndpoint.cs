@@ -1,4 +1,3 @@
-using CeoAgent.ApiService.Modules.WhatsApp;
 using CeoAgent.Application.Company.Abstractions;
 using CeoAgent.Application.Company.Implementation;
 using CeoAgent.Application.Errors;
@@ -8,32 +7,31 @@ using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Integrations.Jobs;
 using CeoAgent.Shared.Enums;
-using CeoAgent.Shared.Request.AgentSimulation;
-using CeoAgent.Shared.Response.AgentSimulation;
+using CeoAgent.Shared.Request.WhatsApp;
+using CeoAgent.Shared.Response.WhatsApp;
 using FastEndpoints;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
-namespace CeoAgent.ApiService.Modules.AgentSimulation.Endpoints;
+namespace CeoAgent.ApiService.Modules.WhatsApp;
 
 /// <summary>
-/// Persists a synthetic user text message and enqueues the normal Worker flow.
+/// Persists an inbound WhatsApp text message supplied by an admin caller and enqueues the normal Worker flow.
 /// </summary>
-public sealed class SimulateIncomingMessageEndpoint(
+public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
     ICompanyContext companyContext,
     IIncomingMessageJobEnqueuer incomingMessageJobEnqueuer,
-    TimeProvider timeProvider) : Endpoint<AgentSimulationMessageRequest, AgentSimulationMessageResponse>
+    TimeProvider timeProvider) : Endpoint<ReceiveWhatsAppMessageRequest, ReceiveWhatsAppMessageResponse>
 {
-    private const string DefaultExternalCustomerId = "simulated-user";
-    private const string ProviderType = "simulation";
+    private const string ProviderType = "whatsapp_cloud";
 
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/agent-simulations/messages");
+        Post("/v1/admin/companies/{companyId}/whatsapp");
     }
 
-    public override async Task HandleAsync(AgentSimulationMessageRequest request, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ReceiveWhatsAppMessageRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
         await EnsureCompanyIsAccessibleAsync(companyId, cancellationToken);
@@ -41,12 +39,14 @@ public sealed class SimulateIncomingMessageEndpoint(
         var channel = await dbContext.CompanyChannels
             .WithDefaultTracking(trackChanges: true)
             .OrderBy(entity => entity.CreatedAt)
-            .FirstOrDefaultAsync(entity => entity.CompanyId == companyId, cancellationToken)
-            ?? throw new BusinessRuleException("company_channel_required", "Company requires at least one channel before agent simulation.");
+            .FirstOrDefaultAsync(
+                entity => entity.CompanyId == companyId
+                    && entity.Provider == CompanyChannelProvider.WhatsAppCloud,
+                cancellationToken)
+            ?? throw new BusinessRuleException("company_channel_required", "Company requires a WhatsApp channel before receiving WhatsApp messages.");
 
         var customer = await ResolveCustomerAsync(companyId, channel.Id, request.ExternalCustomerId, cancellationToken);
         var conversation = await ResolveConversationAsync(companyId, channel.Id, customer.Id, cancellationToken);
-        var providerMessageId = $"simulation:{Guid.CreateVersion7()}";
         var occurredAt = timeProvider.GetUtcNow().UtcDateTime;
         var inbound = new Message
         {
@@ -55,11 +55,10 @@ public sealed class SimulateIncomingMessageEndpoint(
             Role = MessageRole.User,
             Type = MessageType.Text,
             MessageText = request.MessageText,
-            ProviderMessageId = providerMessageId,
+            ProviderMessageId = null,
             Payload = new MessagePayload
             {
                 ProviderType = ProviderType,
-                ProviderMessageId = providerMessageId,
             },
             OccurredAt = occurredAt,
         };
@@ -72,7 +71,7 @@ public sealed class SimulateIncomingMessageEndpoint(
         await incomingMessageJobEnqueuer.EnqueueAsync(job, cancellationToken);
 
         await Send.OkAsync(
-            new AgentSimulationMessageResponse
+            new ReceiveWhatsAppMessageResponse
             {
                 CompanyId = companyId,
                 ConversationId = conversation.Id,
@@ -96,12 +95,10 @@ public sealed class SimulateIncomingMessageEndpoint(
     private async Task<Customer> ResolveCustomerAsync(
         Guid companyId,
         Guid channelId,
-        string? externalCustomerId,
+        string externalCustomerId,
         CancellationToken cancellationToken)
     {
-        var normalizedExternalCustomerId = string.IsNullOrWhiteSpace(externalCustomerId)
-            ? DefaultExternalCustomerId
-            : externalCustomerId.Trim();
+        var normalizedExternalCustomerId = externalCustomerId.Trim();
         var customer = await dbContext.Customers
             .WithDefaultTracking(trackChanges: true)
             .SingleOrDefaultAsync(
@@ -120,7 +117,7 @@ public sealed class SimulateIncomingMessageEndpoint(
             CompanyId = companyId,
             CompanyChannelId = channelId,
             ExternalCustomerId = normalizedExternalCustomerId,
-            DisplayName = "Simulated User",
+            DisplayName = normalizedExternalCustomerId,
         };
         dbContext.Customers.Add(customer);
         return customer;
@@ -153,7 +150,7 @@ public sealed class SimulateIncomingMessageEndpoint(
             .SingleOrDefaultAsync(cancellationToken);
         if (agentProfileId == Guid.Empty)
         {
-            throw new BusinessRuleException("agent_profile_required", "Company requires an agent profile before agent simulation.");
+            throw new BusinessRuleException("agent_profile_required", "Company requires an agent profile before receiving WhatsApp messages.");
         }
 
         conversation = new Conversation
@@ -169,11 +166,11 @@ public sealed class SimulateIncomingMessageEndpoint(
     }
 }
 
-public sealed class AgentSimulationMessageValidator : Validator<AgentSimulationMessageRequest>
+public sealed class ReceiveWhatsAppMessageValidator : Validator<ReceiveWhatsAppMessageRequest>
 {
-    public AgentSimulationMessageValidator()
+    public ReceiveWhatsAppMessageValidator()
     {
         RuleFor(request => request.MessageText).NotEmpty().MaximumLength(4000);
-        RuleFor(request => request.ExternalCustomerId).MaximumLength(160);
+        RuleFor(request => request.ExternalCustomerId).NotEmpty().MaximumLength(160);
     }
 }

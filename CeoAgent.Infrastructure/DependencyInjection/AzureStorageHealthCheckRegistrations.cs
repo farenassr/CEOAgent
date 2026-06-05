@@ -60,6 +60,10 @@ public sealed class AzureQueueServiceMetadataHealthCheck(QueueServiceClient queu
         {
             return HealthCheckResult.Unhealthy("Azure Storage Queue service metadata is unavailable.", exception);
         }
+        catch (OperationCanceledException exception)
+        {
+            return HealthCheckResult.Unhealthy("Azure Storage Queue service metadata read timed out.", exception);
+        }
     }
 }
 
@@ -77,6 +81,10 @@ public sealed class AzureBlobServiceMetadataHealthCheck(BlobServiceClient blobSe
         catch (RequestFailedException exception)
         {
             return HealthCheckResult.Unhealthy("Azure Blob Storage service metadata is unavailable.", exception);
+        }
+        catch (OperationCanceledException exception)
+        {
+            return HealthCheckResult.Unhealthy("Azure Blob Storage service metadata read timed out.", exception);
         }
     }
 }

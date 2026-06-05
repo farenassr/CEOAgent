@@ -147,17 +147,17 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        app.MapHealthChecks(HealthEndpointPath);
+        app.MapHealthChecks(HealthEndpointPath).ShortCircuit();
 
         app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
             Predicate = r => r.Tags.Contains("live"),
-        });
+        }).ShortCircuit();
 
         app.MapHealthChecks("/ready", new HealthCheckOptions
         {
             Predicate = r => !r.Tags.Contains("live"),
-        });
+        }).ShortCircuit();
 
         return app;
     }

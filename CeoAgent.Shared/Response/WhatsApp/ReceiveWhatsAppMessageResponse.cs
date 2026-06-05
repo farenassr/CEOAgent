@@ -1,19 +1,19 @@
-namespace CeoAgent.Shared.Response.AgentSimulation;
+namespace CeoAgent.Shared.Response.WhatsApp;
 
-public sealed class AgentSimulationMessageResponse
+public sealed class ReceiveWhatsAppMessageResponse
 {
     /// <summary>
-    /// Company that owns the simulated message.
+    /// Company that owns the inbound WhatsApp message.
     /// </summary>
     public Guid CompanyId { get; set; }
 
     /// <summary>
-    /// Conversation selected or created for the simulated customer.
+    /// Conversation selected or created for the WhatsApp customer.
     /// </summary>
     public Guid ConversationId { get; set; }
 
     /// <summary>
-    /// Persisted synthetic user message id.
+    /// Persisted inbound user message id.
     /// </summary>
     public Guid MessageId { get; set; }
 

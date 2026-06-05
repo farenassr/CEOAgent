@@ -38,7 +38,6 @@ public sealed class ProcessIncomingMessageJobProcessor(
     ILogger<ProcessIncomingMessageJobProcessor> logger)
 {
     private const string WhatsAppProvider = "whatsapp_cloud";
-    private const string SimulationProvider = "simulation";
     private const string AudioAckText = "Recibí tu audio, lo estoy revisando.";
     private const string DefaultVoiceName = "default";
     private const int MaxToolLoopIterations = 4;
@@ -72,11 +71,9 @@ public sealed class ProcessIncomingMessageJobProcessor(
                     return;
                 }
 
-                await SendExistingReplyAsync(context, existingReply, replyClientMessageId, IsSimulation(context.Inbound), cancellationToken);
+                await SendExistingReplyAsync(context, existingReply, replyClientMessageId, cancellationToken);
                 return;
             }
-
-            var isSimulation = IsSimulation(context.Inbound);
 
             if (ShouldMarkInboundRead(context.Inbound))
             {
@@ -89,7 +86,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                     cancellationToken);
             }
 
-            if (!isSimulation && context.Inbound.Type == MessageType.Audio)
+            if (context.Inbound.Type == MessageType.Audio)
             {
                 bool sttSuccess = await ProcessInboundAudioAsync(context, cancellationToken);
                 if (!sttSuccess)
@@ -167,11 +164,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
             context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
 
             SentMessageReference sent;
-            if (isSimulation)
-            {
-                sent = new SentMessageReference($"simulation:{assistant.Id}");
-            }
-            else if (context.Inbound.Type == MessageType.Audio)
+            if (context.Inbound.Type == MessageType.Audio)
             {
                 sent = await SendAudioReplyAsync(context, assistant, assistantText, replyClientMessageId, cancellationToken);
             }
@@ -200,15 +193,8 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
     private static bool ShouldMarkInboundRead(Message inbound)
     {
-        return !IsSimulation(inbound)
-            && !string.IsNullOrWhiteSpace(inbound.ProviderMessageId);
-    }
-
-    private static bool IsSimulation(Message inbound)
-    {
         return !string.IsNullOrWhiteSpace(inbound.ProviderMessageId)
-            && (string.Equals(inbound.Payload?.ProviderType, SimulationProvider, StringComparison.OrdinalIgnoreCase)
-                || inbound.ProviderMessageId.StartsWith(SimulationProvider + ":", StringComparison.OrdinalIgnoreCase));
+            && inbound.ProviderMessageId.StartsWith("wamid.", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<bool> ProcessInboundAudioAsync(ProcessorContext context, CancellationToken cancellationToken)
@@ -394,15 +380,10 @@ public sealed class ProcessIncomingMessageJobProcessor(
         ProcessorContext context,
         Message existingReply,
         string replyClientMessageId,
-        bool isSimulation,
         CancellationToken cancellationToken)
     {
         SentMessageReference sent;
-        if (isSimulation)
-        {
-            sent = new SentMessageReference($"simulation:{existingReply.Id}");
-        }
-        else if (context.Inbound.Type == MessageType.Audio)
+        if (context.Inbound.Type == MessageType.Audio)
         {
             sent = await SendAudioReplyAsync(context, existingReply, existingReply.MessageText ?? string.Empty, replyClientMessageId, cancellationToken);
         }
@@ -538,7 +519,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         CancellationToken cancellationToken)
     {
         var messages = context.Messages.ToList();
-        var sideEffectsEnabled = !IsSimulation(context.Inbound);
+        const bool sideEffectsEnabled = true;
 
         for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
         {

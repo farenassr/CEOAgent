@@ -16,10 +16,10 @@ using Shouldly;
 namespace CeoAgent.ApiService.Tests;
 
 [NotInParallel]
-public sealed class AgentSimulationEndpointTests
+public sealed class AdminWhatsAppInboundMessageEndpointTests
 {
     [Test]
-    public async Task SimulateIncomingMessage_PersistsUserMessageAndEnqueuesWorkerJob()
+    public async Task ReceiveWhatsAppMessage_PersistsUserMessageAsWhatsAppAndEnqueuesWorkerJob()
     {
         var queue = new RecordingIncomingMessageQueue();
         const string adminKey = "test-admin-key";
@@ -42,11 +42,12 @@ public sealed class AgentSimulationEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{CompanyId}/agent-simulations/messages")
+            $"/v1/admin/companies/{CompanyId}/whatsapp")
         {
             Content = JsonContent.Create(new
             {
                 messageText = "Necesito una mesa para dos manana",
+                externalCustomerId = "573001112233",
             }),
         };
         request.Headers.Add("X-Admin-Api-Key", adminKey);
@@ -69,6 +70,10 @@ public sealed class AgentSimulationEndpointTests
             .SingleOrDefaultAsync(entity => entity.Id == body.MessageId);
         message.ShouldNotBeNull();
         message.MessageText.ShouldBe("Necesito una mesa para dos manana");
+        message.ProviderMessageId.ShouldBeNull();
+        message.Payload.ShouldNotBeNull();
+        message.Payload.ProviderType.ShouldBe("whatsapp_cloud");
+        message.Payload.ProviderMessageId.ShouldBeNull();
     }
 
     private static void SeedCompany(CeoAgentDbContext dbContext)
