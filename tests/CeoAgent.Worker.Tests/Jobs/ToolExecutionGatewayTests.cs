@@ -1,16 +1,18 @@
 using System.Text.Json;
-using CeoAgent.Integrations.AI;
-using CeoAgent.Application.Company.Abstractions;
-using CeoAgent.Application.Company.Implementation;
+using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Shared.AI;
+using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
-using CeoAgent.Integrations.Calendar;
+using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
+using CeoAgent.Shared.Calendar;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
-using CeoAgent.Tools.Implementation.Execution;
-using CeoAgent.Tools.Models.Execution;
-using CeoAgent.Tools.Implementation.GoogleCalendar;
+using CeoAgent.Infrastructure.Implementation.AITools.Execution;
+using CeoAgent.Shared.AITools;
+using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -48,7 +50,40 @@ public sealed class ToolExecutionGatewayTests
         result.ToolName.ShouldBe(MvpToolKeys.CheckGoogleCalendarAvailability);
         result.Content.ShouldContain("\"status\":\"succeeded\"");
         fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
+        await fixture.DbContext.SaveChangesAsync();
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ForEnabledAvailabilityTool_UpdatesTrackedResultMessageBeforeSave()
+    {
+        await using var fixture = await GatewayFixture.CreateAsync();
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var call = new AgentToolCall(
+            "call-result-message",
+            MvpToolKeys.CheckGoogleCalendarAvailability,
+            JsonSerializer.SerializeToElement(new
+            {
+                date = "2026-05-28",
+                partySize = 2,
+                preferredTime = "16:00",
+            }));
+
+        var result = await fixture.Gateway.ExecuteAsync(
+            new ToolExecutionGatewayRequest(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.TriggerMessage.Id,
+                fixture.InboundMessage.Id,
+                call,
+                tools),
+            CancellationToken.None);
+
+        var resultMessage = fixture.DbContext.ChangeTracker
+            .Entries<Message>()
+            .Select(entry => entry.Entity)
+            .Single(message => message.Role == MessageRole.ToolResult);
+        resultMessage.MessageText.ShouldBe(result.Content);
     }
 
     [Test]
@@ -144,6 +179,7 @@ public sealed class ToolExecutionGatewayTests
         result.Content.ShouldContain("\"status\":\"denied\"");
         result.Content.ShouldContain("\"failureReason\":\"malformed_arguments\"");
         fixture.Calendar.AvailabilityRequests.ShouldBeEmpty();
+        await fixture.DbContext.SaveChangesAsync();
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
     }
 
@@ -191,6 +227,7 @@ public sealed class ToolExecutionGatewayTests
             CancellationToken.None);
 
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
+        await fixture.DbContext.SaveChangesAsync();
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
     }
 

@@ -3,10 +3,10 @@ using System.Net;
 using System.Reflection;
 using System.IO.Compression;
 using System.Text.Json;
-using CeoAgent.Adapters;
-using CeoAgent.Adapters.GoogleCalendar;
-using CeoAgent.Adapters.GoogleCalendar.Abstractions;
-using CeoAgent.Integrations.Calendar;
+using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
+using CeoAgent.Infrastructure;
+using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
+using CeoAgent.Shared.Calendar;
 using Google.Apis.Calendar.v3;
 using Google.Apis.Http;
 using Google.Apis.Services;
@@ -17,9 +17,9 @@ namespace CeoAgent.IntegrationTests.Integrations;
 public sealed class GoogleCalendarSdkTests
 {
     [Test]
-    public void AdaptersProject_ReferencesOfficialGoogleCalendarSdk()
+    public void InfrastructureProject_ReferencesOfficialGoogleCalendarSdk()
     {
-        typeof(AdaptersAssembly).Assembly
+        typeof(InfrastructureAssembly).Assembly
             .GetReferencedAssemblies()
             .Any(assembly => assembly.Name == "Google.Apis.Calendar.v3")
             .ShouldBeTrue();
@@ -32,10 +32,29 @@ public sealed class GoogleCalendarSdkTests
         typeof(ICalendarIntegration).GetMethod(nameof(ICalendarIntegration.CreateReservationAsync)).ShouldNotBeNull();
 
         typeof(ICalendarIntegration)
-            .Assembly
-            .GetReferencedAssemblies()
-            .Any(assembly => assembly.Name?.StartsWith("Google.Apis", StringComparison.Ordinal) == true)
+            .GetMethods()
+            .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType).Append(method.ReturnType))
+            .SelectMany(GetExposedTypes)
+            .Any(type => type.Namespace?.StartsWith("Google.Apis", StringComparison.Ordinal) == true)
             .ShouldBeFalse();
+    }
+
+    private static IEnumerable<Type> GetExposedTypes(Type type)
+    {
+        yield return type;
+
+        if (!type.IsGenericType)
+        {
+            yield break;
+        }
+
+        foreach (var genericArgument in type.GetGenericArguments())
+        {
+            foreach (var exposedType in GetExposedTypes(genericArgument))
+            {
+                yield return exposedType;
+            }
+        }
     }
 
     [Test]

@@ -1,20 +1,25 @@
 # Google Calendar Integration
 
 Google Calendar is the MVP calendar provider. Calendar provider behavior must
-stay behind `ICalendarIntegration` and the Google Calendar adapter.
+stay behind `ICalendarIntegration` and the Google Calendar AI tool
+implementation.
 
 ## Boundary
 
 ```text
 Model tool call or Worker workflow
-  -> CeoAgent.Tools ToolExecutionGateway
-  -> CeoAgent.Tools Google Calendar handler / executor
+  -> CeoAgent.Infrastructure ToolExecutionGateway
+  -> CeoAgent.Infrastructure AITools/GoogleCalendar executor
   -> ICalendarIntegration
   -> GoogleCalendarIntegration
   -> Google Calendar SDK/API
 ```
 
-Do not use Google Calendar SDK types outside `CeoAgent.Adapters`.
+Do not use Google Calendar SDK types outside
+`CeoAgent.Infrastructure/Implementation/AITools/GoogleCalendar/Integration`.
+Google Calendar tool executors, scheduling policies, validators, and
+tool-specific helpers belong under
+`CeoAgent.Infrastructure/Implementation/AITools/GoogleCalendar`.
 
 ## Current Capabilities
 
@@ -42,7 +47,7 @@ Do not use Google Calendar SDK types outside `CeoAgent.Adapters`.
 
 ## Review Checklist
 
-- Is the Google SDK usage confined to `CeoAgent.Adapters/GoogleCalendar`?
+- Is the Google SDK usage confined to `CeoAgent.Infrastructure/Implementation/AITools/GoogleCalendar/Integration`?
 - Does the tool path load company, conversation, tool, and credential context
   from company-scoped data?
 - Does the LLM path return only sanitized tool result JSON to the model?

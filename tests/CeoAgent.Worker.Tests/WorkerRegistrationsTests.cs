@@ -1,5 +1,4 @@
 using Azure.Storage.Queues;
-using CeoAgent.Adapters;
 using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.Worker.Jobs;
 using Microsoft.Extensions.Configuration;
@@ -14,7 +13,7 @@ namespace CeoAgent.Worker.Tests;
 public sealed class WorkerRegistrationsTests
 {
     [Test]
-    public void AddWorkerRuntime_WithAdapters_ConstructsIncomingMessageProcessor()
+    public void AddWorkerRuntime_WithIntegrationImplementations_ConstructsIncomingMessageProcessor()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -28,7 +27,6 @@ public sealed class WorkerRegistrationsTests
         services.AddLogging(builder => builder.AddDebug());
         services.AddSingleton(new QueueServiceClient("UseDevelopmentStorage=true"));
         services.AddInfrastructure(configuration);
-        services.AddAdapters(configuration);
         services.AddWorkerRuntime();
 
         services.ShouldContain(descriptor =>

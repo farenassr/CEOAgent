@@ -8,47 +8,36 @@ public sealed partial class ArchitectureRulesTests
 {
     private static readonly string[] ProductionProjectDirectories =
     [
-        "CeoAgent.Adapters",
         "CeoAgent.ApiService",
         "CeoAgent.AppHost",
         "CeoAgent.Application",
         "CeoAgent.Infrastructure",
-        "CeoAgent.Integrations",
         "CeoAgent.ServiceDefaults",
         "CeoAgent.Shared",
-        "CeoAgent.Tools",
         "CeoAgent.Worker",
     ];
 
     private static readonly Dictionary<string, string[]> AllowedProjectReferences =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["CeoAgent.Adapters"] = ["CeoAgent.Integrations"],
             ["CeoAgent.ApiService"] =
             [
-                "CeoAgent.Adapters",
                 "CeoAgent.Application",
                 "CeoAgent.Infrastructure",
-                "CeoAgent.Integrations",
                 "CeoAgent.ServiceDefaults",
                 "CeoAgent.Shared",
-                "CeoAgent.Tools",
             ],
             ["CeoAgent.AppHost"] = ["CeoAgent.ApiService", "CeoAgent.Worker"],
-            ["CeoAgent.Application"] = ["CeoAgent.Integrations"],
+            ["CeoAgent.Application"] = ["CeoAgent.Shared"],
             ["CeoAgent.Infrastructure"] = ["CeoAgent.Application", "CeoAgent.Shared"],
-            ["CeoAgent.Integrations"] = ["CeoAgent.Shared"],
             ["CeoAgent.ServiceDefaults"] = [],
             ["CeoAgent.Shared"] = [],
-            ["CeoAgent.Tools"] = ["CeoAgent.Application", "CeoAgent.Infrastructure", "CeoAgent.Integrations"],
             ["CeoAgent.Worker"] =
             [
-                "CeoAgent.Adapters",
                 "CeoAgent.Application",
                 "CeoAgent.Infrastructure",
-                "CeoAgent.Integrations",
                 "CeoAgent.ServiceDefaults",
-                "CeoAgent.Tools",
+                "CeoAgent.Shared",
             ],
         };
 
@@ -63,7 +52,7 @@ public sealed partial class ArchitectureRulesTests
 
         foreach (var projectDirectory in ProductionProjectDirectories)
         {
-            var projectPath = Directory.GetFiles(Path.Combine(repoRoot, projectDirectory), "*.csproj").Single();
+            var projectPath = Directory.GetFiles(GetProductionProjectRoot(repoRoot, projectDirectory), "*.csproj").Single();
             var document = XDocument.Load(projectPath);
             var references = document
                 .Descendants("ProjectReference")
@@ -109,30 +98,64 @@ public sealed partial class ArchitectureRulesTests
     }
 
     /// <summary>
-    /// Verifies that provider SDK packages and namespaces stay in the Adapters project.
+    /// Verifies that provider SDK packages and namespaces stay in infrastructure implementation code.
     /// </summary>
     [Test]
-    public void ProviderSdkUsage_StaysInsideAdapters()
+    public void ProviderSdkUsage_StaysInsideIntegrationImplementations()
     {
         var repoRoot = FindRepositoryRoot();
         var providerMarkers = new[]
         {
+            "Azure.Security.KeyVault.Secrets",
             "Google.Apis",
             "OpenAI.Responses",
             "Microsoft.Agents.AI.OpenAI",
+            "Refit",
         };
         var violations = new List<string>();
 
-        foreach (var projectDirectory in ProductionProjectDirectories.Where(directory => directory != "CeoAgent.Adapters"))
+        foreach (var projectDirectory in ProductionProjectDirectories)
         {
             foreach (var filePath in EnumerateProductionFiles(repoRoot, projectDirectory, ["*.cs", "*.csproj"]))
             {
+                var relativePath = Path.GetRelativePath(repoRoot, filePath);
+                var isInfrastructureImplementation = relativePath.StartsWith(
+                    Path.Combine("src", "CeoAgent.Infrastructure", "Implementation") + Path.DirectorySeparatorChar,
+                    StringComparison.Ordinal);
+                var isInfrastructureApiClient = relativePath.StartsWith(
+                    Path.Combine("src", "CeoAgent.Infrastructure", "ApiClient") + Path.DirectorySeparatorChar,
+                    StringComparison.Ordinal);
+                var isInfrastructureProjectFile = relativePath == Path.Combine(
+                    "src",
+                    "CeoAgent.Infrastructure",
+                    "CEOAgent.Infrastructure.csproj");
+                var isApplicationProviderFactory = relativePath == Path.Combine(
+                        "src",
+                        "CeoAgent.Application",
+                        "Abstractions",
+                        "AITools",
+                        "GoogleCalendar",
+                        "IGoogleCalendarServiceFactory.cs")
+                    || relativePath == Path.Combine(
+                        "src",
+                        "CeoAgent.Application",
+                        "Abstractions",
+                        "OpenAI",
+                        "IOpenAIResponsesClientFactory.cs")
+                    || relativePath == Path.Combine(
+                        "src",
+                        "CeoAgent.Application",
+                        "CEOAgent.Application.csproj");
                 var text = File.ReadAllText(filePath);
                 foreach (var marker in providerMarkers)
                 {
-                    if (text.Contains(marker, StringComparison.Ordinal))
+                    if (!isInfrastructureImplementation
+                        && !isInfrastructureApiClient
+                        && !isInfrastructureProjectFile
+                        && !isApplicationProviderFactory
+                        && text.Contains(marker, StringComparison.Ordinal))
                     {
-                        violations.Add($"{Path.GetRelativePath(repoRoot, filePath)} contains {marker}");
+                        violations.Add($"{relativePath} contains {marker}");
                     }
                 }
             }
@@ -204,37 +227,34 @@ public sealed partial class ArchitectureRulesTests
     }
 
     /// <summary>
-    /// Verifies that the native tools runtime keeps non-root code under the approved physical folders.
+    /// Verifies that infrastructure implementation code stays in the approved target folders.
     /// </summary>
     [Test]
-    public void ToolsRuntimeFiles_FollowAbstractionsImplementationModelsConvention()
+    public void InfrastructureImplementationFiles_FollowTargetFolderConvention()
     {
         var repoRoot = FindRepositoryRoot();
-        var toolsRoot = Path.Combine(repoRoot, "CeoAgent.Tools");
-        var allowedRootFiles = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "ToolsAssembly.cs",
-            "ToolsRegistrations.cs",
-        };
+        var implementationRoot = Path.Combine(repoRoot, "src", "CeoAgent.Infrastructure", "Implementation");
         var allowedTopLevelFolders = new HashSet<string>(StringComparer.Ordinal)
         {
-            "Abstractions",
-            "Implementation",
-            "Models",
+            "AI",
+            "AITools",
+            "Company",
+            "GoogleCalendar",
+            "Messaging",
+            "OpenAI",
+            "Secrets",
         };
 
-        var violations = Directory.EnumerateFiles(toolsRoot, "*.cs", SearchOption.AllDirectories)
+        var violations = Directory.EnumerateFiles(implementationRoot, "*.cs", SearchOption.AllDirectories)
             .Where(filePath => !filePath.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 && !filePath.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .Select(filePath => new
             {
                 FilePath = filePath,
-                RelativeParts = Path.GetRelativePath(toolsRoot, filePath)
+                RelativeParts = Path.GetRelativePath(implementationRoot, filePath)
                     .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
             })
-            .Where(item => item.RelativeParts.Length > 1
-                ? !allowedTopLevelFolders.Contains(item.RelativeParts[0])
-                : !allowedRootFiles.Contains(item.RelativeParts[0]))
+            .Where(item => item.RelativeParts.Length < 2 || !allowedTopLevelFolders.Contains(item.RelativeParts[0]))
             .Select(item => Path.GetRelativePath(repoRoot, item.FilePath))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -251,13 +271,20 @@ public sealed partial class ArchitectureRulesTests
         var repoRoot = FindRepositoryRoot();
         var namespaceRoots = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [Path.Combine("CeoAgent.Application", "Company")] = "CeoAgent.Application.Company",
-            [Path.Combine("CeoAgent.Infrastructure", "Entities", "Filters")] = "CeoAgent.Infrastructure.Entities.Filters",
-            ["CeoAgent.Tools"] = "CeoAgent.Tools",
+            [Path.Combine("src", "CeoAgent.Application", "Abstractions", "Company")] = "CeoAgent.Application.Abstractions.Company",
+            [Path.Combine("src", "CeoAgent.Application", "Abstractions")] = "CeoAgent.Application.Abstractions",
+            [Path.Combine("src", "CeoAgent.Shared", "AI")] = "CeoAgent.Shared.AI",
+            [Path.Combine("src", "CeoAgent.Shared", "AITools")] = "CeoAgent.Shared.AITools",
+            [Path.Combine("src", "CeoAgent.Shared", "Calendar")] = "CeoAgent.Shared.Calendar",
+            [Path.Combine("src", "CeoAgent.Shared", "Jobs")] = "CeoAgent.Shared.Jobs",
+            [Path.Combine("src", "CeoAgent.Shared", "Messaging")] = "CeoAgent.Shared.Messaging",
+            [Path.Combine("src", "CeoAgent.Infrastructure", "Entities", "Filters")] = "CeoAgent.Infrastructure.Entities.Filters",
+            [Path.Combine("src", "CeoAgent.Infrastructure", "Implementation")] = "CeoAgent.Infrastructure.Implementation",
         };
         var enforcedFolders = new HashSet<string>(StringComparer.Ordinal)
         {
             "Abstractions",
+            "Implementations",
             "Implementation",
             "Models",
         };
@@ -300,7 +327,7 @@ public sealed partial class ArchitectureRulesTests
     public void AppHost_Postgres18_UsesVersionSpecificDataVolume()
     {
         var repoRoot = FindRepositoryRoot();
-        var appHost = File.ReadAllText(Path.Combine(repoRoot, "CeoAgent.AppHost", "AppHost.cs"));
+        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
         appHost.ShouldContain(".WithDataVolume(\"ceoagent-postgres-database-volume\")");
     }
 
@@ -318,7 +345,7 @@ public sealed partial class ArchitectureRulesTests
 
     private static IEnumerable<string> EnumerateProductionFiles(string repoRoot, string projectDirectory, string[] searchPatterns)
     {
-        var root = Path.Combine(repoRoot, projectDirectory);
+        var root = GetProductionProjectRoot(repoRoot, projectDirectory);
         foreach (var pattern in searchPatterns)
         {
             foreach (var filePath in Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories)
@@ -361,6 +388,11 @@ public sealed partial class ArchitectureRulesTests
         }
 
         return directory?.FullName ?? throw new DirectoryNotFoundException("Could not find repository root.");
+    }
+
+    private static string GetProductionProjectRoot(string repoRoot, string projectDirectory)
+    {
+        return Path.Combine(repoRoot, "src", projectDirectory);
     }
 
     [GeneratedRegex("\\b(?:Get|Post|Put|Patch|Delete)\\(\\\"(?<route>[^\\\"]+)\\\"", RegexOptions.None, 100)]

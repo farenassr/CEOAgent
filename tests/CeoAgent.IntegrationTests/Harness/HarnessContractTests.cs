@@ -23,7 +23,7 @@ public sealed partial class HarnessContractTests
         };
 
         var missing = expectedScripts
-            .Where(script => !File.Exists(Path.Combine(repoRoot, "scripts", script)))
+            .Where(script => !File.Exists(Path.Combine(repoRoot, "AIHarness", "scripts", script)))
             .ToArray();
 
         missing.ShouldBeEmpty();
@@ -87,7 +87,7 @@ public sealed partial class HarnessContractTests
         var repoRoot = FindRepositoryRoot();
         var whatsappFlow = File.ReadAllText(Path.Combine(repoRoot, "AIHarness", "whatsapp-flow.md"));
 
-        whatsappFlow.ShouldContain("scripts/whatsapp-eval.ps1");
+        whatsappFlow.ShouldContain("AIHarness/scripts/whatsapp-eval.ps1");
         whatsappFlow.ShouldNotContain("They are not an automated test");
     }
 
@@ -131,8 +131,8 @@ public sealed partial class HarnessContractTests
         var repoRoot = FindRepositoryRoot();
         var harnessIndex = File.ReadAllText(Path.Combine(repoRoot, "AIHarness", "harness-engineering.md"));
 
-        File.Exists(Path.Combine(repoRoot, "scripts", "aspire-smoke.ps1")).ShouldBeTrue();
-        harnessIndex.ShouldContain("scripts/aspire-smoke.ps1");
+        File.Exists(Path.Combine(repoRoot, "AIHarness", "scripts", "aspire-smoke.ps1")).ShouldBeTrue();
+        harnessIndex.ShouldContain("AIHarness/scripts/aspire-smoke.ps1");
         harnessIndex.ShouldContain("health");
         harnessIndex.ShouldContain("logs");
         harnessIndex.ShouldContain("traces");

@@ -14,8 +14,8 @@ Core harness assets:
 - `AGENTS.md`: always-on operating rules.
 - `.codex/AGENTS.md`: Codex-specific overlay; keep it consistent with this file.
 - `AIHarness/`: deeper architecture, integration, and design context.
-- `scripts/`: stable command wrappers. Prefer these over ad-hoc commands.
-- `evals/whatsapp/`: WhatsApp scenario fixtures and regression checks.
+- `AIHarness/scripts/`: stable command wrappers. Prefer these over ad-hoc commands.
+- `AIHarness/evals/whatsapp/`: WhatsApp scenario fixtures and regression checks.
 - `traces/examples/`: sanitized trace examples for debugging and future evals.
 - `.codex/agents/*.toml`: project-scoped Codex subagents.
 
@@ -38,7 +38,7 @@ docs for the current task:
 - `AIHarness/whatsapp-flow.md`: WhatsApp webhook ingestion, message parsing,
   media handling, or outbound replies.
 - `AIHarness/google-calendar-integration.md`: calendar availability, booking,
-  cancellation, or Google Calendar adapter behavior.
+  cancellation, or Google Calendar implementation behavior.
 - `AIHarness/security-rules.md`: secrets, authentication, authorization,
   webhook verification, logging, company isolation, or PII handling.
 - Architecture docs: module boundaries, project references, background jobs,
@@ -63,15 +63,14 @@ Before changing files:
 
 The solution is a .NET Aspire modular monolith:
 
-- `CeoAgent.AppHost`: local Aspire orchestration.
-- `CeoAgent.ApiService`: FastEndpoints HTTP surface, admin endpoints, webhook receiver.
-- `CeoAgent.Worker`: background jobs and agent/tool execution.
-- `CeoAgent.Application`: shared application logic and AI runtime orchestration.
-- `CeoAgent.Infrastructure`: EF Core, persistence, queues, blob, infrastructure glue.
-- `CeoAgent.Integrations`: integration port contracts only.
-- `CeoAgent.Adapters`: external provider implementations.
-- `CeoAgent.Tools`: native tool handlers.
-- `CeoAgent.Shared`: public API request/response DTOs and shared enums.
+- `src/CeoAgent.AppHost`: local Aspire orchestration.
+- `src/CeoAgent.ApiService`: FastEndpoints HTTP surface, admin endpoints, webhook receiver.
+- `src/CeoAgent.Worker`: background jobs and agent/tool execution.
+- `src/CeoAgent.Application`: application-owned abstractions and prompt behavior.
+- `src/CeoAgent.Infrastructure`: EF Core, persistence, queues, blob, provider implementations,
+  company context implementation, and native tool execution.
+- `src/CeoAgent.Shared`: public API request/response DTOs, shared enums, provider-neutral
+  runtime/tool/calendar/messaging/job models.
 - `tests/*`: TUnit, Shouldly, NSubstitute, Verify, Testcontainers, Aspire Testing.
 
 `CeoAgent.Web` is not core MVP backend unless a task explicitly targets it.
@@ -81,9 +80,9 @@ The solution is a .NET Aspire modular monolith:
 Use wrappers when possible:
 
 ```powershell
-./scripts/build.ps1
-./scripts/test.ps1
-./scripts/format.ps1
+./AIHarness/scripts/build.ps1
+./AIHarness/scripts/test.ps1
+./AIHarness/scripts/format.ps1
 ```
 
 Canonical commands:
@@ -108,7 +107,7 @@ Run the narrowest meaningful check first, then broaden when risk warrants it.
 ## Architecture Rules
 
 - Modular monolith for MVP. Do not split into microservices.
-- Vertical slices live under `CeoAgent.ApiService/Modules/<Module>/...`.
+- Vertical slices live under `src/CeoAgent.ApiService/Modules/<Module>/...`.
 - FastEndpoints for HTTP. No MVC controllers.
 - Use martinothamar/Mediator for non-trivial API use cases, Worker workflows,
   reusable workflows, and cross-module operations. Never use MediatR.
@@ -123,11 +122,12 @@ Run the narrowest meaningful check first, then broaden when risk warrants it.
 
 ## Integration Boundaries
 
-- Ports live in `CeoAgent.Integrations`.
-- Provider implementations live in `CeoAgent.Adapters`.
+- Ports live in `src/CeoAgent.Application/Abstractions`.
+- Provider-neutral request/result models live in `src/CeoAgent.Shared`.
+- Provider implementations live in `src/CeoAgent.Infrastructure/Implementation`.
 - Business logic must not call external systems directly.
-- WhatsApp-specific code stays in the WhatsApp adapter or WhatsApp API module.
-- Google Calendar SDK usage stays in the Google Calendar adapter.
+- WhatsApp-specific code stays in the WhatsApp implementation or WhatsApp API module.
+- Google Calendar SDK usage stays in the Google Calendar implementation.
 - Aspire `.WithReference(...)` supplies local runtime resource connection strings.
 - Do not move PostgreSQL, queue, or blob runtime connection strings into Key Vault.
 
@@ -150,7 +150,7 @@ Run the narrowest meaningful check first, then broaden when risk warrants it.
 - Do not scaffold or remove EF migrations unless the user explicitly requests
   migration work.
 - JSONB entity document types live under
-  `CeoAgent.Infrastructure/Entities/JsonDocuments/`.
+  `src/CeoAgent.Infrastructure/Entities/JsonDocuments/`.
 
 ## Security
 
@@ -188,7 +188,7 @@ Use available project subagents when their domain matches the task:
 - `architecture-reviewer`: reviews architecture, module boundaries, vertical slices, project references, and design risks.
 - `backend-engineer`: implements .NET API, FastEndpoints, Mediator workflows, Worker jobs, and service boundaries.
 - `db-specialist`: handles EF Core, PostgreSQL, migrations review, indexes, JSONB, query filters, company isolation, and data modeling.
-- `integrations-engineer`: handles ports/adapters, WhatsApp Cloud, Google Calendar, external APIs, provider boundaries, and tool execution.
+- `integrations-engineer`: handles integration ports and implementations, WhatsApp Cloud, Google Calendar, external APIs, provider boundaries, and tool execution.
 - `ai-engineer`: handles Microsoft Agent Framework, agent loop, prompts, structured output, tool calling, model behavior, evals, and LLM safety.
 - `testing-engineer`: handles unit tests, integration tests, Aspire Testing, Testcontainers, fixtures, evals, and regression coverage.
 - `code-simplifier`: simplifies redundant code and query logic without changing behavior.

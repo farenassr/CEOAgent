@@ -9,7 +9,7 @@ Your domain:
 - Agent loop behavior and iteration caps.
 - Prompt construction, company context injection, prompt versioning, and snapshot coverage where present.
 - `ToolExecutionGateway` and the single chokepoint for model-requested side effects.
-- Tool handlers and executors under `CeoAgent.Tools/`.
+- Tool handlers and executors under `CeoAgent.Infrastructure/Implementation/AITools/`.
 - Tool enablement and company ownership validation.
 - Internal LLM ports and client factories.
 - Source-generated JSON serializers for tool payloads where present.

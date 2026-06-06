@@ -1,7 +1,6 @@
-using CeoAgent.Adapters;
 using CeoAgent.Infrastructure;
-using CeoAgent.Integrations;
-using CeoAgent.Tools;
+using CeoAgent.Application;
+using CeoAgent.Shared.Constants;
 using Shouldly;
 
 namespace CeoAgent.IntegrationTests;
@@ -9,7 +8,7 @@ namespace CeoAgent.IntegrationTests;
 public sealed class FoundationTests
 {
     /// <summary>
-    /// Verifies that the infrastructure, adapter, integration, and tool assemblies can be loaded.
+    /// Verifies that the foundation assemblies can be loaded.
     /// </summary>
     [Test]
     public void FoundationProjectsAssemblies_AreLoadable()
@@ -17,16 +16,14 @@ public sealed class FoundationTests
         var assemblyNames = new[]
         {
             typeof(InfrastructureAssembly).Assembly.GetName().Name,
-            typeof(AdaptersAssembly).Assembly.GetName().Name,
-            typeof(IntegrationsAssembly).Assembly.GetName().Name,
-            typeof(ToolsAssembly).Assembly.GetName().Name,
+            typeof(ApplicationAssembly).Assembly.GetName().Name,
+            typeof(MvpToolKeys).Assembly.GetName().Name,
         };
 
         assemblyNames.ShouldBe([
             "CeoAgent.Infrastructure",
-            "CeoAgent.Adapters",
-            "CeoAgent.Integrations",
-            "CeoAgent.Tools",
+            "CeoAgent.Application",
+            "CeoAgent.Shared",
         ]);
     }
 }

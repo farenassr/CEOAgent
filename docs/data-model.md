@@ -140,9 +140,7 @@ En los diagramas, estos tipos aparecen como `CT_*` o cajas punteadas para distin
 
 | Tipo | Campos |
 | ---- | ------ |
-| `MessagePayload` | `ProviderType : string?`, `ProviderMessageId : string?`, `Audio : AudioPayload?` |
-| `BlobPayload` | `BlobUri : string`, `ContentType : string`, `SizeBytes : long` |
-| `AudioPayload : BlobPayload` | `Language : string?`, `DurationMs : int?`, `SttStatus : SpeechProcessingStatus?`, `TtsStatus : SpeechProcessingStatus?` |
+| `MessagePayload` | `ProviderType : string?`, `ProviderMessageId : string?` |
 
 #### `ToolExecutionRequest`
 
@@ -529,7 +527,7 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 6. Guarda el `message` entrante con `ProviderMessageId` para evitar duplicados.
 7. Si el mensaje trae audio, guarda sus metadatos en `message.payload_json.audio`.
 8. El agente procesa el turno usando `agent_profile`, ultimos mensajes elegibles y herramientas habilitadas en `company_tool`.
-9. Si el agente pide una herramienta, Worker orquesta el turno y delega en `CeoAgent.Tools`, donde el gateway valida el catalogo habilitado, ejecuta el handler nativo, registra `tool_execution` cuando aplica y devuelve un resultado sanitizado al modelo antes de responder al cliente.
+9. Si el agente pide una herramienta, Worker orquesta el turno y delega en `CeoAgent.Infrastructure/Implementation/AITools`, donde el gateway valida el catalogo habilitado, ejecuta el handler nativo, registra `tool_execution` cuando aplica y devuelve un resultado sanitizado al modelo antes de responder al cliente.
 
 ---
 

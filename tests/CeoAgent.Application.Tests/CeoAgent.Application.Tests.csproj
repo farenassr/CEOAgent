@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\CeoAgent.Application\CeoAgent.Application.csproj" />
+    <ProjectReference Include="..\..\src\CeoAgent.Application\CeoAgent.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

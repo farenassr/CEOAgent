@@ -1,4 +1,5 @@
-using CeoAgent.Integrations.Jobs;
+using CeoAgent.Application.Abstractions.Jobs;
+using CeoAgent.Shared.Jobs;
 using Shouldly;
 
 namespace CeoAgent.Worker.Tests.Jobs;

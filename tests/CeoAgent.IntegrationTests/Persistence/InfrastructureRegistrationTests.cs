@@ -1,5 +1,5 @@
-using CeoAgent.Application.Company.Abstractions;
-using CeoAgent.Application.Company.Implementation;
+using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;

@@ -1,8 +1,9 @@
-using CeoAgent.Adapters.WhatsApp;
-using CeoAgent.Adapters.WhatsApp.Abstractions;
-using CeoAgent.Adapters.Secrets;
-using CeoAgent.Adapters.WhatsApp.Client;
-using CeoAgent.Integrations.Messaging;
+using CeoAgent.Infrastructure.ApiClient.WhatsApp;
+using CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
+using CeoAgent.Application.Abstractions.Secrets;
+using CeoAgent.Infrastructure.Implementation.Secrets;
+using CeoAgent.Application.Abstractions.Messaging;
+using CeoAgent.Shared.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Shouldly;
@@ -58,7 +59,6 @@ public sealed class WhatsAppCloudIntegrationTests
             resolver,
             client,
             secrets,
-            new HttpClient(),
             configuration,
             logger);
 
@@ -108,7 +108,7 @@ public sealed class WhatsAppCloudIntegrationTests
         }
     }
 
-    private sealed class RecordingWhatsAppCloudRefitClient : IWhatsAppCloudRefitClient
+    private sealed class RecordingWhatsAppCloudRefitClient : IWhatsAppCloudClient
     {
         public string? Authorization { get; private set; }
 
@@ -129,13 +129,6 @@ public sealed class WhatsAppCloudIntegrationTests
                 [new WhatsAppSentMessage("wamid.sent")]));
         }
 
-        public Task<WhatsAppMediaResponse> GetMediaAsync(
-            string mediaId,
-            string authorization,
-            CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
     }
 
     private sealed class FakeSecretValueProvider : Dictionary<string, string>, ISecretValueProvider

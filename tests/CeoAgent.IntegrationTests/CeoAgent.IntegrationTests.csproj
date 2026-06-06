@@ -1,10 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\CeoAgent.Adapters\CeoAgent.Adapters.csproj" />
-    <ProjectReference Include="..\..\CeoAgent.Integrations\CeoAgent.Integrations.csproj" />
-    <ProjectReference Include="..\..\CeoAgent.Tools\CeoAgent.Tools.csproj" />
+    <ProjectReference Include="..\..\src\CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
