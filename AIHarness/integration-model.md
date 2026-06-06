@@ -4,49 +4,60 @@ This document defines how external systems enter CeoAgent.
 
 ## Boundary Rule
 
-Business logic talks to ports. Provider-specific code lives behind adapters.
+Business logic talks to ports. Provider-specific code lives behind integration implementations.
 
 ```text
 Business workflow
-  -> CeoAgent.Integrations port
-  -> CeoAgent.Adapters provider implementation
+  -> CeoAgent.Application abstraction
+  -> CeoAgent.Infrastructure provider implementation
   -> external provider
 ```
 
-Within integration areas, put port interfaces in `Abstractions` and
-provider-neutral request/result records in `Models` when the folder split helps
-readability. When a folder split is used, namespaces should include the same
-folder segment. Keep provider SDK clients, Refit DTOs, and provider-specific
-implementation abstractions inside `CeoAgent.Adapters`.
+Put port interfaces in `CeoAgent.Application/Abstractions`, provider-neutral
+request/result records in `CeoAgent.Shared`, and provider-specific runtime code
+in `CeoAgent.Infrastructure/Implementation`. Namespaces must include the same
+folder segments.
+
+For AI tool capabilities, keep the complete provider capability under
+`CeoAgent.Infrastructure/Implementation/AITools/<ProviderOrCapability>/`.
+Provider-backed integration code goes in an `Integration` subfolder, and tool
+executors, validators, scheduling policies, and tool-specific helpers stay in
+the same provider/capability folder. For example, Google Calendar code belongs
+under `Implementation/AITools/GoogleCalendar`, with external provider calls and
+SDK factories under `Implementation/AITools/GoogleCalendar/Integration`.
+Keep provider SDK clients, Refit DTOs, and provider-specific implementation
+abstractions inside Infrastructure implementation folders.
 
 ## Current Ports
 
 | Port | Project | Purpose |
 | --- | --- | --- |
-| `IMessageChannelIntegration` | `CeoAgent.Integrations/Messaging` | Send and receive channel messages. WhatsApp Cloud is the MVP provider. |
-| `IWhatsAppChannelCredentialResolver` | `CeoAgent.Integrations/Messaging` | Resolve WhatsApp credential references for a company channel. |
-| `ICalendarIntegration` | `CeoAgent.Integrations/Calendar` | Calendar availability and reservation operations. Google Calendar is the MVP provider. |
-| `IAgentRuntime` | `CeoAgent.Integrations/AI` | Provider-neutral model runtime. OpenAI is the MVP LLM provider and is implemented in adapters. |
-| Speech ports | `CeoAgent.Integrations/Speech` | Transcription and speech synthesis workflows when enabled. |
-| Job contracts | `CeoAgent.Integrations/Jobs` | Queue payload contracts shared by API and Worker. |
+| `IMessageChannelIntegration` | `CeoAgent.Application/Abstractions/Messaging` | Send and receive channel messages. WhatsApp Cloud is the MVP provider. |
+| `IWhatsAppChannelCredentialResolver` | `CeoAgent.Application/Abstractions/Messaging` | Resolve WhatsApp credential references for a company channel. |
+| `ICalendarIntegration` | `CeoAgent.Application/Abstractions/AITools/GoogleCalendar` | Calendar availability and reservation operations. Google Calendar is the MVP provider. |
+| `IAgentRuntime` | `CeoAgent.Application/Abstractions/AI` | Provider-neutral model runtime. OpenAI is the MVP LLM provider and is implemented in Infrastructure. |
+| Job constants/retry contracts | `CeoAgent.Application/Abstractions/Jobs` | Queue names and retry policy shared by API and Worker. |
+| Job payloads | `CeoAgent.Shared/Jobs` | Queue payload models shared by API and Worker. |
 
-## Adapter Rules
+## Implementation Rules
 
-- Keep provider SDKs and Refit clients in `CeoAgent.Adapters`.
-- Keep LLM SDK types in `CeoAgent.Adapters`; Worker receives only provider-neutral runtime DTOs.
+- Keep provider SDKs and Refit clients in `CeoAgent.Infrastructure/Implementation`
+  or implementation-owned API client folders; AI tool provider SDK usage belongs
+  under `Implementation/AITools/<ProviderOrCapability>/Integration`.
+- Keep LLM SDK types in `CeoAgent.Infrastructure/Implementation`; Worker receives only provider-neutral runtime DTOs.
 - Use Refit for typed HTTP clients when practical.
 - Use raw `HttpClient` only for streaming, multipart, media download/upload,
   or provider-specific needs.
-- Polly is allowed inside adapter-owned HTTP stacks.
+- Polly is allowed inside implementation-owned HTTP stacks.
 - Do not add Polly to Aspire-wired clients.
 - Keep one implementation per port until a second provider requires keyed DI.
-- The LLM runtime adapter must not execute business side effects automatically.
+- The LLM runtime implementation must not execute business side effects automatically.
   Model-requested tools are routed by Worker orchestration into the
-  `CeoAgent.Tools` tool gateway.
+  the Infrastructure tool gateway.
 - The OpenAI MVP runtime currently uses the OpenAI Responses SDK surface. Keep
   that experimental SDK usage isolated behind `IAgentRuntime`, and reuse
-  adapter-owned client instances instead of constructing SDK clients inside each
-  agent loop iteration.
+  implementation-owned client instances instead of constructing SDK clients
+  inside each agent loop iteration.
 
 ## Credential Rules
 
@@ -57,7 +68,7 @@ implementation abstractions inside `CeoAgent.Adapters`.
 
 ## Contract Test Template
 
-When adding or changing an adapter, add a focused contract test plan:
+When adding or changing a provider implementation, add a focused contract test plan:
 
 ```text
 Provider:

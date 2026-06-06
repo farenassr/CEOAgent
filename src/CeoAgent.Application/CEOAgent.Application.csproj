@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CeoAgent.Shared\CeoAgent.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Apis.Calendar.v3" Version="1.74.0.4154" />
+    <PackageReference Include="OpenAI" Version="2.10.0" />
+    <PackageReference Update="Meziantou.Analyzer" Version="3.0.98" />
+  </ItemGroup>
+</Project>

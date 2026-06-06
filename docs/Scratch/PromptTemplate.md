@@ -9,7 +9,7 @@ Start this as a harness-engineered development phase.
 - Follow `AGENTS.md`.
 - Use `.codex/AGENTS.md` only when relevant.
 - Use `AIHarness/` docs only when relevant.
-- Prefer `scripts/` over ad-hoc commands.
+- Prefer `AIHarness/scripts/` over ad-hoc commands.
 - Use relevant `.codex/agents/` subagents only when they add value.
 - Keep changes small, scoped, reversible, and production-safe.
 - Do not refactor unrelated code.

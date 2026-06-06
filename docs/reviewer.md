@@ -22,7 +22,7 @@ Antes de revisar:
 5. Enfócate en archivos y líneas modificadas.
 6. Puedes leer archivos no modificados solo cuando sean necesarios para entender contexto, contratos, patrones existentes o impacto real.
 7. Lee documentos de `AIHarness/` solo si son relevantes para los cambios.
-8. Usa `scripts/` en lugar de comandos ad-hoc cuando necesites validar algo.
+8. Usa `AIHarness/scripts/` en lugar de comandos ad-hoc cuando necesites validar algo.
 
 ## Ambiguity Protocol & Workflow
 

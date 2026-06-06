@@ -1,13 +1,13 @@
-using CeoAgent.Application.Company.Abstractions;
-using CeoAgent.Application.Company.Implementation;
+using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using System.Text.Json;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
-using CeoAgent.Tools.Implementation.Execution;
-using CeoAgent.Tools.Models.Execution;
+using CeoAgent.Infrastructure.Implementation.AITools.Execution;
+using CeoAgent.Shared.AITools;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Shouldly;
 

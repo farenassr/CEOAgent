@@ -1,21 +1,22 @@
-using System.Text;
 using System.Text.Json;
-using CeoAgent.Integrations.AI;
-using CeoAgent.Application.Company.Abstractions;
-using CeoAgent.Application.Company.Implementation;
+using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Shared.AI;
+using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
-using CeoAgent.Integrations.Calendar;
-using CeoAgent.Integrations.Jobs;
-using CeoAgent.Integrations.Messaging;
-using CeoAgent.Integrations.Speech;
+using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
+using CeoAgent.Shared.Calendar;
+using CeoAgent.Application.Abstractions.Jobs;
+using CeoAgent.Shared.Jobs;
+using CeoAgent.Application.Abstractions.Messaging;
+using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
-using CeoAgent.Shared.Media;
-using CeoAgent.Tools.Implementation.Execution;
-using CeoAgent.Tools.Models.Execution;
-using CeoAgent.Tools.Implementation.GoogleCalendar;
+using CeoAgent.Infrastructure.Implementation.AITools.Execution;
+using CeoAgent.Shared.AITools;
+using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Worker.Jobs;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -27,10 +28,9 @@ namespace CeoAgent.Worker.Tests.Jobs;
 public sealed class ProcessIncomingMessageJobProcessorTests
 {
     [Test]
-    public async Task ProcessAsync_ForInboundAudio_TranscribesBuildsPromptAndRepliesWithTtsAudio()
+    public async Task ProcessAsync_ForInboundAudio_SendsTextOnlyReplyWithoutCallingAgent()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.Blobs.ConsumeStream = true;
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
@@ -41,34 +41,18 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             CancellationToken.None);
 
         fixture.Messaging.ReadMessages.Single().ProviderMessageId.ShouldBe("wamid.audio-1");
-        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Recibí tu audio, lo estoy revisando.");
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Por ahora solo puedo procesar mensajes de texto.");
 
-        fixture.Blobs.Stored.Single(blob => blob.Direction == AudioBlobDirection.Inbound).Path
-            .ShouldContain("/media/audio/inbound/");
-        fixture.InboundMessage.MessageText.ShouldBe("Quiero reservar a las cuatro.");
-        fixture.InboundMessage.Payload!.Audio!.SttStatus.ShouldBe(SpeechProcessingStatus.Completed);
-        fixture.InboundMessage.Payload.Audio.BlobUri.ShouldContain("https://blob.test/");
-        fixture.Transcription.LastRequestBytes.ShouldBeGreaterThan(0);
-
-        fixture.Agent.Requests.Single().ModelName.ShouldBe("gpt-4.1-mini");
-        fixture.Agent.Requests.Single().SystemPrompt.ShouldContain("Company: Contoso Bistro");
-        fixture.Agent.Requests.Single().SystemPrompt.ShouldContain("Language: es");
-        fixture.Agent.Requests.Single().SystemPrompt.ShouldContain("Responde corto.");
-        fixture.Agent.Requests.Single().Tools.Select(tool => tool.Name).ShouldBe([
-            MvpToolKeys.CheckGoogleCalendarAvailability,
-            MvpToolKeys.CreateGoogleCalendarReservation,
-        ]);
-
-        fixture.Blobs.Stored.Single(blob => blob.Direction == AudioBlobDirection.Outbound).Path
-            .ShouldContain("/media/audio/outbound/");
-        fixture.Messaging.AudioMessages.Single().AudioUri.ToString().ShouldContain("https://blob.test/");
+        fixture.Agent.Requests.ShouldBeEmpty();
 
         var assistant = fixture.DbContext.ChangeTracker
             .Entries<Message>()
             .Select(entry => entry.Entity)
             .Single(message => message.Role == MessageRole.Assistant);
-        assistant.MessageText.ShouldBe("Claro, reviso disponibilidad.");
-        assistant.Payload!.Audio!.TtsStatus.ShouldBe(SpeechProcessingStatus.Completed);
+        assistant.Type.ShouldBe(MessageType.Text);
+        assistant.MessageText.ShouldBe("Por ahora solo puedo procesar mensajes de texto.");
+        assistant.Payload!.ProviderType.ShouldBe("text");
+        assistant.Payload.ProviderMessageId.ShouldBe("sent-text-1");
     }
 
     [Test]
@@ -86,8 +70,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         fixture.Messaging.ReadMessages.Count.ShouldBe(1);
         fixture.Messaging.TextMessages.Count.ShouldBe(1);
-        fixture.Messaging.AudioMessages.Count.ShouldBe(1);
-        fixture.Agent.Requests.Count.ShouldBe(1);
+        fixture.Agent.Requests.Count.ShouldBe(0);
 
         fixture.CompanyContext.SetCompany(fixture.CompanyId);
         var assistantCount = await fixture.DbContext.Messages
@@ -166,6 +149,36 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
+    public async Task ProcessAsync_DoesNotTrackReadOnlyContextEntities()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola desde WhatsApp admin";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+        fixture.DbContext.ChangeTracker.Clear();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.DbContext.ChangeTracker.Entries<Company>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<AgentProfile>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<CompanyChannel>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<Customer>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<Conversation>().ShouldNotBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<Message>().ShouldNotBeEmpty();
+    }
+
+    [Test]
     public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_ExecutesMutatingTool()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
@@ -210,6 +223,54 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             && message.Text != null
             && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)
             && message.Text.Contains("\"eventId\":\"event-123\"", StringComparison.Ordinal)).ShouldBeTrue();
+    }
+
+    [Test]
+    public async Task ProcessAsync_ForTextMessageWithMutatingTool_PersistsAllDatabaseChangesWithSingleSaveChanges()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        fixture.Agent.Results.Enqueue(new AgentRunResult(
+            AssistantText: null,
+            ToolCalls:
+            [
+                new AgentToolCall(
+                    "call-reservation",
+                    MvpToolKeys.CreateGoogleCalendarReservation,
+                    JsonSerializer.SerializeToElement(new
+                    {
+                        start = "2026-05-28T16:00:00-05:00",
+                        end = "2026-05-28T17:00:00-05:00",
+                        summary = "Reservation for 2",
+                    })),
+            ]));
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
+
+        var saveChangesCount = 0;
+        fixture.DbContext.SavingChanges += (_, _) => saveChangesCount++;
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        saveChangesCount.ShouldBe(1);
+        fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
+        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
+        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.ToolResult)).ShouldBe(1);
+        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(1);
     }
 
     [Test]
@@ -330,9 +391,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             CompanyContext.SetCompany(CompanyId);
             DbContext = database.Context;
             Messaging = new FakeMessageChannelIntegration();
-            Transcription = new FakeTranscriptionIntegration();
-            Speech = new FakeSpeechSynthesisIntegration();
-            Blobs = new FakeAudioBlobStore();
             Agent = new FakeAgentRuntime();
             Calendar = new FakeCalendarIntegration();
             var calendarExecutor = new GoogleCalendarToolExecutor(
@@ -350,9 +408,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,
-                Transcription,
-                Speech,
-                Blobs,
                 Agent,
                 toolRegistry,
                 toolGateway,
@@ -428,17 +483,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Role = MessageRole.User,
                 Type = MessageType.Audio,
                 ProviderMessageId = "wamid.audio-1",
-                Payload = MessagePayload.ForAudio(
-                    "audio",
-                    new AudioPayload
-                    {
-                        BlobUri = "whatsapp-media://audio-media-1",
-                        ContentType = "audio/ogg",
-                        SizeBytes = 0,
-                        ProviderMediaId = "audio-media-1",
-                        SttStatus = SpeechProcessingStatus.Pending,
-                    },
-                    "wamid.audio-1"),
+                Payload = new MessagePayload
+                {
+                    ProviderType = "audio",
+                    ProviderMessageId = "wamid.audio-1",
+                },
                 OccurredAt = new DateTime(2026, 5, 28, 21, 0, 0, DateTimeKind.Utc),
             };
 
@@ -500,12 +549,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public FakeMessageChannelIntegration Messaging { get; }
 
-        public FakeTranscriptionIntegration Transcription { get; }
-
-        public FakeSpeechSynthesisIntegration Speech { get; }
-
-        public FakeAudioBlobStore Blobs { get; }
-
         public FakeAgentRuntime Agent { get; }
 
         public FakeCalendarIntegration Calendar { get; }
@@ -538,76 +581,16 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public List<ChannelTextMessage> TextMessages { get; } = [];
 
-        public List<ChannelAudioMessage> AudioMessages { get; } = [];
-
         public Task MarkMessageReadAsync(ChannelMessageReference message, CancellationToken cancellationToken)
         {
             ReadMessages.Add(message);
             return Task.CompletedTask;
         }
 
-        public Task<DownloadedMedia> DownloadMediaAsync(ChannelMediaReference media, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new DownloadedMedia(
-                new MemoryStream(Encoding.UTF8.GetBytes("audio")),
-                "audio/ogg",
-                ".ogg",
-                5));
-        }
-
         public Task<SentMessageReference> SendTextAsync(ChannelTextMessage message, CancellationToken cancellationToken)
         {
             TextMessages.Add(message);
             return Task.FromResult(new SentMessageReference($"sent-text-{TextMessages.Count}"));
-        }
-
-        public Task<SentMessageReference> SendAudioAsync(ChannelAudioMessage message, CancellationToken cancellationToken)
-        {
-            AudioMessages.Add(message);
-            return Task.FromResult(new SentMessageReference($"sent-audio-{AudioMessages.Count}"));
-        }
-    }
-
-    private sealed class FakeTranscriptionIntegration : ITranscriptionIntegration
-    {
-        public int LastRequestBytes { get; private set; }
-
-        public Task<TranscriptionResult> TranscribeAsync(TranscriptionRequest request, CancellationToken cancellationToken)
-        {
-            using var copy = new MemoryStream();
-            request.Audio.CopyTo(copy);
-            LastRequestBytes = (int)copy.Length;
-            return Task.FromResult(new TranscriptionResult("Quiero reservar a las cuatro.", "es", TimeSpan.FromSeconds(2)));
-        }
-    }
-
-    private sealed class FakeSpeechSynthesisIntegration : ISpeechSynthesisIntegration
-    {
-        public Task<SpeechSynthesisResult> SynthesizeAsync(SpeechSynthesisRequest request, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new SpeechSynthesisResult(
-                new MemoryStream(Encoding.UTF8.GetBytes("tts")),
-                "audio/mpeg",
-                ".mp3"));
-        }
-    }
-
-    private sealed class FakeAudioBlobStore : IAudioBlobStore
-    {
-        public List<AudioBlobStoreRequest> Stored { get; } = [];
-
-        public bool ConsumeStream { get; set; }
-
-        public Task<AudioBlobStoreResult> StoreAsync(AudioBlobStoreRequest request, CancellationToken cancellationToken)
-        {
-            if (ConsumeStream)
-            {
-                using var copy = new MemoryStream();
-                request.Content.CopyTo(copy);
-            }
-
-            Stored.Add(request);
-            return Task.FromResult(new AudioBlobStoreResult(new Uri($"https://blob.test/{request.Path}"), request.SizeBytes));
         }
     }
 

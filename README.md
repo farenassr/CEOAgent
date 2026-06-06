@@ -45,7 +45,7 @@ Azure Storage Queue
   |
   v
 CeoAgent.Worker
-  |  runs agent, validates tools, calls adapters, sends reply
+  |  runs agent, validates tools, calls integrations, sends reply
   v
 PostgreSQL + Blob Storage + external integrations
 ```
@@ -53,26 +53,24 @@ PostgreSQL + Blob Storage + external integrations
 Core principles:
 
 - Vertical slices for use cases.
-- Ports and adapters for external integrations.
+- Ports and implementations for external integrations.
 - Microsoft Agent Framework for agent and LLM runtime.
 - Controlled tool handlers for side effects.
 - Strongly typed options and startup validation.
 
 ## Solution Shape
 
+Production projects live under `src/`; test projects live under `tests/`.
+
 | Project | Role |
 | --- | --- |
-| `CeoAgent.AppHost` | Local .NET Aspire orchestration for API, Worker, PostgreSQL, queues, blobs, and Key Vault parameters. |
-| `CeoAgent.ApiService` | FastEndpoints HTTP surface, admin endpoints, webhook receiver, errors, OpenAPI, and Scalar. |
-| `CeoAgent.Worker` | Background processing, jobs, agent execution, tools, and integrations. |
-| `CeoAgent.ServiceDefaults` | Health checks, OpenTelemetry, service discovery, and baseline resilience. |
-| `CeoAgent.Application` | Shared application logic and internal business contracts. |
-| `CeoAgent.Infrastructure` | EF Core entities, configurations, DbContext, persistence, and infrastructure wiring. |
-| `CeoAgent.Integrations` | Integration ports and contracts only. |
-| `CeoAgent.Adapters` | Provider implementations for WhatsApp, calendars, AI providers, and external HTTP. |
-| `CeoAgent.Tools` | Native MVP tool handlers. |
-| `CeoAgent.Shared` | Public request/response DTOs and shared enums. |
-| `CeoAgent.Web` | Web template project; not central to the MVP backend for now. |
+| `src/CeoAgent.AppHost` | Local .NET Aspire orchestration for API, Worker, PostgreSQL, queues, blobs, and Key Vault parameters. |
+| `src/CeoAgent.ApiService` | FastEndpoints HTTP surface, admin endpoints, webhook receiver, errors, OpenAPI, and Scalar. |
+| `src/CeoAgent.Worker` | Background processing, jobs, agent execution, tools, and integrations. |
+| `src/CeoAgent.ServiceDefaults` | Health checks, OpenTelemetry, service discovery, and baseline resilience. |
+| `src/CeoAgent.Application` | Application abstractions and prompt behavior. |
+| `src/CeoAgent.Infrastructure` | EF Core entities, persistence, provider implementations, and native MVP tool handlers. |
+| `src/CeoAgent.Shared` | Public DTOs, shared enums, and provider-neutral runtime/tool models. |
 | `tests/*` | API, integration, and Worker tests. |
 
 ## Agent And Harness Rules
@@ -147,7 +145,7 @@ dotnet test CeoAgent.slnx
 Run with Aspire:
 
 ```powershell
-dotnet run --project CeoAgent.AppHost/CeoAgent.AppHost.csproj
+dotnet run --project src/CeoAgent.AppHost/CeoAgent.AppHost.csproj
 ```
 
 The API exposes:
@@ -167,35 +165,35 @@ Vault is reserved for shared publish/deploy secrets.
 Configure the local PostgreSQL password for Aspire:
 
 ```powershell
-dotnet user-secrets set "Parameters:postgres-password" "postgres" --project CeoAgent.AppHost
+dotnet user-secrets set "Parameters:postgres-password" "postgres" --project src/CeoAgent.AppHost
 ```
 
 Configure local admin authentication for Aspire:
 
 ```powershell
-dotnet user-secrets set "Parameters:admin-api-key" "dev-admin-key-change-me" --project CeoAgent.AppHost
-dotnet user-secrets set "Parameters:admin-company-id" "018f5c7a-1234-7890-abcd-000000000001" --project CeoAgent.AppHost
+dotnet user-secrets set "Parameters:admin-api-key" "dev-admin-key-change-me" --project src/CeoAgent.AppHost
+dotnet user-secrets set "Parameters:admin-company-id" "018f5c7a-1234-7890-abcd-000000000001" --project src/CeoAgent.AppHost
 ```
 
 Configure the local EF Core design-time connection string:
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:CeoAgent" "Host=localhost;Port=5432;Database=CeoAgent;Username=postgres;Password=postgres" --project CeoAgent.Infrastructure
+dotnet user-secrets set "ConnectionStrings:CeoAgent" "Host=localhost;Port=5432;Database=CeoAgent;Username=postgres;Password=postgres" --project src/CeoAgent.Infrastructure
 ```
 
 Configure Langfuse for Aspire:
 
 ```powershell
-dotnet user-secrets set "Parameters:langfuse-host" "https://cloud.langfuse.com" --project CeoAgent.AppHost
-dotnet user-secrets set "Parameters:langfuse-public-key" "<langfuse-public-key>" --project CeoAgent.AppHost
-dotnet user-secrets set "Parameters:langfuse-secret-key" "<langfuse-secret-key>" --project CeoAgent.AppHost
+dotnet user-secrets set "Parameters:langfuse-host" "https://cloud.langfuse.com" --project src/CeoAgent.AppHost
+dotnet user-secrets set "Parameters:langfuse-public-key" "<langfuse-public-key>" --project src/CeoAgent.AppHost
+dotnet user-secrets set "Parameters:langfuse-secret-key" "<langfuse-secret-key>" --project src/CeoAgent.AppHost
 ```
 
 With Aspire running and the connection string configured, applying migrations
 is a manual action:
 
 ```powershell
-dotnet ef database update --project CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj
+dotnet ef database update --project src\CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj
 ```
 
 For publish/runtime, API and Worker receive connection strings through Aspire or
@@ -244,7 +242,7 @@ The immediate backend focus remains the MVP flow:
 - Queue processing.
 - Agent runner.
 - Tool handlers.
-- Real adapters.
+- Real integration implementations.
 - Google Calendar integration.
 - End-to-end LLM observability.
 

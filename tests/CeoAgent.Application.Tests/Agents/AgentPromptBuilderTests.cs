@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CeoAgent.Application.Agents;
-using CeoAgent.Integrations.AI;
+using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Shared.AI;
 using Shouldly;
 
 namespace CeoAgent.Application.Tests.Agents;

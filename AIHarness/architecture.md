@@ -13,14 +13,14 @@ WhatsApp Cloud
   -> CeoAgent.ApiService
   -> Azure Storage Queue
   -> CeoAgent.Worker
-  -> CeoAgent.Tools
-  -> PostgreSQL / Blob Storage / provider adapters
+  -> CeoAgent.Infrastructure tool execution
+  -> PostgreSQL / Blob Storage / provider implementations
 ```
 
 The API receives HTTP requests, validates webhooks, persists inbound state, and
 queues work. The Worker owns long-running job and agent-loop orchestration,
 outbound messaging, and integration call coordination. Native business tool
-execution lives in `CeoAgent.Tools`.
+execution lives in `CeoAgent.Infrastructure/Implementation/AITools`.
 
 ## Project Responsibilities
 
@@ -28,12 +28,9 @@ execution lives in `CeoAgent.Tools`.
 | --- | --- |
 | `CeoAgent.ApiService` | FastEndpoints, webhook receiver, admin endpoints, global errors, correlation, HTTP contracts. |
 | `CeoAgent.Worker` | Queue-driven jobs, agent loop orchestration, outbound processing. |
-| `CeoAgent.Application` | Shared application behavior, AI prompt/runner abstractions, company context contracts. |
-| `CeoAgent.Infrastructure` | EF Core entities/configurations, DbContext, storage and queue infrastructure. |
-| `CeoAgent.Integrations` | Port interfaces and provider-neutral DTOs only. |
-| `CeoAgent.Adapters` | Provider-specific implementations for WhatsApp, Google Calendar, secrets, and external HTTP. |
-| `CeoAgent.Tools` | Native business tool catalog, gateway, and handlers exposed to the agent. |
-| `CeoAgent.Shared` | Public request/response DTOs and shared enums. |
+| `CeoAgent.Application` | Application-owned abstractions, prompt behavior, and company context contracts. |
+| `CeoAgent.Infrastructure` | EF Core entities/configurations, DbContext, storage and queue infrastructure, provider implementations, company context implementation, and native tool execution. |
+| `CeoAgent.Shared` | Public request/response DTOs, shared enums, provider-neutral runtime/tool/calendar/messaging/job models. |
 
 ## Dependency Direction
 
@@ -41,18 +38,14 @@ Allowed direction:
 
 ```text
 ApiService / Worker
-  -> Application / Infrastructure / Integrations / Adapters / Tools / Shared
+  -> Application / Infrastructure / Shared
 Application
-  -> Integrations
+  -> Shared
 Infrastructure
   -> Application / Shared
-Adapters
-  -> Integrations
-Tools
-  -> Application / Integrations / Infrastructure as needed by existing patterns
 ```
 
-Avoid direct provider SDK usage outside `CeoAgent.Adapters`.
+Avoid direct provider SDK usage outside `CeoAgent.Infrastructure/Implementation`.
 
 ## Physical Organization
 
@@ -61,9 +54,8 @@ contains contracts, concrete runtime code, and request/result shapes that would
 otherwise be mixed together. Files under those folders should declare namespaces
 that include the same folder segments.
 
-`CeoAgent.Tools` is the enforced MVP runtime example: non-root source files
-belong under `Abstractions`, `Implementation`, or `Models`, while root files are
-limited to assembly markers and DI registration.
+Application abstractions, Infrastructure implementations, and Shared models use
+folders and namespaces that include the same segments.
 
 ## Non-Negotiable Checks
 
@@ -81,6 +73,6 @@ limited to assembly markers and DI registration.
 
 - Does this change keep long work out of the API request path?
 - Does this change preserve company isolation?
-- Does this change keep provider details behind ports/adapters?
+- Does this change keep provider details behind integration ports and implementations?
 - Does this change add tests proportionate to risk?
 - Does this change update docs/evals when behavior changes?

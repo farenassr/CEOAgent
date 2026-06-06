@@ -1,12 +1,13 @@
-using CeoAgent.Application.Company.Abstractions;
-using CeoAgent.Application.Company.Implementation;
+using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
-using CeoAgent.Integrations.Calendar;
+using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
+using CeoAgent.Shared.Calendar;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
-using CeoAgent.Tools.Implementation.GoogleCalendar;
+using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -97,6 +98,7 @@ public sealed class GoogleCalendarToolExecutorTests
 
         second.Status.ShouldBe(ToolExecutionStatus.Succeeded);
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
+        await fixture.DbContext.SaveChangesAsync();
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
     }
 
@@ -124,6 +126,34 @@ public sealed class GoogleCalendarToolExecutorTests
             CancellationToken.None);
 
         fixture.Calendar.ReservationRequests.Single().CredentialReference.ShouldBe("stored://google-calendar/contoso");
+    }
+
+    [Test]
+    public async Task CreateReservationAsync_DoesNotTrackReadOnlyContextEntities()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.DbContext.ChangeTracker.Clear();
+
+        await fixture.Executor.CreateReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new CreateCalendarEventRequest
+            {
+                Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+                End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                Summary = "Reservation for 2",
+            },
+            "reservation-key",
+            CancellationToken.None);
+
+        fixture.DbContext.ChangeTracker.Entries<Conversation>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<Company>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<CompanyTool>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<IntegrationCredentialReference>().ShouldBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
+        fixture.DbContext.ChangeTracker.Entries<Message>().ShouldNotBeEmpty();
     }
 
     private sealed class CalendarToolFixture

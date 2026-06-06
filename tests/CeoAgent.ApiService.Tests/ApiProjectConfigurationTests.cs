@@ -15,6 +15,7 @@ public sealed class ApiProjectConfigurationTests
             "..",
             "..",
             "..",
+            "src",
             "CeoAgent.ApiService",
             "CeoAgent.ApiService.csproj"));
         var document = XDocument.Load(projectPath);

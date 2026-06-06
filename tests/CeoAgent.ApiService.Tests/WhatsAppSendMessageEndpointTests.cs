@@ -2,7 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using CeoAgent.ApiService.Tests.Support;
 using CeoAgent.ApiService.Infrastructure.Security;
-using CeoAgent.Integrations.Messaging;
+using CeoAgent.Application.Abstractions.Messaging;
+using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Response.Company;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -137,20 +138,10 @@ public sealed class WhatsAppSendMessageEndpointTests
             throw new NotSupportedException();
         }
 
-        public Task<DownloadedMedia> DownloadMediaAsync(ChannelMediaReference media, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-
         public Task<SentMessageReference> SendTextAsync(ChannelTextMessage message, CancellationToken cancellationToken)
         {
             TextMessages.Add(message);
             return Task.FromResult(new SentMessageReference($"wamid.sent-{TextMessages.Count}"));
-        }
-
-        public Task<SentMessageReference> SendAudioAsync(ChannelAudioMessage message, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
         }
     }
 

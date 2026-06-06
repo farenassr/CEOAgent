@@ -26,7 +26,7 @@ connection strings supplied by Aspire references.
 
 ## Harness Checks
 
-- Use `scripts/aspire-smoke.ps1 -StartAppHost` for an opt-in local health
+- Use `AIHarness/scripts/aspire-smoke.ps1 -StartAppHost` for an opt-in local health
   smoke check.
-- Use `scripts/harness-check.ps1` for static harness checks before closing
+- Use `AIHarness/scripts/harness-check.ps1` for static harness checks before closing
   harness changes.

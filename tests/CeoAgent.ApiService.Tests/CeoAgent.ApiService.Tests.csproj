@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\CeoAgent.ApiService\CeoAgent.ApiService.csproj" />
+    <ProjectReference Include="..\..\src\CeoAgent.ApiService\CeoAgent.ApiService.csproj" />
   </ItemGroup>
 
   <ItemGroup>

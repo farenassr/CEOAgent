@@ -1,5 +1,6 @@
-using CeoAgent.Adapters.GoogleCalendar.Service;
-using CeoAgent.Adapters.Secrets;
+using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
+using CeoAgent.Application.Abstractions.Secrets;
+using CeoAgent.Infrastructure.Implementation.Secrets;
 using Google.Apis.Calendar.v3;
 using Microsoft.Extensions.Caching.Memory;
 using Shouldly;

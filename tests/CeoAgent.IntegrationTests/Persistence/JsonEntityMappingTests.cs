@@ -1,9 +1,9 @@
-using CeoAgent.Application.Company.Abstractions;
-using CeoAgent.Application.Company.Implementation;
+using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.IntegrationTests.Infrastructure;
-using CeoAgent.Infrastructure.Scheduling;
+using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -55,8 +55,6 @@ public sealed class JsonEntityMappingTests
 
         typeof(CheckAvailabilityConfig).IsAssignableTo(typeof(ToolConfiguration)).ShouldBeFalse();
         typeof(GoogleCalendarCredentialMetadata).IsAssignableTo(typeof(CredentialMetadata)).ShouldBeFalse();
-        typeof(AudioPayload).IsAssignableTo(typeof(BlobPayload)).ShouldBeTrue();
-        typeof(BlobPayload).IsAbstract.ShouldBeTrue();
         typeof(CheckAvailabilityRequest).IsAssignableTo(typeof(ToolExecutionRequest)).ShouldBeFalse();
         typeof(CheckAvailabilityResult).IsAssignableTo(typeof(ToolExecutionResult)).ShouldBeFalse();
     }
@@ -159,18 +157,6 @@ public sealed class JsonEntityMappingTests
             entityType.ShouldNotBeNull();
             entityType.GetDeclaredQueryFilters().ShouldNotBeEmpty($"{clrType.Name} should have a global company query filter.");
         }
-    }
-
-    [Test]
-    public void MessagePayload_UsesAudioComplexTypeWithSharedBlobFieldsAndEnumStatuses()
-    {
-        typeof(BlobPayload).GetProperty(nameof(BlobPayload.BlobUri))!.PropertyType.ShouldBe(typeof(string));
-        typeof(BlobPayload).GetProperty(nameof(BlobPayload.ContentType))!.PropertyType.ShouldBe(typeof(string));
-        typeof(BlobPayload).GetProperty(nameof(BlobPayload.SizeBytes))!.PropertyType.ShouldBe(typeof(long));
-        typeof(AudioPayload).GetProperty(nameof(AudioPayload.Language))!.PropertyType.ShouldBe(typeof(string));
-        typeof(AudioPayload).GetProperty(nameof(AudioPayload.DurationMs))!.PropertyType.ShouldBe(typeof(int?));
-        typeof(AudioPayload).GetProperty(nameof(AudioPayload.SttStatus))!.PropertyType.ShouldBe(typeof(SpeechProcessingStatus?));
-        typeof(AudioPayload).GetProperty(nameof(AudioPayload.TtsStatus))!.PropertyType.ShouldBe(typeof(SpeechProcessingStatus?));
     }
 
     [Test]
