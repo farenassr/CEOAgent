@@ -1,17 +1,17 @@
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
-using CeoAgent.Shared.AI;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
+using CeoAgent.Shared.AI;
 using CeoAgent.Shared.AITools;
 using CeoAgent.Shared.Constants;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 
-public sealed class CheckGoogleCalendarAvailabilityExecutor(
+public sealed class FindGoogleCalendarReservationsExecutor(
     GoogleCalendarToolExecutor executor,
     ToolExecutionGatewayHelper helper) : IToolExecutor
 {
-    public string ToolKey => MvpToolKeys.CheckGoogleCalendarAvailability;
+    public string ToolKey => MvpToolKeys.FindGoogleCalendarReservations;
 
     public async Task<ToolExecutionGatewayResult> ExecuteAsync(
         ToolExecutionGatewayRequest request,
@@ -19,12 +19,12 @@ public sealed class CheckGoogleCalendarAvailabilityExecutor(
         string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        return await helper.ExecuteValidatedAsync<CheckAvailabilityRequest>(
+        return await helper.ExecuteValidatedAsync<FindGoogleCalendarReservationsRequest>(
             request,
             descriptor,
             idempotencyKey,
             ToolExecutionGatewayHelper.IsValid,
-            (arguments, token) => executor.CheckAvailabilityAsync(
+            (arguments, token) => executor.FindReservationsAsync(
                 request.CompanyId,
                 request.ConversationId,
                 descriptor.CompanyToolId,

@@ -43,7 +43,47 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         return request.Start != default
             && request.End != default
             && request.End > request.Start
-            && !string.IsNullOrWhiteSpace(request.Summary);
+            && !string.IsNullOrWhiteSpace(request.Summary)
+            && !string.IsNullOrWhiteSpace(request.CustomerName);
+    }
+
+    public static bool IsValid(FindGoogleCalendarReservationsRequest request)
+    {
+        return request.Status is null
+            || string.Equals(request.Status, "active", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(request.Status, "cancelled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsValid(UpdateGoogleCalendarReservationRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.ReservationId)
+            && request.NewStart != default
+            && request.NewEnd != default
+            && request.NewEnd > request.NewStart;
+    }
+
+    public static bool IsValid(CancelGoogleCalendarReservationRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.ReservationId);
+    }
+
+    public async Task<ToolExecutionGatewayResult> ExecuteValidatedAsync<TRequest>(
+        ToolExecutionGatewayRequest request,
+        AgentToolDescriptor descriptor,
+        string idempotencyKey,
+        Func<TRequest, bool> isValid,
+        Func<TRequest, CancellationToken, Task<ToolExecution>> execute,
+        CancellationToken cancellationToken)
+        where TRequest : class
+    {
+        if (!TryDeserialize<TRequest>(request.ToolCall.Arguments, out var arguments)
+            || !isValid(arguments))
+        {
+            return await PersistDeniedAsync(request, descriptor, "malformed_arguments", idempotencyKey, cancellationToken);
+        }
+
+        var execution = await execute(arguments, cancellationToken);
+        return await ToGatewayResultAsync(request.ToolCall, execution, cancellationToken);
     }
 
     public async Task<ToolExecutionGatewayResult> PersistDeniedAsync(

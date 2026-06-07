@@ -34,16 +34,18 @@ public sealed class AgentPromptBuilderTests
         prompt.ShouldContain("Language: es");
         prompt.ShouldContain("Model: gpt-4.1-mini");
         prompt.ShouldContain("Hours: Mon-Fri 12:00-22:00; Sat 12:00-23:00; Sun closed");
-        prompt.ShouldContain("Rules:");
         prompt.ShouldContain("Responde corto.");
         prompt.ShouldContain("check_google_calendar_availability");
         prompt.ShouldContain("create_google_calendar_reservation");
+        prompt.ShouldNotContain("Rules:");
         prompt.ShouldNotContain("- Keep replies concise and useful.");
-        prompt.ShouldNotContain("- Do not promise or create reservations outside working hours.");
-        prompt.ShouldNotContain("- Do not invent availability.");
-        prompt.ShouldNotContain("- Call check_google_calendar_availability before offering or confirming reservation times.");
-        prompt.ShouldNotContain("- Do not confirm availability without calling check_google_calendar_availability.");
-        prompt.ShouldNotContain("- Only call create_google_calendar_reservation after explicit customer confirmation.");
+        prompt.ShouldNotContain("- Do not invent availability, reservations, customer names, phone numbers, or contact details.");
+        prompt.ShouldNotContain("- Do not ask for the customer's phone number to find, update, or cancel reservations when this conversation comes from WhatsApp.");
+        prompt.ShouldNotContain("- Use find_google_calendar_reservations to look up reservations for the current customer.");
+        prompt.ShouldNotContain("- If multiple matching reservations are found, ask which reservation before updating or cancelling.");
+        prompt.ShouldNotContain("- Do not confirm reservation updates or cancellations without a successful tool result.");
+        prompt.ShouldNotContain("- Call check_google_calendar_availability before offering or confirming new reservation times.");
+        prompt.ShouldNotContain("- Only call create_google_calendar_reservation after explicit customer confirmation and after the customer has provided their name.");
     }
 
     [Test]
@@ -67,7 +69,8 @@ public sealed class AgentPromptBuilderTests
 
         overrideIndex.ShouldBeGreaterThanOrEqualTo(0);
         reassertionIndex.ShouldBeGreaterThan(overrideIndex);
-        prompt[reassertionIndex..].ShouldContain("Never bypass calendar availability checks");
+        prompt[reassertionIndex..].ShouldNotContain("Never bypass calendar availability checks");
+        prompt[reassertionIndex..].ShouldNotContain("Never create a reservation without the customer's name");
         prompt[reassertionIndex..].ShouldContain("Never bypass company isolation");
     }
 

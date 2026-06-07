@@ -203,6 +203,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                         start = "2026-05-28T16:00:00-05:00",
                         end = "2026-05-28T17:00:00-05:00",
                         summary = "Reservation for 2",
+                        customerName = "Ada Lovelace",
                     })),
             ]));
         fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
@@ -250,6 +251,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                         start = "2026-05-28T16:00:00-05:00",
                         end = "2026-05-28T17:00:00-05:00",
                         summary = "Reservation for 2",
+                        customerName = "Ada Lovelace",
                     })),
             ]));
         fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
@@ -380,6 +382,60 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
     }
 
+    [Test]
+    public async Task ProcessAsync_WhenModelFindsReservations_IncludesReservationTimeInToolResult()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Tengo una reserva hoy?";
+        fixture.InboundMessage.Payload = null;
+        await fixture.DbContext.SaveChangesAsync();
+        fixture.Calendar.FindResult = new CalendarReservationSearchResult(
+        [
+            new CalendarReservationInfo(
+                "reservation-key",
+                "event-123",
+                new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                "Reservation for 2",
+                "Ada Lovelace",
+                "https://calendar.google.com/event?eid=event-123"),
+        ]);
+
+        fixture.Agent.Results.Enqueue(new AgentRunResult(
+            AssistantText: null,
+            ToolCalls:
+            [
+                new AgentToolCall(
+                    "call-find",
+                    MvpToolKeys.FindGoogleCalendarReservations,
+                    JsonSerializer.SerializeToElement(new
+                    {
+                        date = "2026-05-28",
+                        includePast = false,
+                        status = (string?)null,
+                    })),
+            ]));
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Tu reserva es a las 4:00 p.m.", []));
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.Count.ShouldBe(2);
+        fixture.Agent.Requests[1].Messages.Any(message =>
+            message.Role == "tool"
+            && message.ToolCallId == "call-find"
+            && message.Text is not null
+            && message.Text.Contains("\"count\":1", StringComparison.Ordinal)
+            && message.Text.Contains("2026-05-28T16:00:00-05:00", StringComparison.Ordinal)).ShouldBeTrue();
+        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Tu reserva es a las 4:00 p.m.");
+    }
+
     private sealed class ProcessorFixture
     {
         private readonly PostgresWorkerDatabase database;
@@ -402,7 +458,10 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var executors = new IToolExecutor[]
             {
                 new CheckGoogleCalendarAvailabilityExecutor(calendarExecutor, helper),
-                new CreateGoogleCalendarReservationExecutor(calendarExecutor, helper)
+                new CreateGoogleCalendarReservationExecutor(calendarExecutor, helper),
+                new FindGoogleCalendarReservationsExecutor(calendarExecutor, helper),
+                new UpdateGoogleCalendarReservationExecutor(calendarExecutor, helper),
+                new CancelGoogleCalendarReservationExecutor(calendarExecutor, helper)
             };
             var toolGateway = new ToolExecutionGateway(executors, helper);
             Processor = new ProcessIncomingMessageJobProcessor(
@@ -522,7 +581,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 CompanyId = CompanyId,
                 ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
                 Description = "Create a Google Calendar reservation after explicit customer confirmation.",
-                ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"}},"required":["start","end","summary"],"additionalProperties":false}"""),
+                ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"},"customerName":{"type":"string"}},"required":["start","end","summary","customerName"],"additionalProperties":false}"""),
                 IsEnabled = true,
                 CredentialReferenceId = credential.Id,
                 Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
@@ -532,7 +591,23 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                     BufferMinutes = 0,
                 }),
             };
-            DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool);
+            var findTool = new CompanyTool
+            {
+                Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b43"),
+                CompanyId = CompanyId,
+                ToolKey = MvpToolKeys.FindGoogleCalendarReservations,
+                Description = "Find reservations for the current WhatsApp customer.",
+                ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":["string","null"]},"includePast":{"type":"boolean"},"status":{"type":["string","null"]}},"required":["date","includePast","status"],"additionalProperties":false}"""),
+                IsEnabled = true,
+                CredentialReferenceId = credential.Id,
+                Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
+                {
+                    CalendarId = "primary",
+                    TimeZoneId = "America/Bogota",
+                    BufferMinutes = 0,
+                }),
+            };
+            DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool, findTool);
             DbContext.SaveChanges();
         }
 
@@ -616,11 +691,15 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         }
     }
 
-    private sealed class FakeCalendarIntegration : ICalendarIntegration
+    private sealed class FakeCalendarIntegration : IGoogleCalendarIntegration
     {
         public List<CalendarAvailabilityRequest> AvailabilityRequests { get; } = [];
 
         public List<CalendarReservationRequest> ReservationRequests { get; } = [];
+
+        public List<CalendarReservationSearchRequest> FindRequests { get; } = [];
+
+        public CalendarReservationSearchResult FindResult { get; set; } = new([]);
 
         public Task<CalendarAvailabilityResult> CheckAvailabilityAsync(
             CalendarAvailabilityRequest request,
@@ -636,6 +715,28 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         {
             ReservationRequests.Add(request);
             return Task.FromResult(new CalendarReservationResult("event-123", "https://calendar.google.com/event?eid=event-123"));
+        }
+
+        public Task<CalendarReservationSearchResult> FindReservationsAsync(
+            CalendarReservationSearchRequest request,
+            CancellationToken cancellationToken)
+        {
+            FindRequests.Add(request);
+            return Task.FromResult(FindResult);
+        }
+
+        public Task<CalendarReservationMutationResult> UpdateReservationAsync(
+            CalendarReservationUpdateRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalendarReservationMutationResult.NotOwned(request.ReservationId));
+        }
+
+        public Task<CalendarReservationCancellationResult> CancelReservationAsync(
+            CalendarReservationCancellationRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalendarReservationCancellationResult.NotOwned(request.ReservationId));
         }
     }
 

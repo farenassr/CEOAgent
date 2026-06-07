@@ -34,7 +34,7 @@ abstractions inside Infrastructure implementation folders.
 | --- | --- | --- |
 | `IMessageChannelIntegration` | `CeoAgent.Application/Abstractions/Messaging` | Send and receive channel messages. WhatsApp Cloud is the MVP provider. |
 | `IWhatsAppChannelCredentialResolver` | `CeoAgent.Application/Abstractions/Messaging` | Resolve WhatsApp credential references for a company channel. |
-| `ICalendarIntegration` | `CeoAgent.Application/Abstractions/AITools/GoogleCalendar` | Calendar availability and reservation operations. Google Calendar is the MVP provider. |
+| `IGoogleCalendarIntegration` | `CeoAgent.Application/Abstractions/AITools/GoogleCalendar` | Calendar availability and reservation operations. Google Calendar is the MVP provider. |
 | `IAgentRuntime` | `CeoAgent.Application/Abstractions/AI` | Provider-neutral model runtime. OpenAI is the MVP LLM provider and is implemented in Infrastructure. |
 | Job constants/retry contracts | `CeoAgent.Application/Abstractions/Jobs` | Queue names and retry policy shared by API and Worker. |
 | Job payloads | `CeoAgent.Shared/Jobs` | Queue payload models shared by API and Worker. |

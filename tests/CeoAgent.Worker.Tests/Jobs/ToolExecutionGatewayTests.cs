@@ -154,6 +154,41 @@ public sealed class ToolExecutionGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_ForReservationWithoutCustomerName_ReturnsMalformedArgumentsWithoutSideEffect()
+    {
+        await using var fixture = await GatewayFixture.CreateAsync();
+        var reservationTool = await fixture.DbContext.CompanyTools
+            .SingleAsync(tool => tool.ToolKey == MvpToolKeys.CreateGoogleCalendarReservation);
+        reservationTool.IsEnabled = true;
+        await fixture.DbContext.SaveChangesAsync();
+
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var call = new AgentToolCall(
+            "call-reservation-missing-name",
+            MvpToolKeys.CreateGoogleCalendarReservation,
+            JsonSerializer.SerializeToElement(new
+            {
+                start = "2026-05-28T16:00:00-05:00",
+                end = "2026-05-28T17:00:00-05:00",
+                summary = "Reservation for 2",
+            }));
+
+        var result = await fixture.Gateway.ExecuteAsync(
+            new ToolExecutionGatewayRequest(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.TriggerMessage.Id,
+                fixture.InboundMessage.Id,
+                call,
+                tools),
+            CancellationToken.None);
+
+        result.Content.ShouldContain("\"status\":\"denied\"");
+        result.Content.ShouldContain("\"failureReason\":\"malformed_arguments\"");
+        fixture.Calendar.ReservationRequests.ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task ExecuteAsync_ForIncompleteAvailabilityArguments_ReturnsMalformedArgumentsWithoutSideEffect()
     {
         await using var fixture = await GatewayFixture.CreateAsync();
@@ -198,6 +233,7 @@ public sealed class ToolExecutionGatewayTests
             start = "2026-05-28T16:00:00-05:00",
             end = "2026-05-28T17:00:00-05:00",
             summary = "Reservation for 2",
+            customerName = "Ada Lovelace",
         };
 
         await fixture.Gateway.ExecuteAsync(
@@ -366,7 +402,7 @@ public sealed class ToolExecutionGatewayTests
                     CompanyId = CompanyId,
                     ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
                     Description = "Create reservations.",
-                    ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"}},"required":["start","end","summary"],"additionalProperties":false}"""),
+                    ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"},"customerName":{"type":"string"}},"required":["start","end","summary","customerName"],"additionalProperties":false}"""),
                     IsEnabled = false,
                     CredentialReferenceId = credential.Id,
                     Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
@@ -414,7 +450,7 @@ public sealed class ToolExecutionGatewayTests
         }
     }
 
-    private sealed class FakeCalendarIntegration : ICalendarIntegration
+    private sealed class FakeCalendarIntegration : IGoogleCalendarIntegration
     {
         public List<CalendarAvailabilityRequest> AvailabilityRequests { get; } = [];
 
@@ -434,6 +470,27 @@ public sealed class ToolExecutionGatewayTests
         {
             ReservationRequests.Add(request);
             return Task.FromResult(new CalendarReservationResult("event-123", "https://calendar.google.com/event?eid=event-123"));
+        }
+
+        public Task<CalendarReservationSearchResult> FindReservationsAsync(
+            CalendarReservationSearchRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new CalendarReservationSearchResult([]));
+        }
+
+        public Task<CalendarReservationMutationResult> UpdateReservationAsync(
+            CalendarReservationUpdateRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalendarReservationMutationResult.NotOwned(request.ReservationId));
+        }
+
+        public Task<CalendarReservationCancellationResult> CancelReservationAsync(
+            CalendarReservationCancellationRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalendarReservationCancellationResult.NotOwned(request.ReservationId));
         }
     }
 

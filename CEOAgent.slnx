@@ -5,23 +5,11 @@
     <Project Path="tests/CeoAgent.IntegrationTests/CeoAgent.IntegrationTests.csproj" />
     <Project Path="tests/CeoAgent.Worker.Tests/CeoAgent.Worker.Tests.csproj" />
   </Folder>
-  <Project Path="src/CeoAgent.ApiService/CeoAgent.ApiService.csproj">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
-  <Project Path="src/CeoAgent.AppHost/CeoAgent.AppHost.csproj">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
-  <Project Path="src/CeoAgent.Application/CeoAgent.Application.csproj">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
-  <Project Path="src/CeoAgent.Infrastructure/CeoAgent.Infrastructure.csproj">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
-  <Project Path="src/CeoAgent.ServiceDefaults/CeoAgent.ServiceDefaults.csproj">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
+  <Project Path="src/CeoAgent.ApiService/CeoAgent.ApiService.csproj" />
+  <Project Path="src/CeoAgent.AppHost/CeoAgent.AppHost.csproj" />
+  <Project Path="src/CeoAgent.Application/CeoAgent.Application.csproj" />
+  <Project Path="src/CeoAgent.Infrastructure/CeoAgent.Infrastructure.csproj" />
+  <Project Path="src/CeoAgent.ServiceDefaults/CeoAgent.ServiceDefaults.csproj" />
   <Project Path="src/CeoAgent.Shared/CeoAgent.Shared.csproj" Id="1f78a91d-65cc-479c-9c09-b2f6c3c5e365" />
-  <Project Path="src/CeoAgent.Worker/CeoAgent.Worker.csproj">
-    <Build Solution="Debug|*" Project="false" />
-  </Project>
+  <Project Path="src/CeoAgent.Worker/CeoAgent.Worker.csproj" />
 </Solution>

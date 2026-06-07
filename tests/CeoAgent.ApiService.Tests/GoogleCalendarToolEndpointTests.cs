@@ -65,6 +65,8 @@ public sealed class GoogleCalendarToolEndpointTests
         calendarRequest.CalendarId.ShouldBe("primary");
         calendarRequest.Start.ShouldBe(new DateTimeOffset(2026, 6, 1, 16, 0, 0, TimeSpan.FromHours(-5)));
         calendarRequest.End.ShouldBe(new DateTimeOffset(2026, 6, 1, 17, 0, 0, TimeSpan.FromHours(-5)));
+        calendarRequest.SearchWindowStart.ShouldBe(new DateTimeOffset(2026, 6, 1, 13, 0, 0, TimeSpan.FromHours(-5)));
+        calendarRequest.SearchWindowEnd.ShouldBe(new DateTimeOffset(2026, 6, 1, 19, 0, 0, TimeSpan.FromHours(-5)));
         calendarRequest.AlternativeSearchStarts.ShouldContain(new DateTimeOffset(2026, 6, 1, 16, 30, 0, TimeSpan.FromHours(-5)));
     }
 
@@ -92,6 +94,7 @@ public sealed class GoogleCalendarToolEndpointTests
                 end = "2026-06-01T17:00:00-05:00",
                 summary = "Reservation for 2",
                 description = "Window table",
+                customerName = "Ada Lovelace",
                 idempotencyKey = "reservation-123",
             }),
         };
@@ -111,7 +114,7 @@ public sealed class GoogleCalendarToolEndpointTests
         credentialJson.RootElement.GetProperty("private_key").GetString().ShouldBe("-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n");
         calendarRequest.CalendarId.ShouldBe("primary");
         calendarRequest.Summary.ShouldBe("Reservation for 2");
-        calendarRequest.Description.ShouldBe("Window table");
+        calendarRequest.Description.ShouldBe($"Window table{Environment.NewLine}Customer: Ada Lovelace");
         calendarRequest.IdempotencyKey.ShouldBe("reservation-123");
     }
 
@@ -230,7 +233,7 @@ public sealed class GoogleCalendarToolEndpointTests
     }
 
     private static ApiFactory CreateFactory(
-        ICalendarIntegration calendar,
+        IGoogleCalendarIntegration calendar,
         string environmentName = "Testing",
         string? adminApiKey = null)
     {
@@ -238,7 +241,7 @@ public sealed class GoogleCalendarToolEndpointTests
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
-            services.RemoveAll<ICalendarIntegration>();
+            services.RemoveAll<IGoogleCalendarIntegration>();
             services.AddSingleton(calendar);
 
             services.Configure<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>(options =>
@@ -432,8 +435,9 @@ public sealed class GoogleCalendarToolEndpointTests
                     start = new { type = "string" },
                     end = new { type = "string" },
                     summary = new { type = "string" },
+                    customerName = new { type = "string" },
                 },
-                required = new[] { "start", "end", "summary" },
+                required = new[] { "start", "end", "summary", "customerName" },
                 additionalProperties = false,
             };
         }
@@ -452,7 +456,7 @@ public sealed class GoogleCalendarToolEndpointTests
         };
     }
 
-    private sealed class RecordingCalendarIntegration : ICalendarIntegration
+    private sealed class RecordingCalendarIntegration : IGoogleCalendarIntegration
     {
         public List<CalendarAvailabilityRequest> AvailabilityRequests { get; } = [];
 
@@ -481,6 +485,27 @@ public sealed class GoogleCalendarToolEndpointTests
         {
             ReservationRequests.Add(request);
             return Task.FromResult(ReservationResult);
+        }
+
+        public Task<CalendarReservationSearchResult> FindReservationsAsync(
+            CalendarReservationSearchRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new CalendarReservationSearchResult([]));
+        }
+
+        public Task<CalendarReservationMutationResult> UpdateReservationAsync(
+            CalendarReservationUpdateRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalendarReservationMutationResult.NotOwned(request.ReservationId));
+        }
+
+        public Task<CalendarReservationCancellationResult> CancelReservationAsync(
+            CalendarReservationCancellationRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalendarReservationCancellationResult.NotOwned(request.ReservationId));
         }
     }
 

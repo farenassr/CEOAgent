@@ -25,6 +25,7 @@ public sealed class GoogleCalendarToolExecutorTests
             Start = new DateTimeOffset(2026, 5, 28, 8, 0, 0, TimeSpan.FromHours(-5)),
             End = new DateTimeOffset(2026, 5, 28, 9, 0, 0, TimeSpan.FromHours(-5)),
             Summary = "Reservation for 2",
+            CustomerName = "Ada Lovelace",
         };
 
         var result = await fixture.Executor.CreateReservationAsync(
@@ -43,10 +44,18 @@ public sealed class GoogleCalendarToolExecutorTests
     }
 
     [Test]
-    public async Task CheckAvailabilityAsync_WhenRequestedSlotIsBusy_ReturnsNearestFreeAlternative()
+    public async Task CheckAvailabilityAsync_WhenRequestedSlotIsBusy_ReturnsNearbyFreeAlternativesFromSingleSearchWindow()
     {
         await using var fixture = await CalendarToolFixture.CreateAsync();
-        fixture.Calendar.AvailableStarts.Add(new DateTimeOffset(2026, 5, 28, 16, 30, 0, TimeSpan.FromHours(-5)));
+        fixture.Calendar.AvailableStarts.AddRange(
+        [
+            new DateTimeOffset(2026, 5, 28, 15, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 15, 0, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 14, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 16, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 17, 30, 0, TimeSpan.FromHours(-5)),
+        ]);
 
         var result = await fixture.Executor.CheckAvailabilityAsync(
             fixture.CompanyId,
@@ -63,8 +72,28 @@ public sealed class GoogleCalendarToolExecutorTests
             CancellationToken.None);
 
         result.Result!.CheckAvailability!.Available.ShouldBeFalse();
-        result.Result.CheckAvailability.AlternativeSlots.ShouldBe([new TimeOnly(16, 30)]);
+        result.Result.CheckAvailability.AlternativeSlots.ShouldBe(
+        [
+            new TimeOnly(15, 30),
+            new TimeOnly(15, 0),
+            new TimeOnly(14, 30),
+            new TimeOnly(16, 30),
+            new TimeOnly(17, 0),
+            new TimeOnly(17, 30),
+        ]);
         fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
+        var calendarRequest = fixture.Calendar.AvailabilityRequests.Single();
+        calendarRequest.SearchWindowStart.ShouldBe(new DateTimeOffset(2026, 5, 28, 13, 0, 0, TimeSpan.FromHours(-5)));
+        calendarRequest.SearchWindowEnd.ShouldBe(new DateTimeOffset(2026, 5, 28, 19, 0, 0, TimeSpan.FromHours(-5)));
+        calendarRequest.AlternativeSearchStarts.ShouldBe(
+        [
+            new DateTimeOffset(2026, 5, 28, 15, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 15, 0, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 14, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 16, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 17, 30, 0, TimeSpan.FromHours(-5)),
+        ]);
     }
 
     [Test]
@@ -76,6 +105,7 @@ public sealed class GoogleCalendarToolExecutorTests
             Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
             End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
             Summary = "Reservation for 2",
+            CustomerName = "Ada Lovelace",
         };
 
         await fixture.Executor.CreateReservationAsync(
@@ -121,11 +151,256 @@ public sealed class GoogleCalendarToolExecutorTests
                 Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
                 End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
                 Summary = "Reservation for 2",
+                CustomerName = "Ada Lovelace",
             },
             "reservation-key",
             CancellationToken.None);
 
         fixture.Calendar.ReservationRequests.Single().CredentialReference.ShouldBe("stored://google-calendar/contoso");
+    }
+
+    [Test]
+    public async Task CreateReservationAsync_StoresPrivateReservationMetadataFromCurrentConversationCustomer()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+
+        await fixture.Executor.CreateReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new CreateCalendarEventRequest
+            {
+                Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+                End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                Summary = "Reservation for 2",
+                CustomerName = "Ada Lovelace",
+            },
+            "reservation-key",
+            CancellationToken.None);
+
+        var request = fixture.Calendar.ReservationRequests.Single();
+        request.CompanyId.ShouldBe(fixture.CompanyId.ToString("D"));
+        request.ConversationId.ShouldBe(fixture.Conversation.Id.ToString("D"));
+        request.CustomerExternalId.ShouldBe("15551234567");
+        request.ReservationId.ShouldBe("reservation-key");
+    }
+
+    [Test]
+    public async Task FindReservationsAsync_UsesCurrentCustomerExternalIdAndCompanyLocalDateWindow()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.FindResult = new CalendarReservationSearchResult(
+        [
+            new CalendarReservationInfo(
+                "event-123",
+                "event-123",
+                new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                "Reservation for 2",
+                "Ada Lovelace",
+                "https://calendar.google.com/event?eid=event-123"),
+        ]);
+
+        var execution = await fixture.Executor.FindReservationsAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new FindGoogleCalendarReservationsRequest
+            {
+                Date = new DateOnly(2026, 5, 28),
+                IncludePast = false,
+                Status = null,
+            },
+            "find-key",
+            CancellationToken.None);
+
+        var request = fixture.Calendar.FindRequests.Single();
+        request.CustomerExternalId.ShouldBe("15551234567");
+        request.TimeMin.ShouldBe(new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.FromHours(-5)));
+        request.TimeMax.ShouldBe(new DateTimeOffset(2026, 5, 29, 0, 0, 0, TimeSpan.FromHours(-5)));
+        execution.Result!.FindGoogleCalendarReservations!.Count.ShouldBe(1);
+        execution.Result.FindGoogleCalendarReservations.DisambiguationNeeded.ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task FindReservationsAsync_WhenCalendarProviderFails_PersistsFailedExecution()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.FindFailureReason = "upstream_error";
+
+        var execution = await fixture.Executor.FindReservationsAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new FindGoogleCalendarReservationsRequest
+            {
+                Date = new DateOnly(2026, 5, 28),
+                IncludePast = false,
+                Status = null,
+            },
+            "find-failed-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Failed);
+        execution.FailureReason.ShouldBe("upstream_error");
+        execution.Result.ShouldBeNull();
+        fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
+    }
+
+    [Test]
+    public async Task UpdateReservationAsync_WhenCustomerDoesNotOwnReservation_DeniesWithoutCalendarUpdate()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.UpdateResult = CalendarReservationMutationResult.NotOwned("event-123");
+
+        var execution = await fixture.Executor.UpdateReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new UpdateGoogleCalendarReservationRequest
+            {
+                ReservationId = "event-123",
+                NewStart = new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                NewEnd = new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                Summary = null,
+                CustomerName = null,
+            },
+            "update-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Denied);
+        execution.FailureReason.ShouldBe("reservation_not_found_or_not_owned");
+        fixture.Calendar.UpdateRequests.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task UpdateReservationAsync_WhenCalendarProviderFails_PersistsFailedExecution()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.UpdateResult = CalendarReservationMutationResult.Failed("upstream_error");
+
+        var execution = await fixture.Executor.UpdateReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new UpdateGoogleCalendarReservationRequest
+            {
+                ReservationId = "event-123",
+                NewStart = new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                NewEnd = new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                Summary = null,
+                CustomerName = null,
+            },
+            "update-failed-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Failed);
+        execution.FailureReason.ShouldBe("upstream_error");
+        execution.Result.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task CancelReservationAsync_WhenCompanyOrCustomerDoesNotMatch_DeniesWithoutSuccessfulCancel()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.CancelResult = CalendarReservationCancellationResult.NotOwned("event-123");
+
+        var execution = await fixture.Executor.CancelReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new CancelGoogleCalendarReservationRequest
+            {
+                ReservationId = "event-123",
+                Reason = null,
+            },
+            "cancel-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Denied);
+        execution.FailureReason.ShouldBe("reservation_not_found_or_not_owned");
+        fixture.Calendar.CancelRequests.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task CancelReservationAsync_WhenCalendarProviderFails_PersistsFailedExecution()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.CancelResult = CalendarReservationCancellationResult.Failed("event-123", "upstream_error");
+
+        var execution = await fixture.Executor.CancelReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new CancelGoogleCalendarReservationRequest
+            {
+                ReservationId = "event-123",
+                Reason = null,
+            },
+            "cancel-failed-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Failed);
+        execution.FailureReason.ShouldBe("upstream_error");
+        execution.Result.ShouldBeNull();
+    }
+
+    [Test]
+    public async Task UpdateReservationAsync_ForValidReservation_CallsCalendarAndPersistsToolExecution()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+
+        var execution = await fixture.Executor.UpdateReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new UpdateGoogleCalendarReservationRequest
+            {
+                ReservationId = "event-123",
+                NewStart = new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                NewEnd = new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                Summary = null,
+                CustomerName = null,
+            },
+            "update-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        execution.ToolKey.ShouldBe(MvpToolKeys.UpdateGoogleCalendarReservation);
+        fixture.Calendar.UpdateRequests.Count.ShouldBe(1);
+        fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
+    }
+
+    [Test]
+    public async Task CancelReservationAsync_ForValidReservation_CallsCalendarAndPersistsToolExecution()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+
+        var execution = await fixture.Executor.CancelReservationAsync(
+            fixture.CompanyId,
+            fixture.Conversation.Id,
+            fixture.Tool.Id,
+            fixture.TriggerMessage.Id,
+            new CancelGoogleCalendarReservationRequest
+            {
+                ReservationId = "event-123",
+                Reason = null,
+            },
+            "cancel-key",
+            CancellationToken.None);
+
+        execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        execution.ToolKey.ShouldBe(MvpToolKeys.CancelGoogleCalendarReservation);
+        fixture.Calendar.CancelRequests.Count.ShouldBe(1);
+        fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
     }
 
     [Test]
@@ -144,6 +419,7 @@ public sealed class GoogleCalendarToolExecutorTests
                 Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
                 End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
                 Summary = "Reservation for 2",
+                CustomerName = "Ada Lovelace",
             },
             "reservation-key",
             CancellationToken.None);
@@ -296,13 +572,36 @@ public sealed class GoogleCalendarToolExecutorTests
         }
     }
 
-    private sealed class FakeCalendarIntegration : ICalendarIntegration
+    private sealed class FakeCalendarIntegration : IGoogleCalendarIntegration
     {
         public List<DateTimeOffset> AvailableStarts { get; } = [];
 
         public List<CalendarAvailabilityRequest> AvailabilityRequests { get; } = [];
 
         public List<CalendarReservationRequest> ReservationRequests { get; } = [];
+
+        public List<CalendarReservationSearchRequest> FindRequests { get; } = [];
+
+        public List<CalendarReservationUpdateRequest> UpdateRequests { get; } = [];
+
+        public List<CalendarReservationCancellationRequest> CancelRequests { get; } = [];
+
+        public CalendarReservationSearchResult FindResult { get; set; } = new([]);
+
+        public string? FindFailureReason { get; set; }
+
+        public CalendarReservationMutationResult UpdateResult { get; set; } =
+            CalendarReservationMutationResult.Updated(new CalendarReservationInfo(
+                "event-123",
+                "event-123",
+                new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                "Reservation for 2",
+                "Ada Lovelace",
+                "https://calendar.google.com/event?eid=event-123"));
+
+        public CalendarReservationCancellationResult CancelResult { get; set; } =
+            CalendarReservationCancellationResult.Cancelled("event-123", "event-123");
 
         public Task<CalendarAvailabilityResult> CheckAvailabilityAsync(
             CalendarAvailabilityRequest request,
@@ -311,7 +610,7 @@ public sealed class GoogleCalendarToolExecutorTests
             AvailabilityRequests.Add(request);
             var alternatives = request.AlternativeSearchStarts
                 .Where(start => AvailableStarts.Contains(start))
-                .Take(1)
+                .Take(GoogleCalendarSchedulingPolicy.MaxAlternativeStarts)
                 .ToArray();
 
             return Task.FromResult(new CalendarAvailabilityResult(
@@ -326,6 +625,35 @@ public sealed class GoogleCalendarToolExecutorTests
         {
             ReservationRequests.Add(request);
             return Task.FromResult(new CalendarReservationResult("event-123", "https://calendar.google.com/event?eid=event-123"));
+        }
+
+        public Task<CalendarReservationSearchResult> FindReservationsAsync(
+            CalendarReservationSearchRequest request,
+            CancellationToken cancellationToken)
+        {
+            FindRequests.Add(request);
+            if (FindFailureReason is not null)
+            {
+                return Task.FromResult(CalendarReservationSearchResult.Failed(FindFailureReason));
+            }
+
+            return Task.FromResult(FindResult);
+        }
+
+        public Task<CalendarReservationMutationResult> UpdateReservationAsync(
+            CalendarReservationUpdateRequest request,
+            CancellationToken cancellationToken)
+        {
+            UpdateRequests.Add(request);
+            return Task.FromResult(UpdateResult);
+        }
+
+        public Task<CalendarReservationCancellationResult> CancelReservationAsync(
+            CalendarReservationCancellationRequest request,
+            CancellationToken cancellationToken)
+        {
+            CancelRequests.Add(request);
+            return Task.FromResult(CancelResult);
         }
     }
 
