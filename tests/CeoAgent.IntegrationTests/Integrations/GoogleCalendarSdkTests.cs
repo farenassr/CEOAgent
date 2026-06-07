@@ -28,10 +28,13 @@ public sealed class GoogleCalendarSdkTests
     [Test]
     public void GoogleCalendarIntegrationContract_IsProviderNeutral()
     {
-        typeof(ICalendarIntegration).GetMethod(nameof(ICalendarIntegration.CheckAvailabilityAsync)).ShouldNotBeNull();
-        typeof(ICalendarIntegration).GetMethod(nameof(ICalendarIntegration.CreateReservationAsync)).ShouldNotBeNull();
+        typeof(IGoogleCalendarIntegration).GetMethod(nameof(IGoogleCalendarIntegration.CheckAvailabilityAsync)).ShouldNotBeNull();
+        typeof(IGoogleCalendarIntegration).GetMethod(nameof(IGoogleCalendarIntegration.CreateReservationAsync)).ShouldNotBeNull();
+        typeof(IGoogleCalendarIntegration).GetMethod(nameof(IGoogleCalendarIntegration.FindReservationsAsync)).ShouldNotBeNull();
+        typeof(IGoogleCalendarIntegration).GetMethod(nameof(IGoogleCalendarIntegration.UpdateReservationAsync)).ShouldNotBeNull();
+        typeof(IGoogleCalendarIntegration).GetMethod(nameof(IGoogleCalendarIntegration.CancelReservationAsync)).ShouldNotBeNull();
 
-        typeof(ICalendarIntegration)
+        typeof(IGoogleCalendarIntegration)
             .GetMethods()
             .SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType).Append(method.ReturnType))
             .SelectMany(GetExposedTypes)
@@ -99,23 +102,31 @@ public sealed class GoogleCalendarSdkTests
                 CalendarId: "primary",
                 Start: new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
                 End: new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                SearchWindowStart: new DateTimeOffset(2026, 5, 28, 13, 0, 0, TimeSpan.FromHours(-5)),
+                SearchWindowEnd: new DateTimeOffset(2026, 5, 28, 19, 0, 0, TimeSpan.FromHours(-5)),
                 PartySize: 2,
                 AlternativeSearchStarts:
                 [
+                    new DateTimeOffset(2026, 5, 28, 15, 30, 0, TimeSpan.FromHours(-5)),
                     new DateTimeOffset(2026, 5, 28, 16, 30, 0, TimeSpan.FromHours(-5)),
                     new DateTimeOffset(2026, 5, 28, 17, 30, 0, TimeSpan.FromHours(-5)),
+                    new DateTimeOffset(2026, 5, 28, 18, 0, 0, TimeSpan.FromHours(-5)),
                 ]),
             CancellationToken.None);
 
         handler.Requests.Count(request => request.RequestUri?.AbsolutePath == "/calendar/v3/freeBusy").ShouldBe(1);
         var freeBusyRequest = handler.JsonBodies.Single();
         DateTimeOffset.Parse(freeBusyRequest.RootElement.GetProperty("timeMin").GetString()!, CultureInfo.InvariantCulture)
-            .ShouldBe(new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)));
+            .ShouldBe(new DateTimeOffset(2026, 5, 28, 13, 0, 0, TimeSpan.FromHours(-5)));
         DateTimeOffset.Parse(freeBusyRequest.RootElement.GetProperty("timeMax").GetString()!, CultureInfo.InvariantCulture)
-            .ShouldBe(new DateTimeOffset(2026, 5, 28, 18, 30, 0, TimeSpan.FromHours(-5)));
+            .ShouldBe(new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)));
         freeBusyRequest.RootElement.GetProperty("items")[0].GetProperty("id").GetString().ShouldBe("primary");
         result.Available.ShouldBeFalse();
-        result.AlternativeStarts.ShouldBe([new DateTimeOffset(2026, 5, 28, 17, 30, 0, TimeSpan.FromHours(-5))]);
+        result.AlternativeStarts.ShouldBe(
+        [
+            new DateTimeOffset(2026, 5, 28, 17, 30, 0, TimeSpan.FromHours(-5)),
+            new DateTimeOffset(2026, 5, 28, 18, 0, 0, TimeSpan.FromHours(-5)),
+        ]);
     }
 
     [Test]
@@ -208,6 +219,352 @@ public sealed class GoogleCalendarSdkTests
     }
 
     [Test]
+    public async Task CreateReservationAsync_WhenNoExistingEvent_CreatesEventWithCustomerOwnershipMetadata()
+    {
+        var handler = new RecordingGoogleCalendarHandler
+        {
+            EventsResponseJson = """{"items":[]}""",
+        };
+        var integration = new GoogleCalendarIntegration(new RecordingGoogleCalendarServiceFactory(handler));
+
+        await integration.CreateReservationAsync(
+            new CalendarReservationRequest(
+                CredentialReference: "default",
+                CalendarId: "primary",
+                Start: new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+                End: new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+                Summary: "Reservation for 2",
+                IdempotencyKey: "reservation-key",
+                Description: "Customer: Ada Lovelace",
+                CustomerEmail: null,
+                CompanyId: "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30",
+                ConversationId: "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34",
+                CustomerExternalId: "15551234567",
+                ReservationId: "reservation-key"),
+            CancellationToken.None);
+
+        var privateProperties = handler.JsonBodies.Last()
+            .RootElement
+            .GetProperty("extendedProperties")
+            .GetProperty("private");
+        privateProperties.GetProperty("ceoagent_company_id").GetString().ShouldBe("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        privateProperties.GetProperty("ceoagent_conversation_id").GetString().ShouldBe("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34");
+        privateProperties.GetProperty("ceoagent_customer_external_id").GetString().ShouldBe("15551234567");
+        privateProperties.GetProperty("ceoagent_reservation_id").GetString().ShouldBe("reservation-key");
+    }
+
+    [Test]
+    public async Task FindReservationsAsync_QueriesByCustomerPrivateExtendedPropertyAndReturnsSanitizedMatches()
+    {
+        var handler = new RecordingGoogleCalendarHandler
+        {
+            EventsResponseJson = """
+                {
+                  "items": [
+                    {
+                      "id": "event-123",
+                      "htmlLink": "https://calendar.google.com/event?eid=event-123",
+                      "summary": "Reservation for 2",
+                      "description": "Customer: Ada Lovelace",
+                      "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
+                      "extendedProperties": {
+                        "private": {
+                          "ceoagent_company_id": "company-1",
+                          "ceoagent_customer_external_id": "15551234567",
+                          "ceoagent_reservation_id": "reservation-key"
+                        }
+                      }
+                    }
+                  ]
+                }
+                """,
+        };
+        var integration = new GoogleCalendarIntegration(new RecordingGoogleCalendarServiceFactory(handler));
+
+        var result = await integration.FindReservationsAsync(
+            new CalendarReservationSearchRequest(
+                "default",
+                "primary",
+                "company-1",
+                "15551234567",
+                new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 29, 0, 0, 0, TimeSpan.FromHours(-5)),
+                IncludePast: false),
+            CancellationToken.None);
+
+        var eventsQuery = handler.Requests.Single(request => request.Method == HttpMethod.Get);
+        eventsQuery.RequestUri!.Query.ShouldContain("privateExtendedProperty=ceoagent_customer_external_id%3D15551234567");
+        result.Reservations.Single().ReservationId.ShouldBe("reservation-key");
+        result.Reservations.Single().CustomerName.ShouldBe("Ada Lovelace");
+    }
+
+    [Test]
+    public async Task FindReservationsAsync_WhenEventsListIsPaginated_ReturnsOwnedMatchesFromAllPages()
+    {
+        var handler = new RecordingGoogleCalendarHandler
+        {
+            EventsResponseJsonSequence =
+            [
+                """
+                {
+                  "nextPageToken": "page-2",
+                  "items": [
+                    {
+                      "id": "event-1",
+                      "summary": "Reservation page 1",
+                      "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
+                      "extendedProperties": {
+                        "private": {
+                          "ceoagent_company_id": "company-1",
+                          "ceoagent_customer_external_id": "15551234567",
+                          "ceoagent_reservation_id": "reservation-1"
+                        }
+                      }
+                    }
+                  ]
+                }
+                """,
+                """
+                {
+                  "items": [
+                    {
+                      "id": "event-2",
+                      "summary": "Reservation page 2",
+                      "start": { "dateTime": "2026-05-28T18:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T19:00:00-05:00" },
+                      "extendedProperties": {
+                        "private": {
+                          "ceoagent_company_id": "company-1",
+                          "ceoagent_customer_external_id": "15551234567",
+                          "ceoagent_reservation_id": "reservation-2"
+                        }
+                      }
+                    },
+                    {
+                      "id": "event-other",
+                      "summary": "Other customer",
+                      "start": { "dateTime": "2026-05-28T19:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T20:00:00-05:00" },
+                      "extendedProperties": {
+                        "private": {
+                          "ceoagent_company_id": "company-1",
+                          "ceoagent_customer_external_id": "other-customer",
+                          "ceoagent_reservation_id": "reservation-other"
+                        }
+                      }
+                    }
+                  ]
+                }
+                """,
+            ],
+        };
+        var integration = new GoogleCalendarIntegration(new RecordingGoogleCalendarServiceFactory(handler));
+
+        var result = await integration.FindReservationsAsync(
+            new CalendarReservationSearchRequest(
+                "default",
+                "primary",
+                "company-1",
+                "15551234567",
+                new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 29, 0, 0, 0, TimeSpan.FromHours(-5)),
+                IncludePast: false),
+            CancellationToken.None);
+
+        var eventListRequests = handler.Requests
+            .Where(request => request.Method == HttpMethod.Get
+                && request.RequestUri?.AbsolutePath.EndsWith("/events", StringComparison.Ordinal) == true)
+            .ToArray();
+        eventListRequests.Length.ShouldBe(2);
+        eventListRequests[1].RequestUri!.Query.ShouldContain("pageToken=page-2");
+        result.Reservations.Select(item => item.ReservationId).ShouldBe(["reservation-1", "reservation-2"]);
+    }
+
+    [Test]
+    public async Task UpdateReservationAsync_WhenMetadataDoesNotMatch_DoesNotUpdateEvent()
+    {
+        var handler = new RecordingGoogleCalendarHandler
+        {
+            EventResponseJson = """
+                {
+                  "id": "event-123",
+                  "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+                  "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
+                  "extendedProperties": {
+                    "private": {
+                      "ceoagent_company_id": "company-1",
+                      "ceoagent_customer_external_id": "other-customer"
+                    }
+                  }
+                }
+                """,
+            EventsResponseJson = """{"items":[]}""",
+        };
+        var integration = new GoogleCalendarIntegration(new RecordingGoogleCalendarServiceFactory(handler));
+
+        var result = await integration.UpdateReservationAsync(
+            new CalendarReservationUpdateRequest(
+                "default",
+                "primary",
+                "company-1",
+                "15551234567",
+                "event-123",
+                new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                Summary: null,
+                CustomerName: null),
+            CancellationToken.None);
+
+        result.Succeeded.ShouldBeFalse();
+        handler.Requests.Count(request => request.Method == HttpMethod.Put).ShouldBe(0);
+    }
+
+    [Test]
+    public async Task UpdateReservationAsync_WhenAvailabilityListConflictIsOnSecondPage_ReturnsSlotUnavailableAndDoesNotUpdate()
+    {
+        var handler = new RecordingGoogleCalendarHandler
+        {
+            EventsResponseJsonSequence =
+            [
+                """
+                {
+                  "nextPageToken": "busy-page-2",
+                  "items": [
+                    {
+                      "id": "event-123",
+                      "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T17:00:00-05:00" }
+                    }
+                  ]
+                }
+                """,
+                """
+                {
+                  "items": [
+                    {
+                      "id": "event-conflict",
+                      "start": { "dateTime": "2026-05-28T20:30:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T21:30:00-05:00" }
+                    }
+                  ]
+                }
+                """,
+            ],
+        };
+        var integration = new GoogleCalendarIntegration(new RecordingGoogleCalendarServiceFactory(handler));
+
+        var result = await integration.UpdateReservationAsync(
+            new CalendarReservationUpdateRequest(
+                "default",
+                "primary",
+                "company-1",
+                "15551234567",
+                "event-123",
+                new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                Summary: null,
+                CustomerName: null),
+            CancellationToken.None);
+
+        result.Succeeded.ShouldBeFalse();
+        result.FailureReason.ShouldBe("slot_unavailable");
+        handler.Requests.Count(request => request.Method == HttpMethod.Put).ShouldBe(0);
+        handler.Requests.Count(request => request.Method == HttpMethod.Get
+            && request.RequestUri?.AbsolutePath.EndsWith("/events", StringComparison.Ordinal) == true).ShouldBe(2);
+    }
+
+    [Test]
+    public async Task UpdateReservationAsync_WhenReservationIdLookupIsPaginated_FindsOwnedEventOnLaterPage()
+    {
+        var handler = new RecordingGoogleCalendarHandler
+        {
+            EventResponseStatusCode = HttpStatusCode.NotFound,
+            EventResponseJson = """{"error":{"code":404,"message":"Not found."}}""",
+            CreatedEventJson = """
+                {
+                  "id": "event-456",
+                  "htmlLink": "https://calendar.google.com/event?eid=event-456",
+                  "summary": "Reservation for 2",
+                  "start": { "dateTime": "2026-05-28T20:00:00-05:00" },
+                  "end": { "dateTime": "2026-05-28T21:00:00-05:00" },
+                  "extendedProperties": {
+                    "private": {
+                      "ceoagent_company_id": "company-1",
+                      "ceoagent_customer_external_id": "15551234567",
+                      "ceoagent_reservation_id": "reservation-key"
+                    }
+                  }
+                }
+                """,
+            EventsResponseJsonSequence =
+            [
+                """
+                {
+                  "nextPageToken": "reservation-page-2",
+                  "items": [
+                    {
+                      "id": "event-other",
+                      "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
+                      "extendedProperties": {
+                        "private": {
+                          "ceoagent_company_id": "company-1",
+                          "ceoagent_customer_external_id": "other-customer",
+                          "ceoagent_reservation_id": "reservation-key"
+                        }
+                      }
+                    }
+                  ]
+                }
+                """,
+                """
+                {
+                  "items": [
+                    {
+                      "id": "event-456",
+                      "htmlLink": "https://calendar.google.com/event?eid=event-456",
+                      "summary": "Reservation for 2",
+                      "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+                      "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
+                      "extendedProperties": {
+                        "private": {
+                          "ceoagent_company_id": "company-1",
+                          "ceoagent_customer_external_id": "15551234567",
+                          "ceoagent_reservation_id": "reservation-key"
+                        }
+                      }
+                    }
+                  ]
+                }
+                """,
+                """{"items":[]}""",
+            ],
+        };
+        var integration = new GoogleCalendarIntegration(new RecordingGoogleCalendarServiceFactory(handler));
+
+        var result = await integration.UpdateReservationAsync(
+            new CalendarReservationUpdateRequest(
+                "default",
+                "primary",
+                "company-1",
+                "15551234567",
+                "reservation-key",
+                new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
+                new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                Summary: null,
+                CustomerName: null),
+            CancellationToken.None);
+
+        result.Succeeded.ShouldBeTrue();
+        result.Reservation!.EventId.ShouldBe("event-456");
+        handler.Requests.Count(request => request.Method == HttpMethod.Put).ShouldBe(1);
+        handler.Requests.Count(request => request.Method == HttpMethod.Get
+            && request.RequestUri?.Query.Contains("pageToken=reservation-page-2", StringComparison.Ordinal) == true).ShouldBe(1);
+    }
+
+    [Test]
     public async Task CreateReservationAsync_WhenDeterministicEventIdConflicts_ReturnsExistingReservation()
     {
         var handler = new RecordingGoogleCalendarHandler
@@ -286,6 +643,25 @@ public sealed class GoogleCalendarSdkTests
 
         public string EventsResponseJson { get; init; } = """{"items":[]}""";
 
+        public string EventResponseJson { get; init; } =
+            """
+            {
+              "id": "event-123",
+              "htmlLink": "https://calendar.google.com/event?eid=event-123",
+              "start": { "dateTime": "2026-05-28T16:00:00-05:00" },
+              "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
+              "extendedProperties": {
+                "private": {
+                  "ceoagent_company_id": "company-1",
+                  "ceoagent_customer_external_id": "15551234567",
+                  "ceoagent_reservation_id": "reservation-key"
+                }
+              }
+            }
+            """;
+
+        public HttpStatusCode EventResponseStatusCode { get; init; } = HttpStatusCode.OK;
+
         public List<string> EventsResponseJsonSequence { get; init; } = [];
 
         public HttpStatusCode CreatedEventStatusCode { get; init; } = HttpStatusCode.OK;
@@ -311,6 +687,15 @@ public sealed class GoogleCalendarSdkTests
                 "/calendar/v3/freeBusy" => FreeBusyResponseJson,
                 var path when request.Method == HttpMethod.Get
                     && path?.EndsWith("/events", StringComparison.Ordinal) == true => NextEventsResponseJson(),
+                var path when request.Method == HttpMethod.Get
+                    && path?.Contains("/events/", StringComparison.Ordinal) == true => SetStatusAndReturn(
+                        EventResponseStatusCode,
+                        EventResponseJson,
+                        out responseStatusCode),
+                var path when request.Method == HttpMethod.Put
+                    && path?.Contains("/events/", StringComparison.Ordinal) == true => CreatedEventJson,
+                var path when request.Method == HttpMethod.Delete
+                    && path?.Contains("/events/", StringComparison.Ordinal) == true => "{}",
                 var path when request.Method == HttpMethod.Post
                     && path?.EndsWith("/events", StringComparison.Ordinal) == true => SetStatusAndReturn(
                         CreatedEventStatusCode,

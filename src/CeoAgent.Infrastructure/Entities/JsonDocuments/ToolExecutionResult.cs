@@ -28,6 +28,24 @@ public sealed class ToolExecutionResult
     [JsonPropertyName("create_calendar_event")]
     public CreateCalendarEventResult? CreateCalendarEvent { get; set; }
 
+    /// <summary>
+    /// Result payload for finding Google Calendar reservations.
+    /// </summary>
+    [JsonPropertyName("find_google_calendar_reservations")]
+    public FindGoogleCalendarReservationsResult? FindGoogleCalendarReservations { get; set; }
+
+    /// <summary>
+    /// Result payload for updating a Google Calendar reservation.
+    /// </summary>
+    [JsonPropertyName("update_google_calendar_reservation")]
+    public UpdateGoogleCalendarReservationResult? UpdateGoogleCalendarReservation { get; set; }
+
+    /// <summary>
+    /// Result payload for cancelling a Google Calendar reservation.
+    /// </summary>
+    [JsonPropertyName("cancel_google_calendar_reservation")]
+    public CancelGoogleCalendarReservationResult? CancelGoogleCalendarReservation { get; set; }
+
     public static ToolExecutionResult ForCheckAvailability(CheckAvailabilityResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -82,6 +100,39 @@ public sealed class ToolExecutionResult
             CreateCalendarEvent = result,
         };
     }
+
+    public static ToolExecutionResult ForFindGoogleCalendarReservations(FindGoogleCalendarReservationsResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new ToolExecutionResult
+        {
+            ToolKey = MvpToolKeys.FindGoogleCalendarReservations,
+            FindGoogleCalendarReservations = result,
+        };
+    }
+
+    public static ToolExecutionResult ForUpdateGoogleCalendarReservation(UpdateGoogleCalendarReservationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new ToolExecutionResult
+        {
+            ToolKey = MvpToolKeys.UpdateGoogleCalendarReservation,
+            UpdateGoogleCalendarReservation = result,
+        };
+    }
+
+    public static ToolExecutionResult ForCancelGoogleCalendarReservation(CancelGoogleCalendarReservationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new ToolExecutionResult
+        {
+            ToolKey = MvpToolKeys.CancelGoogleCalendarReservation,
+            CancelGoogleCalendarReservation = result,
+        };
+    }
 }
 
 public sealed class CheckAvailabilityResult
@@ -131,4 +182,86 @@ public sealed class CreateCalendarEventResult
     /// URL for the created calendar event.
     /// </summary>
     public required string EventUrl { get; set; }
+}
+
+public sealed class FindGoogleCalendarReservationsResult
+{
+    /// <summary>
+    /// Matching reservations safe to show to the model.
+    /// </summary>
+    public List<GoogleCalendarReservationResultItem> Reservations { get; set; } = [];
+
+    /// <summary>
+    /// Number of reservations returned.
+    /// </summary>
+    public int Count { get; set; }
+
+    /// <summary>
+    /// Whether the model must ask the customer which reservation to modify.
+    /// </summary>
+    public bool DisambiguationNeeded { get; set; }
+}
+
+public sealed class UpdateGoogleCalendarReservationResult
+{
+    /// <summary>
+    /// Updated reservation details.
+    /// </summary>
+    public GoogleCalendarReservationResultItem? Reservation { get; set; }
+}
+
+public sealed class CancelGoogleCalendarReservationResult
+{
+    /// <summary>
+    /// Whether the reservation was cancelled.
+    /// </summary>
+    public bool Cancelled { get; set; }
+
+    /// <summary>
+    /// Reservation identifier that was cancelled.
+    /// </summary>
+    public required string ReservationId { get; set; }
+
+    /// <summary>
+    /// External calendar event identifier that was cancelled.
+    /// </summary>
+    public string? EventId { get; set; }
+}
+
+public sealed class GoogleCalendarReservationResultItem
+{
+    /// <summary>
+    /// Stable reservation identifier.
+    /// </summary>
+    public required string ReservationId { get; set; }
+
+    /// <summary>
+    /// External calendar event identifier.
+    /// </summary>
+    public required string EventId { get; set; }
+
+    /// <summary>
+    /// Reservation start in company-local offset.
+    /// </summary>
+    public DateTimeOffset Start { get; set; }
+
+    /// <summary>
+    /// Reservation end in company-local offset.
+    /// </summary>
+    public DateTimeOffset End { get; set; }
+
+    /// <summary>
+    /// Event summary.
+    /// </summary>
+    public string? Summary { get; set; }
+
+    /// <summary>
+    /// Customer name when available from event data.
+    /// </summary>
+    public string? CustomerName { get; set; }
+
+    /// <summary>
+    /// Calendar event URL when safe to return.
+    /// </summary>
+    public string? EventUrl { get; set; }
 }

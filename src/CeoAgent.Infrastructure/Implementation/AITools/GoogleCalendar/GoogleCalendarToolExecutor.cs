@@ -18,7 +18,7 @@ namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 /// </summary>
 public sealed class GoogleCalendarToolExecutor(
     CeoAgentDbContext dbContext,
-    ICalendarIntegration calendarIntegration,
+    IGoogleCalendarIntegration calendarIntegration,
     TimeProvider timeProvider)
 {
     /// <summary>
@@ -87,6 +87,8 @@ public sealed class GoogleCalendarToolExecutor(
 
         var start = GoogleCalendarSchedulingPolicy.ToCompanyLocalOffset(request.Date, preferredTime.Value, context.Company.TimeZoneId);
         var end = start.AddMinutes(config.ReservationMinutes);
+        var searchWindowStart = start.AddHours(-GoogleCalendarSchedulingPolicy.AlternativeSearchWindowHours);
+        var searchWindowEnd = start.AddHours(GoogleCalendarSchedulingPolicy.AlternativeSearchWindowHours);
         var alternatives = GoogleCalendarSchedulingPolicy.BuildAlternativeStarts(
             context.Company.WorkingHours,
             request.Date,
@@ -94,8 +96,13 @@ public sealed class GoogleCalendarToolExecutor(
             config.SlotMinutes,
             config.ReservationMinutes,
             config.BufferMinutes);
+        var requestedSlotEligible = GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(
+            context.Company.WorkingHours,
+            start,
+            end,
+            config.BufferMinutes);
 
-        if (!GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(context.Company.WorkingHours, start, end, config.BufferMinutes))
+        if (!requestedSlotEligible && alternatives.Length == 0)
         {
             return await PersistExecutionAsync(
                 context,
@@ -106,7 +113,6 @@ public sealed class GoogleCalendarToolExecutor(
                 ToolExecutionResult.ForCheckGoogleCalendarAvailability(new CheckAvailabilityResult
                 {
                     Available = false,
-                    AlternativeSlots = alternatives.Select(value => TimeOnly.FromDateTime(value.DateTime)).Take(1).ToList(),
                     UnavailabilityReason = "outside_working_hours",
                 }),
                 ToolExecutionStatus.Succeeded,
@@ -119,16 +125,19 @@ public sealed class GoogleCalendarToolExecutor(
             config.CalendarId,
             start,
             end,
+            searchWindowStart,
+            searchWindowEnd,
             request.PartySize,
             alternatives,
+            requestedSlotEligible,
             config.BufferMinutes);
 
         var calendarResult = await calendarIntegration.CheckAvailabilityAsync(calendarRequest, cancellationToken);
         var result = new CheckAvailabilityResult
         {
-            Available = calendarResult.Available,
+            Available = requestedSlotEligible && calendarResult.Available,
             AlternativeSlots = [.. calendarResult.AlternativeStarts.Select(value => TimeOnly.FromDateTime(value.DateTime))],
-            UnavailabilityReason = calendarResult.UnavailabilityReason,
+            UnavailabilityReason = requestedSlotEligible ? calendarResult.UnavailabilityReason : "outside_working_hours",
         };
 
         return await PersistExecutionAsync(
@@ -209,7 +218,12 @@ public sealed class GoogleCalendarToolExecutor(
                 End: request.End,
                 Summary: request.Summary,
                 IdempotencyKey: idempotencyKey,
-                Description: null),
+                Description: $"Customer: {request.CustomerName.Trim()}",
+                CustomerEmail: null,
+                CompanyId: context.Company.Id.ToString("D"),
+                ConversationId: context.Conversation.Id.ToString("D"),
+                CustomerExternalId: context.Customer.ExternalCustomerId,
+                ReservationId: idempotencyKey),
             cancellationToken: cancellationToken);
 
         return await PersistExecutionAsync(
@@ -222,6 +236,227 @@ public sealed class GoogleCalendarToolExecutor(
             {
                 EventId = calendarResult.EventId,
                 EventUrl = calendarResult.EventUrl,
+            }),
+            ToolExecutionStatus.Succeeded,
+            failureReason: null,
+            cancellationToken);
+    }
+
+    public async Task<ToolExecution> FindReservationsAsync(
+        Guid companyId,
+        Guid conversationId,
+        Guid companyToolId,
+        Guid triggerMessageId,
+        FindGoogleCalendarReservationsRequest request,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
+        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var window = BuildSearchWindow(context.Company.TimeZoneId, request.Date, request.IncludePast);
+        var calendarResult = await calendarIntegration.FindReservationsAsync(
+            new CalendarReservationSearchRequest(
+                context.CredentialReference,
+                context.Configuration.CalendarId,
+                context.Company.Id.ToString("D"),
+                context.Customer.ExternalCustomerId,
+                window.Start,
+                window.End,
+                request.IncludePast),
+            cancellationToken);
+        if (calendarResult.FailureReason is not null)
+        {
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.FindGoogleCalendarReservations,
+                idempotencyKey,
+                ToolExecutionRequest.ForFindGoogleCalendarReservations(request),
+                result: null,
+                ToolExecutionStatus.Failed,
+                calendarResult.FailureReason,
+                cancellationToken);
+        }
+
+        var reservations = calendarResult.Reservations.Select(ToResultItem).ToList();
+        var result = new FindGoogleCalendarReservationsResult
+        {
+            Reservations = reservations,
+            Count = reservations.Count,
+            DisambiguationNeeded = reservations.Count > 1,
+        };
+
+        return await PersistExecutionAsync(
+            context,
+            triggerMessageId,
+            MvpToolKeys.FindGoogleCalendarReservations,
+            idempotencyKey,
+            ToolExecutionRequest.ForFindGoogleCalendarReservations(request),
+            ToolExecutionResult.ForFindGoogleCalendarReservations(result),
+            ToolExecutionStatus.Succeeded,
+            failureReason: null,
+            cancellationToken);
+    }
+
+    public async Task<ToolExecution> UpdateReservationAsync(
+        Guid companyId,
+        Guid conversationId,
+        Guid companyToolId,
+        Guid triggerMessageId,
+        UpdateGoogleCalendarReservationRequest request,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
+        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        if (!GoogleCalendarSchedulingPolicy.IsWithinAdvanceWindow(
+            DateOnly.FromDateTime(request.NewStart.DateTime),
+            context.Company.TimeZoneId,
+            timeProvider.GetUtcNow(),
+            context.Configuration.AdvanceBookingDays))
+        {
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.UpdateGoogleCalendarReservation,
+                idempotencyKey,
+                ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+                result: null,
+                ToolExecutionStatus.Denied,
+                "outside_advance_booking_window",
+                cancellationToken);
+        }
+
+        if (!GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(
+            context.Company.WorkingHours,
+            request.NewStart,
+            request.NewEnd,
+            context.Configuration.BufferMinutes))
+        {
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.UpdateGoogleCalendarReservation,
+                idempotencyKey,
+                ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+                result: null,
+                ToolExecutionStatus.Denied,
+                "outside_working_hours",
+                cancellationToken);
+        }
+
+        var calendarResult = await calendarIntegration.UpdateReservationAsync(
+            new CalendarReservationUpdateRequest(
+                context.CredentialReference,
+                context.Configuration.CalendarId,
+                context.Company.Id.ToString("D"),
+                context.Customer.ExternalCustomerId,
+                request.ReservationId,
+                request.NewStart,
+                request.NewEnd,
+                request.Summary,
+                request.CustomerName,
+                context.Configuration.BufferMinutes),
+            cancellationToken);
+
+        if (!calendarResult.Succeeded || calendarResult.Reservation is null)
+        {
+            var failureReason = calendarResult.FailureReason ?? "reservation_not_found_or_not_owned";
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.UpdateGoogleCalendarReservation,
+                idempotencyKey,
+                ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+                result: null,
+                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
+                failureReason,
+                cancellationToken);
+        }
+
+        return await PersistExecutionAsync(
+            context,
+            triggerMessageId,
+            MvpToolKeys.UpdateGoogleCalendarReservation,
+            idempotencyKey,
+            ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+            ToolExecutionResult.ForUpdateGoogleCalendarReservation(new UpdateGoogleCalendarReservationResult
+            {
+                Reservation = ToResultItem(calendarResult.Reservation),
+            }),
+            ToolExecutionStatus.Succeeded,
+            failureReason: null,
+            cancellationToken);
+    }
+
+    public async Task<ToolExecution> CancelReservationAsync(
+        Guid companyId,
+        Guid conversationId,
+        Guid companyToolId,
+        Guid triggerMessageId,
+        CancelGoogleCalendarReservationRequest request,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
+        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var calendarResult = await calendarIntegration.CancelReservationAsync(
+            new CalendarReservationCancellationRequest(
+                context.CredentialReference,
+                context.Configuration.CalendarId,
+                context.Company.Id.ToString("D"),
+                context.Customer.ExternalCustomerId,
+                request.ReservationId,
+                request.Reason),
+            cancellationToken);
+
+        if (!calendarResult.Succeeded)
+        {
+            var failureReason = calendarResult.FailureReason ?? "reservation_not_found_or_not_owned";
+            return await PersistExecutionAsync(
+                context,
+                triggerMessageId,
+                MvpToolKeys.CancelGoogleCalendarReservation,
+                idempotencyKey,
+                ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
+                result: null,
+                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
+                failureReason,
+                cancellationToken);
+        }
+
+        return await PersistExecutionAsync(
+            context,
+            triggerMessageId,
+            MvpToolKeys.CancelGoogleCalendarReservation,
+            idempotencyKey,
+            ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
+            ToolExecutionResult.ForCancelGoogleCalendarReservation(new CancelGoogleCalendarReservationResult
+            {
+                Cancelled = true,
+                ReservationId = calendarResult.ReservationId,
+                EventId = calendarResult.EventId,
             }),
             ToolExecutionStatus.Succeeded,
             failureReason: null,
@@ -252,6 +487,13 @@ public sealed class GoogleCalendarToolExecutor(
                 entity => entity.Id == conversationId,
                 cancellationToken)
             ?? throw new InvalidOperationException($"Conversation '{conversationId}' was not found.");
+        var customer = await dbContext.Customers
+            .AsNoTracking()
+            .ForCompany(companyId)
+            .SingleOrDefaultAsync(
+                entity => entity.Id == conversation.CustomerId,
+                cancellationToken)
+            ?? throw new InvalidOperationException($"Customer '{conversation.CustomerId}' was not found.");
         var company = await dbContext.Companies
             .AsNoTracking()
             .SingleOrDefaultAsync(entity => entity.Id == companyId, cancellationToken)
@@ -273,7 +515,47 @@ public sealed class GoogleCalendarToolExecutor(
         }
 
         var credentialReference = GoogleCalendarCredentialMaterialResolver.Resolve(tool.CredentialReference);
-        return new CalendarToolContext(conversation, company, tool, config, credentialReference);
+        return new CalendarToolContext(conversation, customer, company, tool, config, credentialReference);
+    }
+
+    private (DateTimeOffset Start, DateTimeOffset End) BuildSearchWindow(
+        string timeZoneId,
+        DateOnly? date,
+        bool includePast)
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        var localNow = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timeZone);
+        if (date is { } localDate)
+        {
+            var start = GoogleCalendarSchedulingPolicy.ToCompanyLocalOffset(localDate, TimeOnly.MinValue, timeZoneId);
+            return (start, start.AddDays(1));
+        }
+
+        var todayStart = GoogleCalendarSchedulingPolicy.ToCompanyLocalOffset(
+            DateOnly.FromDateTime(localNow.DateTime),
+            TimeOnly.MinValue,
+            timeZoneId);
+        var windowStart = includePast ? todayStart.AddDays(-30) : localNow;
+        return (windowStart, todayStart.AddDays(30));
+    }
+
+    private static GoogleCalendarReservationResultItem ToResultItem(CalendarReservationInfo reservation)
+    {
+        return new GoogleCalendarReservationResultItem
+        {
+            ReservationId = reservation.ReservationId,
+            EventId = reservation.EventId,
+            Start = reservation.Start,
+            End = reservation.End,
+            Summary = reservation.Summary,
+            CustomerName = reservation.CustomerName,
+            EventUrl = reservation.EventUrl,
+        };
+    }
+
+    private static bool IsProviderFailureReason(string failureReason)
+    {
+        return failureReason is "upstream_error" or "rate_limited" or "calendar_access_denied";
     }
 
     private async Task<ToolExecution> PersistExecutionAsync(
@@ -323,6 +605,7 @@ public sealed class GoogleCalendarToolExecutor(
 
     private sealed record CalendarToolContext(
         Conversation Conversation,
+        Customer Customer,
         InfrastructureCompany Company,
         CompanyTool Tool,
         GoogleCalendarConfig Configuration,

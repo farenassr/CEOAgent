@@ -11,6 +11,12 @@ public static class GoogleCalendarSchedulingPolicy
 
     public const int DefaultSlotMinutes = GoogleCalendarSchedulingDefaults.SlotMinutes;
 
+    public const int AlternativeSearchWindowHours = 3;
+
+    public const int MaxAlternativeStarts = 6;
+
+    private const int PreferredAlternativeStartsPerSide = 3;
+
     /// <summary>
     /// Combines a company-local date and time with the configured time zone offset for that local instant.
     /// </summary>
@@ -67,7 +73,7 @@ public static class GoogleCalendarSchedulingPolicy
     }
 
     /// <summary>
-    /// Builds candidate reservation start times for the date, ordered by closeness to the requested start while respecting slots, duration, and buffer.
+    /// Builds nearby candidate reservation start times inside the availability search window while respecting slots, duration, and buffer.
     /// </summary>
     public static DateTimeOffset[] BuildAlternativeStarts(
         WorkingHours? workingHours,
@@ -77,6 +83,8 @@ public static class GoogleCalendarSchedulingPolicy
         int reservationMinutes = DefaultReservationMinutes,
         int bufferMinutes = 0)
     {
+        var searchWindowStart = requestedStart.AddHours(-AlternativeSearchWindowHours);
+        var searchWindowEnd = requestedStart.AddHours(AlternativeSearchWindowHours);
         var alternatives = new List<DateTimeOffset>();
         foreach (var slot in SlotsForDate(workingHours, date).OrderBy(slot => slot.Start))
         {
@@ -87,7 +95,9 @@ public static class GoogleCalendarSchedulingPolicy
                 .AddMinutes(-bufferMinutes);
             while (cursor <= latestStart)
             {
-                if (cursor != requestedStart)
+                if (cursor != requestedStart
+                    && cursor >= searchWindowStart
+                    && cursor <= searchWindowEnd)
                 {
                     alternatives.Add(cursor);
                 }
@@ -96,9 +106,27 @@ public static class GoogleCalendarSchedulingPolicy
             }
         }
 
-        return alternatives
-            .OrderBy(value => Math.Abs((value - requestedStart).TotalMinutes))
-            .ThenBy(value => value)
+        var selected = alternatives
+            .Where(value => value < requestedStart)
+            .OrderByDescending(value => value)
+            .Take(PreferredAlternativeStartsPerSide)
+            .Concat(alternatives
+                .Where(value => value > requestedStart)
+                .OrderBy(value => value)
+                .Take(PreferredAlternativeStartsPerSide))
+            .ToList();
+
+        if (selected.Count < MaxAlternativeStarts)
+        {
+            selected.AddRange(alternatives
+                .Except(selected)
+                .OrderBy(value => Math.Abs((value - requestedStart).TotalMinutes))
+                .ThenBy(value => value)
+                .Take(MaxAlternativeStarts - selected.Count));
+        }
+
+        return selected
+            .Take(MaxAlternativeStarts)
             .ToArray();
     }
 

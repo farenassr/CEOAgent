@@ -15,7 +15,7 @@ namespace CeoAgent.ApiService.Modules.GoogleCalendar;
 /// </summary>
 public sealed class CreateGoogleCalendarReservationEndpoint(
     GoogleCalendarCompanyToolResolver resolver,
-    ICalendarIntegration calendarIntegration,
+    IGoogleCalendarIntegration calendarIntegration,
     TimeProvider timeProvider)
     : Endpoint<CreateGoogleCalendarReservationRequest, GoogleCalendarReservationResponse>
 {
@@ -113,7 +113,7 @@ public sealed class CreateGoogleCalendarReservationValidator
         RuleFor(request => request.End).GreaterThan(request => request.Start);
         RuleFor(request => request.Summary).NotEmpty().MaximumLength(300);
         RuleFor(request => request.Description).MaximumLength(2000);
-        RuleFor(request => request.CustomerName).MaximumLength(300);
+        RuleFor(request => request.CustomerName).NotEmpty().MaximumLength(300);
         RuleFor(request => request.CustomerEmail).EmailAddress().MaximumLength(300)
             .When(request => !string.IsNullOrWhiteSpace(request.CustomerEmail));
         RuleFor(request => request.Notes).MaximumLength(2000);

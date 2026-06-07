@@ -28,6 +28,24 @@ public sealed class ToolExecutionRequest
     [JsonPropertyName("create_calendar_event")]
     public CreateCalendarEventRequest? CreateCalendarEvent { get; set; }
 
+    /// <summary>
+    /// Request payload for finding Google Calendar reservations for the current conversation customer.
+    /// </summary>
+    [JsonPropertyName("find_google_calendar_reservations")]
+    public FindGoogleCalendarReservationsRequest? FindGoogleCalendarReservations { get; set; }
+
+    /// <summary>
+    /// Request payload for updating a Google Calendar reservation owned by the current conversation customer.
+    /// </summary>
+    [JsonPropertyName("update_google_calendar_reservation")]
+    public UpdateGoogleCalendarReservationRequest? UpdateGoogleCalendarReservation { get; set; }
+
+    /// <summary>
+    /// Request payload for cancelling a Google Calendar reservation owned by the current conversation customer.
+    /// </summary>
+    [JsonPropertyName("cancel_google_calendar_reservation")]
+    public CancelGoogleCalendarReservationRequest? CancelGoogleCalendarReservation { get; set; }
+
     public static ToolExecutionRequest ForCheckAvailability(CheckAvailabilityRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -82,6 +100,39 @@ public sealed class ToolExecutionRequest
             CreateCalendarEvent = request,
         };
     }
+
+    public static ToolExecutionRequest ForFindGoogleCalendarReservations(FindGoogleCalendarReservationsRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return new ToolExecutionRequest
+        {
+            ToolKey = MvpToolKeys.FindGoogleCalendarReservations,
+            FindGoogleCalendarReservations = request,
+        };
+    }
+
+    public static ToolExecutionRequest ForUpdateGoogleCalendarReservation(UpdateGoogleCalendarReservationRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return new ToolExecutionRequest
+        {
+            ToolKey = MvpToolKeys.UpdateGoogleCalendarReservation,
+            UpdateGoogleCalendarReservation = request,
+        };
+    }
+
+    public static ToolExecutionRequest ForCancelGoogleCalendarReservation(CancelGoogleCalendarReservationRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return new ToolExecutionRequest
+        {
+            ToolKey = MvpToolKeys.CancelGoogleCalendarReservation,
+            CancelGoogleCalendarReservation = request,
+        };
+    }
 }
 
 public sealed class CheckAvailabilityRequest
@@ -131,4 +182,68 @@ public sealed class CreateCalendarEventRequest
     /// Event summary or title.
     /// </summary>
     public required string Summary { get; set; }
+
+    /// <summary>
+    /// Customer name captured before creating the reservation.
+    /// </summary>
+    public required string CustomerName { get; set; }
+}
+
+public sealed class FindGoogleCalendarReservationsRequest
+{
+    /// <summary>
+    /// Optional company-local date in yyyy-MM-dd format. Null searches a short future window.
+    /// </summary>
+    public DateOnly? Date { get; set; }
+
+    /// <summary>
+    /// Whether past reservations should be included in the requested window.
+    /// </summary>
+    public bool IncludePast { get; set; }
+
+    /// <summary>
+    /// Optional reservation status filter. Null means active/default reservations.
+    /// </summary>
+    public string? Status { get; set; }
+}
+
+public sealed class UpdateGoogleCalendarReservationRequest
+{
+    /// <summary>
+    /// Reservation identifier returned by find_google_calendar_reservations.
+    /// </summary>
+    public required string ReservationId { get; set; }
+
+    /// <summary>
+    /// New event start timestamp.
+    /// </summary>
+    public DateTimeOffset NewStart { get; set; }
+
+    /// <summary>
+    /// New event end timestamp.
+    /// </summary>
+    public DateTimeOffset NewEnd { get; set; }
+
+    /// <summary>
+    /// Optional replacement event summary.
+    /// </summary>
+    public string? Summary { get; set; }
+
+    /// <summary>
+    /// Optional replacement customer name.
+    /// </summary>
+    public string? CustomerName { get; set; }
+}
+
+public sealed class CancelGoogleCalendarReservationRequest
+{
+    /// <summary>
+    /// Reservation identifier returned by find_google_calendar_reservations.
+    /// </summary>
+    public required string ReservationId { get; set; }
+
+    /// <summary>
+    /// Optional cancellation reason.
+    /// </summary>
+    public string? Reason { get; set; }
 }

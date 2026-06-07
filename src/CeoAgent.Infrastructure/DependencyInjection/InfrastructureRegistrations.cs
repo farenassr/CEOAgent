@@ -85,7 +85,7 @@ public static class InfrastructureRegistrations
         services.AddSingleton<IOpenAIResponsesClientFactory, OpenAIResponsesClientFactory>();
         services.AddScoped<IAgentRuntime, OpenAIAgentRuntime>();
         services.AddScoped<IGoogleCalendarServiceFactory, GoogleCalendarServiceFactory>();
-        services.AddScoped<ICalendarIntegration, GoogleCalendarIntegration>();
+        services.AddScoped<IGoogleCalendarIntegration, GoogleCalendarIntegration>();
         services.AddScoped<IMessageChannelIntegration>(provider =>
         {
             var integration = provider.GetRequiredService<WhatsAppCloudIntegration>();
@@ -102,6 +102,9 @@ public static class InfrastructureRegistrations
         services.AddScoped<ToolExecutionGatewayHelper>();
         services.AddScoped<IToolExecutor, CheckGoogleCalendarAvailabilityExecutor>();
         services.AddScoped<IToolExecutor, CreateGoogleCalendarReservationExecutor>();
+        services.AddScoped<IToolExecutor, FindGoogleCalendarReservationsExecutor>();
+        services.AddScoped<IToolExecutor, UpdateGoogleCalendarReservationExecutor>();
+        services.AddScoped<IToolExecutor, CancelGoogleCalendarReservationExecutor>();
         services.AddScoped<ToolExecutionGateway>();
 
         return services;

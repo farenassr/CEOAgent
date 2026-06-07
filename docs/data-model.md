@@ -2,7 +2,7 @@
 
 Guia explicativa del modelo de datos actual del backend. Este documento describe para que sirve cada tabla, que representa cada propiedad, ejemplos de valores reales y las decisiones importantes de diseño.
 
-> Estado actual: el MVP ya no incluye reservas. El modelo esta enfocado en compañias, canales, clientes, conversaciones, mensajes con texto/audio, herramientas e integraciones externas.
+> Estado actual: el MVP gestiona reservas mediante herramientas de Google Calendar. No existe una tabla relacional de reservas; las reservas viven en Google Calendar y se auditan mediante `tool_execution`.
 
 ## Vista General 🧭
 
@@ -297,6 +297,7 @@ El modelo nunca ejecuta efectos secundarios directamente. Cuando quiere realizar
 - Deshabilitar una herramienta debe impedir su ejecucion aunque el modelo la pida.
 - Herramientas con sistemas externos, como Google Calendar, enlazan su credencial mediante `CredentialReferenceId`.
 - La configuracion se deja en JSON porque cada herramienta puede necesitar parametros diferentes.
+- Las herramientas de reserva de Google Calendar incluyen consultar, crear, actualizar y cancelar reservas. Para buscar, actualizar o cancelar, el backend resuelve el cliente actual desde la conversacion y no acepta telefonos enviados por el modelo.
 
 ---
 
@@ -501,6 +502,12 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 | `FailureReason`  | `string?`             | Motivo corto de falla o denegacion.                                  | `tool_not_enabled`                         |
 | `CreatedAt`      | `DateTime`            | Fecha UTC de creacion.                                               | `2026-05-22T10:15:30Z`                     |
 | `UpdatedAt`      | `DateTime`            | Fecha UTC de ultima actualizacion.                                   | `2026-05-22T10:45:00Z`                     |
+
+Las ejecuciones de Google Calendar pueden usar claves como `find_google_calendar_reservations`,
+`create_google_calendar_reservation`, `update_google_calendar_reservation` y
+`cancel_google_calendar_reservation`. Los resultados devueltos al modelo son sanitizados:
+incluyen identificadores de reserva/evento, horarios locales, resumen, nombre si esta disponible,
+URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 
 ### Estados posibles
 

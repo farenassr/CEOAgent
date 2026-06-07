@@ -35,6 +35,26 @@ public sealed class ToolExecutionConfiguration : IEntityTypeConfiguration<ToolEx
             createCalendarEventRequest.Property(entity => entity.Start).HasJsonPropertyName("start");
             createCalendarEventRequest.Property(entity => entity.End).HasJsonPropertyName("end");
             createCalendarEventRequest.Property(entity => entity.Summary).HasJsonPropertyName("summary");
+            createCalendarEventRequest.Property(entity => entity.CustomerName).HasJsonPropertyName("customerName");
+
+            var findGoogleCalendarReservationsRequest = request.ComplexProperty(entity => entity.FindGoogleCalendarReservations);
+            findGoogleCalendarReservationsRequest.HasJsonPropertyName("find_google_calendar_reservations");
+            findGoogleCalendarReservationsRequest.Property(entity => entity.Date).HasJsonPropertyName("date");
+            findGoogleCalendarReservationsRequest.Property(entity => entity.IncludePast).HasJsonPropertyName("includePast");
+            findGoogleCalendarReservationsRequest.Property(entity => entity.Status).HasJsonPropertyName("status");
+
+            var updateGoogleCalendarReservationRequest = request.ComplexProperty(entity => entity.UpdateGoogleCalendarReservation);
+            updateGoogleCalendarReservationRequest.HasJsonPropertyName("update_google_calendar_reservation");
+            updateGoogleCalendarReservationRequest.Property(entity => entity.ReservationId).HasJsonPropertyName("reservationId");
+            updateGoogleCalendarReservationRequest.Property(entity => entity.NewStart).HasJsonPropertyName("newStart");
+            updateGoogleCalendarReservationRequest.Property(entity => entity.NewEnd).HasJsonPropertyName("newEnd");
+            updateGoogleCalendarReservationRequest.Property(entity => entity.Summary).HasJsonPropertyName("summary");
+            updateGoogleCalendarReservationRequest.Property(entity => entity.CustomerName).HasJsonPropertyName("customerName");
+
+            var cancelGoogleCalendarReservationRequest = request.ComplexProperty(entity => entity.CancelGoogleCalendarReservation);
+            cancelGoogleCalendarReservationRequest.HasJsonPropertyName("cancel_google_calendar_reservation");
+            cancelGoogleCalendarReservationRequest.Property(entity => entity.ReservationId).HasJsonPropertyName("reservationId");
+            cancelGoogleCalendarReservationRequest.Property(entity => entity.Reason).HasJsonPropertyName("reason");
         });
         builder.ComplexProperty(entity => entity.Result, result =>
         {
@@ -57,6 +77,20 @@ public sealed class ToolExecutionConfiguration : IEntityTypeConfiguration<ToolEx
             createCalendarEventResult.HasJsonPropertyName("create_calendar_event");
             createCalendarEventResult.Property(entity => entity.EventId).HasJsonPropertyName("eventId");
             createCalendarEventResult.Property(entity => entity.EventUrl).HasJsonPropertyName("eventUrl");
+
+            var findGoogleCalendarReservationsResult = result.ComplexProperty(entity => entity.FindGoogleCalendarReservations);
+            findGoogleCalendarReservationsResult.HasJsonPropertyName("find_google_calendar_reservations");
+            findGoogleCalendarReservationsResult.Property(entity => entity.Count).HasJsonPropertyName("count");
+            findGoogleCalendarReservationsResult.Property(entity => entity.DisambiguationNeeded).HasJsonPropertyName("disambiguationNeeded");
+
+            var updateGoogleCalendarReservationResult = result.ComplexProperty(entity => entity.UpdateGoogleCalendarReservation);
+            updateGoogleCalendarReservationResult.HasJsonPropertyName("update_google_calendar_reservation");
+
+            var cancelGoogleCalendarReservationResult = result.ComplexProperty(entity => entity.CancelGoogleCalendarReservation);
+            cancelGoogleCalendarReservationResult.HasJsonPropertyName("cancel_google_calendar_reservation");
+            cancelGoogleCalendarReservationResult.Property(entity => entity.Cancelled).HasJsonPropertyName("cancelled");
+            cancelGoogleCalendarReservationResult.Property(entity => entity.ReservationId).HasJsonPropertyName("reservationId");
+            cancelGoogleCalendarReservationResult.Property(entity => entity.EventId).HasJsonPropertyName("eventId");
         });
         builder.HasIndex(entity => new { entity.CompanyId, entity.IdempotencyKey }).IsUnique();
         builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);

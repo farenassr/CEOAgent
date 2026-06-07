@@ -39,7 +39,9 @@ public sealed class CompanyToolRegistry(CeoAgentDbContext dbContext)
 
     private static bool IsMutating(string toolKey)
     {
-        return string.Equals(toolKey, MvpToolKeys.CreateGoogleCalendarReservation, StringComparison.Ordinal);
+        return toolKey is MvpToolKeys.CreateGoogleCalendarReservation
+            or MvpToolKeys.UpdateGoogleCalendarReservation
+            or MvpToolKeys.CancelGoogleCalendarReservation;
     }
 
 }

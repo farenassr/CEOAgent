@@ -14,7 +14,7 @@ namespace CeoAgent.ApiService.Modules.GoogleCalendar;
 /// </summary>
 public sealed class CheckGoogleCalendarAvailabilityEndpoint(
     GoogleCalendarCompanyToolResolver resolver,
-    ICalendarIntegration calendarIntegration,
+    IGoogleCalendarIntegration calendarIntegration,
     TimeProvider timeProvider)
     : Endpoint<CheckGoogleCalendarAvailabilityRequest, GoogleCalendarAvailabilityResponse>
 {
@@ -65,6 +65,8 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
 
         var start = GoogleCalendarSchedulingPolicy.ToCompanyLocalOffset(request.Date, preferredTime.Value, context.Company.TimeZoneId);
         var end = start.AddMinutes(context.Configuration.ReservationMinutes);
+        var searchWindowStart = start.AddHours(-GoogleCalendarSchedulingPolicy.AlternativeSearchWindowHours);
+        var searchWindowEnd = start.AddHours(GoogleCalendarSchedulingPolicy.AlternativeSearchWindowHours);
         var alternatives = GoogleCalendarSchedulingPolicy.BuildAlternativeStarts(
             context.Company.WorkingHours,
             request.Date,
@@ -72,14 +74,18 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
             context.Configuration.SlotMinutes,
             context.Configuration.ReservationMinutes,
             context.Configuration.BufferMinutes);
+        var requestedSlotEligible = GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(
+            context.Company.WorkingHours,
+            start,
+            end,
+            context.Configuration.BufferMinutes);
 
-        if (!GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(context.Company.WorkingHours, start, end, context.Configuration.BufferMinutes))
+        if (!requestedSlotEligible && alternatives.Length == 0)
         {
             await Send.OkAsync(
                 new GoogleCalendarAvailabilityResponse
                 {
                     Available = false,
-                    AlternativeSlots = [.. alternatives.Select(value => TimeOnly.FromDateTime(value.DateTime)).Take(1)],
                     UnavailabilityReason = "outside_working_hours",
                 },
                 cancellationToken);
@@ -92,17 +98,20 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
                 context.Configuration.CalendarId,
                 start,
                 end,
+                searchWindowStart,
+                searchWindowEnd,
                 request.PartySize,
                 alternatives,
+                requestedSlotEligible,
                 context.Configuration.BufferMinutes),
             cancellationToken);
 
         await Send.OkAsync(
             new GoogleCalendarAvailabilityResponse
             {
-                Available = result.Available,
+                Available = requestedSlotEligible && result.Available,
                 AlternativeSlots = [.. result.AlternativeStarts.Select(value => TimeOnly.FromDateTime(value.DateTime))],
-                UnavailabilityReason = result.UnavailabilityReason,
+                UnavailabilityReason = requestedSlotEligible ? result.UnavailabilityReason : "outside_working_hours",
             },
             cancellationToken);
     }

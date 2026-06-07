@@ -31,11 +31,23 @@ public sealed class CompanyToolRegistryTests
         descriptor.ParametersSchema.GetProperty("additionalProperties").GetBoolean().ShouldBeFalse();
     }
 
+    [Test]
+    public async Task GetEnabledToolsAsync_MarksReservationUpdateAndCancelAsMutating()
+    {
+        await using var fixture = await RegistryFixture.CreateAsync(includeReservationTools: true);
+
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+
+        tools.Single(tool => tool.Name == MvpToolKeys.FindGoogleCalendarReservations).IsMutating.ShouldBeFalse();
+        tools.Single(tool => tool.Name == MvpToolKeys.UpdateGoogleCalendarReservation).IsMutating.ShouldBeTrue();
+        tools.Single(tool => tool.Name == MvpToolKeys.CancelGoogleCalendarReservation).IsMutating.ShouldBeTrue();
+    }
+
     private sealed class RegistryFixture : IAsyncDisposable
     {
         private readonly PostgresWorkerDatabase database;
 
-        private RegistryFixture(PostgresWorkerDatabase database)
+        private RegistryFixture(PostgresWorkerDatabase database, bool includeReservationTools)
         {
             this.database = database;
             CompanyContext = database.CompanyContext;
@@ -113,12 +125,41 @@ public sealed class CompanyToolRegistryTests
                     }),
                 });
 
+            if (includeReservationTools)
+            {
+                DbContext.CompanyTools.AddRange(
+                    new CompanyTool
+                    {
+                        CompanyId = CompanyId,
+                        ToolKey = MvpToolKeys.FindGoogleCalendarReservations,
+                        Description = "Find reservations.",
+                        ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":["string","null"]},"includePast":{"type":"boolean"},"status":{"type":["string","null"]}},"required":["date","includePast","status"],"additionalProperties":false}"""),
+                        IsEnabled = true,
+                    },
+                    new CompanyTool
+                    {
+                        CompanyId = CompanyId,
+                        ToolKey = MvpToolKeys.UpdateGoogleCalendarReservation,
+                        Description = "Update reservations.",
+                        ParametersSchema = ParseSchema("""{"type":"object","properties":{"reservationId":{"type":"string"},"newStart":{"type":"string"},"newEnd":{"type":"string"},"summary":{"type":["string","null"]},"customerName":{"type":["string","null"]}},"required":["reservationId","newStart","newEnd","summary","customerName"],"additionalProperties":false}"""),
+                        IsEnabled = true,
+                    },
+                    new CompanyTool
+                    {
+                        CompanyId = CompanyId,
+                        ToolKey = MvpToolKeys.CancelGoogleCalendarReservation,
+                        Description = "Cancel reservations.",
+                        ParametersSchema = ParseSchema("""{"type":"object","properties":{"reservationId":{"type":"string"},"reason":{"type":["string","null"]}},"required":["reservationId","reason"],"additionalProperties":false}"""),
+                        IsEnabled = true,
+                    });
+            }
+
             DbContext.SaveChanges();
         }
 
-        public static async Task<RegistryFixture> CreateAsync()
+        public static async Task<RegistryFixture> CreateAsync(bool includeReservationTools = false)
         {
-            return new RegistryFixture(await PostgresWorkerDatabase.CreateAsync());
+            return new RegistryFixture(await PostgresWorkerDatabase.CreateAsync(), includeReservationTools);
         }
 
         public Guid CompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");

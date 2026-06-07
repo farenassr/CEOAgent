@@ -5,6 +5,9 @@ public sealed record CalendarAvailabilityRequest(
     string CalendarId,
     DateTimeOffset Start,
     DateTimeOffset End,
+    DateTimeOffset SearchWindowStart,
+    DateTimeOffset SearchWindowEnd,
     int PartySize,
     IReadOnlyList<DateTimeOffset> AlternativeSearchStarts,
+    bool RequestedSlotEligible = true,
     int BufferMinutes = 0);
