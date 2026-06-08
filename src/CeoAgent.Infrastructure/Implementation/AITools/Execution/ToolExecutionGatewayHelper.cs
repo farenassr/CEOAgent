@@ -38,6 +38,11 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
             && request.PartySize > 0;
     }
 
+    public static bool IsValid(RequestHumanHandoffRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.Reason);
+    }
+
     public static bool IsValid(CreateCalendarEventRequest request)
     {
         return request.Start != default

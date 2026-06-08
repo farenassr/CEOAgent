@@ -41,7 +41,8 @@ public sealed class CompanyToolRegistry(CeoAgentDbContext dbContext)
     {
         return toolKey is MvpToolKeys.CreateGoogleCalendarReservation
             or MvpToolKeys.UpdateGoogleCalendarReservation
-            or MvpToolKeys.CancelGoogleCalendarReservation;
+            or MvpToolKeys.CancelGoogleCalendarReservation
+            or MvpToolKeys.RequestHumanHandoff;
     }
 
 }

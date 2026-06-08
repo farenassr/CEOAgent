@@ -15,6 +15,8 @@ public static class CeoAgentTelemetry
     public static readonly Counter<double> LlmEstimatedCost = Meter.CreateCounter<double>("llm.estimated_cost", "USD");
     public static readonly Histogram<double> ToolExecutionDuration = Meter.CreateHistogram<double>("tools.execution.duration", "ms");
     public static readonly Counter<long> ToolExecutionFailures = Meter.CreateCounter<long>("tools.execution.failures");
+    public static readonly Counter<long> HumanHandoffEscalations = Meter.CreateCounter<long>("handoff.escalations");
+    public static readonly Counter<long> HumanHandoffNotificationsUnavailable = Meter.CreateCounter<long>("handoff.notifications.unavailable");
 
     public static readonly Counter<long> QueueDequeueCount = Meter.CreateCounter<long>("queue.messages.dequeued");
     public static readonly Counter<long> QueuePoisonCount = Meter.CreateCounter<long>("queue.messages.poisoned");

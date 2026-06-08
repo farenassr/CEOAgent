@@ -14,6 +14,7 @@ using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Prompt;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
+using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Shared.AITools;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
@@ -30,6 +31,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
     IAgentRuntime agentRuntime,
     CompanyToolRegistry toolRegistry,
     ToolExecutionGateway toolGateway,
+    HumanHandoffToolExecutor handoffExecutor,
     ICompanyContextAccessor companyContextAccessor,
     TimeProvider timeProvider,
     ILogger<ProcessIncomingMessageJobProcessor> logger)
@@ -52,6 +54,28 @@ public sealed class ProcessIncomingMessageJobProcessor(
         try
         {
             var context = await LoadContextAsync(job, cancellationToken);
+
+            if (context.Conversation.Status == ConversationStatus.HandedOff)
+            {
+                // HandedOff is the single source of truth for pausing the agent. The inbound message is
+                // already persisted by webhook ingestion; we optionally acknowledge it with a read receipt
+                // and exit without building a prompt or running the agent loop.
+                if (ShouldMarkInboundRead(context.Inbound))
+                {
+                    await messaging.MarkMessageReadAsync(
+                        new ChannelMessageReference(
+                            context.Company.Id,
+                            context.Channel.Id,
+                            WhatsAppProvider,
+                            context.Inbound.ProviderMessageId!),
+                        cancellationToken);
+                }
+
+                logger.ZLogInformation(
+                    $"InboundSuppressedDuringHandoff conversation_id={context.Conversation.Id} company_id={context.Company.Id} message_id={context.Inbound.Id}");
+                return;
+            }
+
             var replyClientMessageId = ReplyClientMessageId(context.Inbound);
 
             var existingReply = await dbContext.Messages
@@ -379,7 +403,31 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
         logger.ZLogWarning(
             $"AgentLoopCapReached conversation_id={context.Conversation.Id} company_id={context.Company.Id} max_iterations={MaxToolLoopIterations}");
+        await EscalateToHumanAsync(context, cancellationToken);
         return LoopCapFallbackText;
+    }
+
+    /// <summary>
+    /// Escalates the conversation to a human when the agent loop cannot complete. Moves the conversation
+    /// to HandedOff and notifies staff so the fallback promise ("te pondre en contacto con una persona")
+    /// is backed by an actual handoff. The single confirmation reply is still sent by the caller.
+    /// </summary>
+    private async Task EscalateToHumanAsync(ProcessorContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await handoffExecutor.AutoEscalateAsync(
+                context.Company.Id,
+                context.Conversation.Id,
+                context.Inbound.Id,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.ZLogError(
+                exception,
+                $"AutoHandoffEscalationFailed conversation_id={context.Conversation.Id} company_id={context.Company.Id}");
+        }
     }
 
     private DateTimeOffset ToCompanyLocalNow(string timeZoneId)

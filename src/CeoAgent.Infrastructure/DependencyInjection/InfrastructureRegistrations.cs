@@ -6,6 +6,7 @@ using CeoAgent.Infrastructure.ApiClient.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
+using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
 using CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.OpenAI;
@@ -99,7 +100,9 @@ public static class InfrastructureRegistrations
     {
         services.AddScoped<CompanyToolRegistry>();
         services.AddScoped<GoogleCalendarToolExecutor>();
+        services.AddScoped<HumanHandoffToolExecutor>();
         services.AddScoped<ToolExecutionGatewayHelper>();
+        services.AddScoped<IToolExecutor, RequestHumanHandoffExecutor>();
         services.AddScoped<IToolExecutor, CheckGoogleCalendarAvailabilityExecutor>();
         services.AddScoped<IToolExecutor, CreateGoogleCalendarReservationExecutor>();
         services.AddScoped<IToolExecutor, FindGoogleCalendarReservationsExecutor>();
