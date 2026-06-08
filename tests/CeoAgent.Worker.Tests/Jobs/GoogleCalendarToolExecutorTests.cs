@@ -1,3 +1,4 @@
+using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Application.Abstractions.Company;
 using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure;
@@ -7,6 +8,7 @@ using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Shared.Calendar;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
+using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -29,12 +31,8 @@ public sealed class GoogleCalendarToolExecutorTests
         };
 
         var result = await fixture.Executor.CreateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("reservation-key"),
             request,
-            "reservation-key",
             CancellationToken.None);
 
         result.Status.ShouldBe(ToolExecutionStatus.Denied);
@@ -58,17 +56,13 @@ public sealed class GoogleCalendarToolExecutorTests
         ]);
 
         var result = await fixture.Executor.CheckAvailabilityAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("availability-key"),
             new CheckAvailabilityRequest
             {
                 Date = new DateOnly(2026, 5, 28),
                 PartySize = 2,
                 PreferredTime = new TimeOnly(16, 0),
             },
-            "availability-key",
             CancellationToken.None);
 
         result.Result!.CheckAvailability!.Available.ShouldBeFalse();
@@ -109,21 +103,13 @@ public sealed class GoogleCalendarToolExecutorTests
         };
 
         await fixture.Executor.CreateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("reservation-key"),
             request,
-            "reservation-key",
             CancellationToken.None);
 
         var second = await fixture.Executor.CreateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("reservation-key"),
             request,
-            "reservation-key",
             CancellationToken.None);
 
         second.Status.ShouldBe(ToolExecutionStatus.Succeeded);
@@ -142,10 +128,7 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.DbContext.ChangeTracker.Clear();
 
         await fixture.Executor.CreateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("reservation-key"),
             new CreateCalendarEventRequest
             {
                 Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
@@ -153,7 +136,6 @@ public sealed class GoogleCalendarToolExecutorTests
                 Summary = "Reservation for 2",
                 CustomerName = "Ada Lovelace",
             },
-            "reservation-key",
             CancellationToken.None);
 
         fixture.Calendar.ReservationRequests.Single().CredentialReference.ShouldBe("stored://google-calendar/contoso");
@@ -165,10 +147,7 @@ public sealed class GoogleCalendarToolExecutorTests
         await using var fixture = await CalendarToolFixture.CreateAsync();
 
         await fixture.Executor.CreateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("reservation-key"),
             new CreateCalendarEventRequest
             {
                 Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
@@ -176,7 +155,6 @@ public sealed class GoogleCalendarToolExecutorTests
                 Summary = "Reservation for 2",
                 CustomerName = "Ada Lovelace",
             },
-            "reservation-key",
             CancellationToken.None);
 
         var request = fixture.Calendar.ReservationRequests.Single();
@@ -203,17 +181,13 @@ public sealed class GoogleCalendarToolExecutorTests
         ]);
 
         var execution = await fixture.Executor.FindReservationsAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("find-key"),
             new FindGoogleCalendarReservationsRequest
             {
                 Date = new DateOnly(2026, 5, 28),
                 IncludePast = false,
                 Status = null,
             },
-            "find-key",
             CancellationToken.None);
 
         var request = fixture.Calendar.FindRequests.Single();
@@ -231,17 +205,13 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.Calendar.FindFailureReason = "upstream_error";
 
         var execution = await fixture.Executor.FindReservationsAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("find-failed-key"),
             new FindGoogleCalendarReservationsRequest
             {
                 Date = new DateOnly(2026, 5, 28),
                 IncludePast = false,
                 Status = null,
             },
-            "find-failed-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Failed);
@@ -257,10 +227,7 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.Calendar.UpdateResult = CalendarReservationMutationResult.NotOwned("event-123");
 
         var execution = await fixture.Executor.UpdateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("update-key"),
             new UpdateGoogleCalendarReservationRequest
             {
                 ReservationId = "event-123",
@@ -269,7 +236,6 @@ public sealed class GoogleCalendarToolExecutorTests
                 Summary = null,
                 CustomerName = null,
             },
-            "update-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Denied);
@@ -284,10 +250,7 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.Calendar.UpdateResult = CalendarReservationMutationResult.Failed("upstream_error");
 
         var execution = await fixture.Executor.UpdateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("update-failed-key"),
             new UpdateGoogleCalendarReservationRequest
             {
                 ReservationId = "event-123",
@@ -296,7 +259,6 @@ public sealed class GoogleCalendarToolExecutorTests
                 Summary = null,
                 CustomerName = null,
             },
-            "update-failed-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Failed);
@@ -311,16 +273,12 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.Calendar.CancelResult = CalendarReservationCancellationResult.NotOwned("event-123");
 
         var execution = await fixture.Executor.CancelReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("cancel-key"),
             new CancelGoogleCalendarReservationRequest
             {
                 ReservationId = "event-123",
                 Reason = null,
             },
-            "cancel-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Denied);
@@ -335,16 +293,12 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.Calendar.CancelResult = CalendarReservationCancellationResult.Failed("event-123", "upstream_error");
 
         var execution = await fixture.Executor.CancelReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("cancel-failed-key"),
             new CancelGoogleCalendarReservationRequest
             {
                 ReservationId = "event-123",
                 Reason = null,
             },
-            "cancel-failed-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Failed);
@@ -358,10 +312,7 @@ public sealed class GoogleCalendarToolExecutorTests
         await using var fixture = await CalendarToolFixture.CreateAsync();
 
         var execution = await fixture.Executor.UpdateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("update-key"),
             new UpdateGoogleCalendarReservationRequest
             {
                 ReservationId = "event-123",
@@ -370,7 +321,6 @@ public sealed class GoogleCalendarToolExecutorTests
                 Summary = null,
                 CustomerName = null,
             },
-            "update-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
@@ -385,16 +335,12 @@ public sealed class GoogleCalendarToolExecutorTests
         await using var fixture = await CalendarToolFixture.CreateAsync();
 
         var execution = await fixture.Executor.CancelReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("cancel-key"),
             new CancelGoogleCalendarReservationRequest
             {
                 ReservationId = "event-123",
                 Reason = null,
             },
-            "cancel-key",
             CancellationToken.None);
 
         execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
@@ -410,10 +356,7 @@ public sealed class GoogleCalendarToolExecutorTests
         fixture.DbContext.ChangeTracker.Clear();
 
         await fixture.Executor.CreateReservationAsync(
-            fixture.CompanyId,
-            fixture.Conversation.Id,
-            fixture.Tool.Id,
-            fixture.TriggerMessage.Id,
+            fixture.CreateExecutionContext("reservation-key"),
             new CreateCalendarEventRequest
             {
                 Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
@@ -421,7 +364,6 @@ public sealed class GoogleCalendarToolExecutorTests
                 Summary = "Reservation for 2",
                 CustomerName = "Ada Lovelace",
             },
-            "reservation-key",
             CancellationToken.None);
 
         fixture.DbContext.ChangeTracker.Entries<Conversation>().ShouldBeEmpty();
@@ -565,6 +507,18 @@ public sealed class GoogleCalendarToolExecutorTests
         public CompanyTool Tool { get; }
 
         public Message TriggerMessage { get; }
+
+        public ToolExecutionContext CreateExecutionContext(string idempotencyKey)
+        {
+            return new ToolExecutionContext(
+                CompanyId,
+                Conversation.Id,
+                Tool.Id,
+                TriggerMessage.Id,
+                idempotencyKey,
+                Tool.CredentialReferenceId,
+                Tool.Configuration);
+        }
 
         public async ValueTask DisposeAsync()
         {

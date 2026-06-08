@@ -1,3 +1,4 @@
+using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Application;
 using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Infrastructure.Entities;
@@ -7,6 +8,7 @@ using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Messaging;
 using System.Globalization;
+using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -37,38 +39,37 @@ public sealed class HumanHandoffToolExecutor(
     /// Tool-driven escalation. Invoked from the agent loop through the request_human_handoff tool executor.
     /// </summary>
     public async Task<ToolExecution> RequestHandoffAsync(
-        Guid companyId,
-        Guid conversationId,
-        Guid companyToolId,
-        Guid triggerMessageId,
+        ToolExecutionContext executionContext,
         RequestHumanHandoffRequest request,
-        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(companyId, idempotencyKey, cancellationToken);
+        var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(
+            executionContext.CompanyId,
+            executionContext.IdempotencyKey,
+            cancellationToken);
         if (existing is not null)
         {
             return existing;
         }
 
         var tool = await dbContext.CompanyTools
-            .EnabledForCompanyTool(companyId, companyToolId)
+            .EnabledForCompanyTool(executionContext.CompanyId, executionContext.CompanyToolId)
             .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException($"Company tool '{companyToolId}' was not found or is not enabled.");
+            ?? throw new InvalidOperationException($"Company tool '{executionContext.CompanyToolId}' was not found or is not enabled.");
 
         var config = tool.Configuration?.RequestHumanHandoff
             ?? throw new InvalidOperationException("request_human_handoff tool configuration is required.");
 
         return await ApplyHandoffAsync(
-            companyId,
-            conversationId,
+            executionContext.CompanyId,
+            executionContext.ConversationId,
             tool.Id,
-            triggerMessageId,
+            executionContext.TriggerMessageId,
             request,
             config,
-            idempotencyKey,
+            executionContext.IdempotencyKey,
             cancellationToken);
     }
 

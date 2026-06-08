@@ -1,3 +1,4 @@
+using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -25,18 +26,18 @@ public sealed class GoogleCalendarToolExecutor(
     /// Checks a requested reservation slot against working hours and Google Calendar, then stores the tool result.
     /// </summary>
     public async Task<ToolExecution> CheckAvailabilityAsync(
-        Guid companyId,
-        Guid conversationId,
-        Guid companyToolId,
-        Guid triggerMessageId,
+        ToolExecutionContext executionContext,
         CheckAvailabilityRequest request,
-        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
-        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(
+            executionContext.CompanyId,
+            executionContext.ConversationId,
+            executionContext.CompanyToolId,
+            cancellationToken);
+        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -53,9 +54,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.CheckGoogleCalendarAvailability,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
                 ToolExecutionResult.ForCheckGoogleCalendarAvailability(new CheckAvailabilityResult
                 {
@@ -71,9 +72,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.CheckGoogleCalendarAvailability,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
                 ToolExecutionResult.ForCheckGoogleCalendarAvailability(new CheckAvailabilityResult
                 {
@@ -106,9 +107,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.CheckGoogleCalendarAvailability,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
                 ToolExecutionResult.ForCheckGoogleCalendarAvailability(new CheckAvailabilityResult
                 {
@@ -142,9 +143,9 @@ public sealed class GoogleCalendarToolExecutor(
 
         return await PersistExecutionAsync(
             context,
-            triggerMessageId,
+            executionContext.TriggerMessageId,
             MvpToolKeys.CheckGoogleCalendarAvailability,
-            idempotencyKey,
+            executionContext.IdempotencyKey,
             ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
             ToolExecutionResult.ForCheckGoogleCalendarAvailability(result),
             ToolExecutionStatus.Succeeded,
@@ -156,18 +157,18 @@ public sealed class GoogleCalendarToolExecutor(
     /// Creates a calendar reservation only when it falls within working hours, then stores the tool result.
     /// </summary>
     public async Task<ToolExecution> CreateReservationAsync(
-        Guid companyId,
-        Guid conversationId,
-        Guid companyToolId,
-        Guid triggerMessageId,
+        ToolExecutionContext executionContext,
         CreateCalendarEventRequest request,
-        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
-        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(
+            executionContext.CompanyId,
+            executionContext.ConversationId,
+            executionContext.CompanyToolId,
+            cancellationToken);
+        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -182,9 +183,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.CreateGoogleCalendarReservation,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
                 result: null,
                 ToolExecutionStatus.Denied,
@@ -200,9 +201,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.CreateGoogleCalendarReservation,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
                 result: null,
                 ToolExecutionStatus.Denied,
@@ -217,20 +218,20 @@ public sealed class GoogleCalendarToolExecutor(
                 Start: request.Start,
                 End: request.End,
                 Summary: request.Summary,
-                IdempotencyKey: idempotencyKey,
+                IdempotencyKey: executionContext.IdempotencyKey,
                 Description: $"Customer: {request.CustomerName.Trim()}",
                 CustomerEmail: null,
                 CompanyId: context.Company.Id.ToString("D"),
                 ConversationId: context.Conversation.Id.ToString("D"),
                 CustomerExternalId: context.Customer.ExternalCustomerId,
-                ReservationId: idempotencyKey),
+                ReservationId: executionContext.IdempotencyKey),
             cancellationToken: cancellationToken);
 
         return await PersistExecutionAsync(
             context,
-            triggerMessageId,
+            executionContext.TriggerMessageId,
             MvpToolKeys.CreateGoogleCalendarReservation,
-            idempotencyKey,
+            executionContext.IdempotencyKey,
             ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
             ToolExecutionResult.ForCreateGoogleCalendarReservation(new CreateCalendarEventResult
             {
@@ -243,18 +244,18 @@ public sealed class GoogleCalendarToolExecutor(
     }
 
     public async Task<ToolExecution> FindReservationsAsync(
-        Guid companyId,
-        Guid conversationId,
-        Guid companyToolId,
-        Guid triggerMessageId,
+        ToolExecutionContext executionContext,
         FindGoogleCalendarReservationsRequest request,
-        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
-        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(
+            executionContext.CompanyId,
+            executionContext.ConversationId,
+            executionContext.CompanyToolId,
+            cancellationToken);
+        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -275,9 +276,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.FindGoogleCalendarReservations,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForFindGoogleCalendarReservations(request),
                 result: null,
                 ToolExecutionStatus.Failed,
@@ -295,9 +296,9 @@ public sealed class GoogleCalendarToolExecutor(
 
         return await PersistExecutionAsync(
             context,
-            triggerMessageId,
+            executionContext.TriggerMessageId,
             MvpToolKeys.FindGoogleCalendarReservations,
-            idempotencyKey,
+            executionContext.IdempotencyKey,
             ToolExecutionRequest.ForFindGoogleCalendarReservations(request),
             ToolExecutionResult.ForFindGoogleCalendarReservations(result),
             ToolExecutionStatus.Succeeded,
@@ -306,18 +307,18 @@ public sealed class GoogleCalendarToolExecutor(
     }
 
     public async Task<ToolExecution> UpdateReservationAsync(
-        Guid companyId,
-        Guid conversationId,
-        Guid companyToolId,
-        Guid triggerMessageId,
+        ToolExecutionContext executionContext,
         UpdateGoogleCalendarReservationRequest request,
-        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
-        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(
+            executionContext.CompanyId,
+            executionContext.ConversationId,
+            executionContext.CompanyToolId,
+            cancellationToken);
+        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -331,9 +332,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.UpdateGoogleCalendarReservation,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
                 result: null,
                 ToolExecutionStatus.Denied,
@@ -349,9 +350,9 @@ public sealed class GoogleCalendarToolExecutor(
         {
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.UpdateGoogleCalendarReservation,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
                 result: null,
                 ToolExecutionStatus.Denied,
@@ -378,9 +379,9 @@ public sealed class GoogleCalendarToolExecutor(
             var failureReason = calendarResult.FailureReason ?? "reservation_not_found_or_not_owned";
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.UpdateGoogleCalendarReservation,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
                 result: null,
                 IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
@@ -390,9 +391,9 @@ public sealed class GoogleCalendarToolExecutor(
 
         return await PersistExecutionAsync(
             context,
-            triggerMessageId,
+            executionContext.TriggerMessageId,
             MvpToolKeys.UpdateGoogleCalendarReservation,
-            idempotencyKey,
+            executionContext.IdempotencyKey,
             ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
             ToolExecutionResult.ForUpdateGoogleCalendarReservation(new UpdateGoogleCalendarReservationResult
             {
@@ -404,18 +405,18 @@ public sealed class GoogleCalendarToolExecutor(
     }
 
     public async Task<ToolExecution> CancelReservationAsync(
-        Guid companyId,
-        Guid conversationId,
-        Guid companyToolId,
-        Guid triggerMessageId,
+        ToolExecutionContext executionContext,
         CancelGoogleCalendarReservationRequest request,
-        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var context = await LoadContextAsync(companyId, conversationId, companyToolId, cancellationToken);
-        var existing = await FindExistingAsync(companyId, idempotencyKey, cancellationToken);
+        var context = await LoadContextAsync(
+            executionContext.CompanyId,
+            executionContext.ConversationId,
+            executionContext.CompanyToolId,
+            cancellationToken);
+        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -436,9 +437,9 @@ public sealed class GoogleCalendarToolExecutor(
             var failureReason = calendarResult.FailureReason ?? "reservation_not_found_or_not_owned";
             return await PersistExecutionAsync(
                 context,
-                triggerMessageId,
+                executionContext.TriggerMessageId,
                 MvpToolKeys.CancelGoogleCalendarReservation,
-                idempotencyKey,
+                executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
                 result: null,
                 IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
@@ -448,9 +449,9 @@ public sealed class GoogleCalendarToolExecutor(
 
         return await PersistExecutionAsync(
             context,
-            triggerMessageId,
+            executionContext.TriggerMessageId,
             MvpToolKeys.CancelGoogleCalendarReservation,
-            idempotencyKey,
+            executionContext.IdempotencyKey,
             ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
             ToolExecutionResult.ForCancelGoogleCalendarReservation(new CancelGoogleCalendarReservationResult
             {

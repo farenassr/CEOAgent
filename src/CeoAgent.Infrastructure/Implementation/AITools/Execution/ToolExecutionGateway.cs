@@ -1,3 +1,4 @@
+using CeoAgent.Application.Abstractions.AITools;
 using System.Text.Json;
 using System.Diagnostics;
 using CeoAgent.Application;
@@ -11,14 +12,14 @@ public sealed class ToolExecutionGateway
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly Dictionary<string, IToolExecutor> _executors;
+    private readonly IAgentToolInvoker _invoker;
     private readonly ToolExecutionGatewayHelper _helper;
 
     public ToolExecutionGateway(
-        IEnumerable<IToolExecutor> executors,
+        IAgentToolInvoker invoker,
         ToolExecutionGatewayHelper helper)
     {
-        _executors = executors.ToDictionary(e => e.ToolKey, StringComparer.Ordinal);
+        _invoker = invoker;
         _helper = helper;
     }
 
@@ -63,35 +64,24 @@ public sealed class ToolExecutionGateway
             return denied;
         }
 
-        if (_executors.TryGetValue(request.ToolCall.Name, out var executor))
+        try
         {
-            try
-            {
-                var result = await executor.ExecuteAsync(request, descriptor, idempotencyKey, cancellationToken);
-                stopwatch.Stop();
-                CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
-                activity?.SetTag("tool.status", "completed");
-                activity?.SetStatus(ActivityStatusCode.Ok);
-                return result;
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                stopwatch.Stop();
-                CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
-                CeoAgentTelemetry.ToolExecutionFailures.Add(1);
-                activity?.SetTag("tool.status", "failed");
-                activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-                throw;
-            }
+            var result = await _invoker.ExecuteAsync(request, descriptor, idempotencyKey, cancellationToken);
+            stopwatch.Stop();
+            CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+            activity?.SetTag("tool.status", "completed");
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            return result;
         }
-
-        stopwatch.Stop();
-        CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
-        CeoAgentTelemetry.ToolExecutionFailures.Add(1);
-        activity?.SetTag("tool.status", "denied");
-        activity?.SetTag("tool.failure_reason", "tool_not_supported");
-        activity?.SetStatus(ActivityStatusCode.Ok);
-        return Denied(request.ToolCall, "tool_not_supported");
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            stopwatch.Stop();
+            CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
+            CeoAgentTelemetry.ToolExecutionFailures.Add(1);
+            activity?.SetTag("tool.status", "failed");
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+            throw;
+        }
     }
 
     private static ToolExecutionGatewayResult Denied(AgentToolCall toolCall, string failureReason)

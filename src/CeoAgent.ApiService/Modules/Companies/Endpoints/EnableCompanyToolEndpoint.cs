@@ -96,7 +96,7 @@ public sealed class CompanyToolValidator : Validator<CompanyToolRequest>
     public CompanyToolValidator()
     {
         RuleFor(request => request.ToolKey).NotEmpty().MaximumLength(120);
-        RuleFor(request => request.Description).NotEmpty().MaximumLength(1000);
+        RuleFor(request => request.Description).MaximumLength(1000);
         RuleFor(request => request.ParametersSchema)
             .NotNull()
             .Must(BeObjectSchema)
