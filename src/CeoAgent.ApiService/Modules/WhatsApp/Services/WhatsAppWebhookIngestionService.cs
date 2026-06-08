@@ -260,14 +260,19 @@ public sealed class WhatsAppWebhookIngestionService(
         Customer customer,
         CancellationToken cancellationToken)
     {
+        // Reuse an active conversation whether the bot is answering (Open) or a human is handling it
+        // (HandedOff). Creating a new conversation during handoff would split the thread and could let the
+        // bot answer on a fresh Open conversation while staff are still engaged on the same WhatsApp number.
         var conversation = await dbContext.Conversations
             .IgnoreQueryFilters()
-            .SingleOrDefaultAsync(
+            .Where(
                 entity => entity.CompanyId == channel.CompanyId
                     && entity.CustomerId == customer.Id
                     && entity.CompanyChannelId == channel.Id
-                    && entity.Status == ConversationStatus.Open,
-                cancellationToken);
+                    && (entity.Status == ConversationStatus.Open
+                        || entity.Status == ConversationStatus.HandedOff))
+            .OrderByDescending(entity => entity.LastMessageAt)
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (conversation is not null)
         {

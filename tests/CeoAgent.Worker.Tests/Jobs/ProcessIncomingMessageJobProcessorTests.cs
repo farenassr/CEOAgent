@@ -17,6 +17,7 @@ using CeoAgent.Shared.Enums;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Shared.AITools;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
+using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Worker.Jobs;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -436,6 +437,134 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Tu reserva es a las 4:00 p.m.");
     }
 
+    [Test]
+    public async Task ProcessAsync_WhenModelRequestsHumanHandoff_HandsOffNotifiesStaffAndSendsConfirmation()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Quiero hablar con una persona";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = null;
+        await fixture.DbContext.SaveChangesAsync();
+
+        fixture.Agent.Results.Enqueue(new AgentRunResult(
+            AssistantText: null,
+            ToolCalls:
+            [
+                new AgentToolCall(
+                    "call-handoff",
+                    MvpToolKeys.RequestHumanHandoff,
+                    JsonSerializer.SerializeToElement(new
+                    {
+                        reason = "customer_requested_human",
+                        notes = (string?)null,
+                    })),
+            ]));
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Te conecto con una persona del equipo.", []));
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+
+        var execution = await fixture.DbContext.ToolExecutions.SingleAsync(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff);
+        execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        execution.Result!.RequestHumanHandoff!.HandoffRequested.ShouldBeTrue();
+        execution.Result.RequestHumanHandoff.HandoffTicketId.ShouldNotBeNullOrWhiteSpace();
+        execution.FailureReason.ShouldBeNull();
+
+        var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
+        state.Snapshot.CurrentIntent.ShouldBe("human_handoff_request");
+        state.Snapshot.ConversationFlags.ShouldContain("human_requested");
+
+        fixture.Messaging.TextMessages.ShouldContain(message => message.RecipientExternalId == "15559998888");
+        fixture.Messaging.TextMessages.ShouldContain(message => message.Text == "Te conecto con una persona del equipo.");
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenAgentLoopIsExhausted_AutoEscalatesToHumanHandoff()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Necesito ayuda";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = null;
+        await fixture.DbContext.SaveChangesAsync();
+
+        // Force the agent to keep requesting a tool until the loop cap is reached.
+        for (var iteration = 0; iteration < 4; iteration++)
+        {
+            fixture.Agent.Results.Enqueue(new AgentRunResult(
+                AssistantText: null,
+                ToolCalls:
+                [
+                    new AgentToolCall(
+                        $"call-availability-{iteration}",
+                        MvpToolKeys.CheckGoogleCalendarAvailability,
+                        JsonSerializer.SerializeToElement(new
+                        {
+                            date = "2026-05-28",
+                            partySize = 2,
+                            preferredTime = "16:00",
+                        })),
+                ]));
+        }
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Messaging.TextMessages.ShouldContain(message =>
+            message.Text == "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
+
+        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+        (await fixture.DbContext.ToolExecutions.CountAsync(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff)).ShouldBe(1);
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenConversationAlreadyHandedOff_SuppressesBot()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Sigo aqui";
+        fixture.InboundMessage.ProviderMessageId = "wamid.text-1";
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "text",
+            ProviderMessageId = "wamid.text-1",
+        };
+        fixture.Conversation.Status = ConversationStatus.HandedOff;
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.CompanyId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.ShouldBeEmpty();
+        fixture.Messaging.ReadMessages.Count.ShouldBe(1);
+
+        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(0);
+    }
+
     private sealed class ProcessorFixture
     {
         private readonly PostgresWorkerDatabase database;
@@ -464,12 +593,18 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 new CancelGoogleCalendarReservationExecutor(calendarExecutor, helper)
             };
             var toolGateway = new ToolExecutionGateway(executors, helper);
+            var handoffExecutor = new HumanHandoffToolExecutor(
+                DbContext,
+                Messaging,
+                TimeProvider.System,
+                NullLogger<HumanHandoffToolExecutor>.Instance);
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,
                 Agent,
                 toolRegistry,
                 toolGateway,
+                handoffExecutor,
                 CompanyContext,
                 TimeProvider.System,
                 NullLogger<ProcessIncomingMessageJobProcessor>.Instance);
@@ -607,7 +742,22 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                     BufferMinutes = 0,
                 }),
             };
-            DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool, findTool);
+            var handoffTool = new CompanyTool
+            {
+                Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b44"),
+                CompanyId = CompanyId,
+                ToolKey = MvpToolKeys.RequestHumanHandoff,
+                Description = "Escalate the conversation to a human agent when the customer asks for a person.",
+                ParametersSchema = ParseSchema("""{"type":"object","properties":{"reason":{"type":"string"},"notes":{"type":["string","null"]}},"required":["reason","notes"],"additionalProperties":false}"""),
+                IsEnabled = true,
+                Configuration = ToolConfiguration.ForRequestHumanHandoff(new RequestHumanHandoffConfig
+                {
+                    TimeoutMinutes = 30,
+                    EscalationChannel = "front-desk",
+                    NotifyUsers = ["15559998888"],
+                }),
+            };
+            DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool, findTool, handoffTool);
             DbContext.SaveChanges();
         }
 
