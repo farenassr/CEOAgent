@@ -582,22 +582,24 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 DbContext,
                 Calendar,
                 new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
-            var toolRegistry = new CompanyToolRegistry(DbContext);
             var helper = new ToolExecutionGatewayHelper(DbContext);
-            var executors = new IToolExecutor[]
-            {
-                new CheckGoogleCalendarAvailabilityExecutor(calendarExecutor, helper),
-                new CreateGoogleCalendarReservationExecutor(calendarExecutor, helper),
-                new FindGoogleCalendarReservationsExecutor(calendarExecutor, helper),
-                new UpdateGoogleCalendarReservationExecutor(calendarExecutor, helper),
-                new CancelGoogleCalendarReservationExecutor(calendarExecutor, helper)
-            };
-            var toolGateway = new ToolExecutionGateway(executors, helper);
             var handoffExecutor = new HumanHandoffToolExecutor(
                 DbContext,
                 Messaging,
                 TimeProvider.System,
                 NullLogger<HumanHandoffToolExecutor>.Instance);
+            var catalog = new CompositeAgentToolCatalog(
+            [
+                new CheckGoogleCalendarAvailabilityTool(calendarExecutor),
+                new CreateGoogleCalendarReservationTool(calendarExecutor),
+                new FindGoogleCalendarReservationsTool(calendarExecutor),
+                new UpdateGoogleCalendarReservationTool(calendarExecutor),
+                new CancelGoogleCalendarReservationTool(calendarExecutor),
+                new RequestHumanHandoffTool(handoffExecutor),
+            ],
+            []);
+            var toolRegistry = new CompanyToolRegistry(DbContext, catalog);
+            var toolGateway = new ToolExecutionGateway(new AgentToolInvoker(catalog, DbContext, helper), helper);
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,

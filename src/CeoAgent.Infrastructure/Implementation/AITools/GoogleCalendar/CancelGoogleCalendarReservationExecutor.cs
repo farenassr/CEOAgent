@@ -1,37 +1,30 @@
-using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Application.Abstractions.AITools;
+using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
-using CeoAgent.Shared.AI;
-using CeoAgent.Shared.AITools;
 using CeoAgent.Shared.Constants;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 
-public sealed class CancelGoogleCalendarReservationExecutor(
-    GoogleCalendarToolExecutor executor,
-    ToolExecutionGatewayHelper helper) : IToolExecutor
+public sealed class CancelGoogleCalendarReservationTool(
+    GoogleCalendarToolExecutor executor) : AgentTool<CancelGoogleCalendarReservationRequest>
 {
-    public string ToolKey => MvpToolKeys.CancelGoogleCalendarReservation;
+    public override string ToolKey => MvpToolKeys.CancelGoogleCalendarReservation;
 
-    public async Task<ToolExecutionGatewayResult> ExecuteAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        string idempotencyKey,
+    public override bool IsMutating => true;
+
+    public override string Description => "Cancel an existing Google Calendar reservation owned by the current customer.";
+
+    public override bool Validate(CancelGoogleCalendarReservationRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.ReservationId);
+    }
+
+    protected override async Task<ToolExecution> ExecuteToolAsync(
+        ToolExecutionContext context,
+        CancelGoogleCalendarReservationRequest request,
         CancellationToken cancellationToken)
     {
-        return await helper.ExecuteValidatedAsync<CancelGoogleCalendarReservationRequest>(
-            request,
-            descriptor,
-            idempotencyKey,
-            ToolExecutionGatewayHelper.IsValid,
-            (arguments, token) => executor.CancelReservationAsync(
-                request.CompanyId,
-                request.ConversationId,
-                descriptor.CompanyToolId,
-                request.TriggerMessageId,
-                arguments,
-                idempotencyKey,
-                token),
-            cancellationToken);
+        return await executor.CancelReservationAsync(context, request, cancellationToken);
     }
 }

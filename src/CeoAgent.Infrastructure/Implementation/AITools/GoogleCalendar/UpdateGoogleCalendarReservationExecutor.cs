@@ -1,37 +1,33 @@
-using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Application.Abstractions.AITools;
+using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
-using CeoAgent.Shared.AI;
-using CeoAgent.Shared.AITools;
 using CeoAgent.Shared.Constants;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 
-public sealed class UpdateGoogleCalendarReservationExecutor(
-    GoogleCalendarToolExecutor executor,
-    ToolExecutionGatewayHelper helper) : IToolExecutor
+public sealed class UpdateGoogleCalendarReservationTool(
+    GoogleCalendarToolExecutor executor) : AgentTool<UpdateGoogleCalendarReservationRequest>
 {
-    public string ToolKey => MvpToolKeys.UpdateGoogleCalendarReservation;
+    public override string ToolKey => MvpToolKeys.UpdateGoogleCalendarReservation;
 
-    public async Task<ToolExecutionGatewayResult> ExecuteAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        string idempotencyKey,
+    public override bool IsMutating => true;
+
+    public override string Description => "Update an existing Google Calendar reservation owned by the current customer.";
+
+    public override bool Validate(UpdateGoogleCalendarReservationRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.ReservationId)
+            && request.NewStart != default
+            && request.NewEnd != default
+            && request.NewEnd > request.NewStart;
+    }
+
+    protected override async Task<ToolExecution> ExecuteToolAsync(
+        ToolExecutionContext context,
+        UpdateGoogleCalendarReservationRequest request,
         CancellationToken cancellationToken)
     {
-        return await helper.ExecuteValidatedAsync<UpdateGoogleCalendarReservationRequest>(
-            request,
-            descriptor,
-            idempotencyKey,
-            ToolExecutionGatewayHelper.IsValid,
-            (arguments, token) => executor.UpdateReservationAsync(
-                request.CompanyId,
-                request.ConversationId,
-                descriptor.CompanyToolId,
-                request.TriggerMessageId,
-                arguments,
-                idempotencyKey,
-                token),
-            cancellationToken);
+        return await executor.UpdateReservationAsync(context, request, cancellationToken);
     }
 }

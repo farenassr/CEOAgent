@@ -1,3 +1,4 @@
+using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Application.Abstractions.Company;
 using CeoAgent.Infrastructure.Implementation.Company;
 using CeoAgent.Infrastructure;
@@ -25,7 +26,7 @@ public sealed class CompanyToolRegistryTests
         tools.Select(tool => tool.Name).ShouldBe([MvpToolKeys.CheckGoogleCalendarAvailability]);
         var descriptor = tools.Single();
         descriptor.CompanyToolId.ShouldBe(fixture.EnabledToolId);
-        descriptor.Description.ShouldBe("Check calendar safely.");
+        descriptor.Description.ShouldBe("Code-first check availability description.");
         descriptor.ParametersSchema.GetProperty("type").GetString().ShouldBe("object");
         descriptor.ParametersSchema.GetProperty("properties").TryGetProperty("fromCompanyTool", out _).ShouldBeTrue();
         descriptor.ParametersSchema.GetProperty("additionalProperties").GetBoolean().ShouldBeFalse();
@@ -43,17 +44,51 @@ public sealed class CompanyToolRegistryTests
         tools.Single(tool => tool.Name == MvpToolKeys.CancelGoogleCalendarReservation).IsMutating.ShouldBeTrue();
     }
 
+    [Test]
+    public async Task GetEnabledToolsAsync_ExcludesEnabledCompanyToolWithoutCatalogImplementation()
+    {
+        await using var fixture = await RegistryFixture.CreateAsync(includeUnsupportedTool: true);
+
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+
+        tools.Select(tool => tool.Name).ShouldNotContain("unsupported_tool");
+    }
+
     private sealed class RegistryFixture : IAsyncDisposable
     {
         private readonly PostgresWorkerDatabase database;
 
-        private RegistryFixture(PostgresWorkerDatabase database, bool includeReservationTools)
+        private RegistryFixture(
+            PostgresWorkerDatabase database,
+            bool includeReservationTools,
+            bool includeUnsupportedTool)
         {
             this.database = database;
             CompanyContext = database.CompanyContext;
             CompanyContext.SetCompany(CompanyId);
             DbContext = database.Context;
-            Registry = new CompanyToolRegistry(DbContext);
+            Registry = new CompanyToolRegistry(
+                DbContext,
+                new CompositeAgentToolCatalog(
+                    [
+                        new FakeAgentTool(
+                            MvpToolKeys.CheckGoogleCalendarAvailability,
+                            "Code-first check availability description.",
+                            isMutating: false),
+                        new FakeAgentTool(
+                            MvpToolKeys.FindGoogleCalendarReservations,
+                            "Code-first find reservations description.",
+                            isMutating: false),
+                        new FakeAgentTool(
+                            MvpToolKeys.UpdateGoogleCalendarReservation,
+                            "Code-first update reservations description.",
+                            isMutating: true),
+                        new FakeAgentTool(
+                            MvpToolKeys.CancelGoogleCalendarReservation,
+                            "Code-first cancel reservations description.",
+                            isMutating: true),
+                    ],
+                    []));
 
             var company = new Company
             {
@@ -154,12 +189,29 @@ public sealed class CompanyToolRegistryTests
                     });
             }
 
+            if (includeUnsupportedTool)
+            {
+                DbContext.CompanyTools.Add(new CompanyTool
+                {
+                    CompanyId = CompanyId,
+                    ToolKey = "unsupported_tool",
+                    Description = "Tenant supplied unsupported tool.",
+                    ParametersSchema = ParseSchema("""{"type":"object","properties":{},"required":[],"additionalProperties":false}"""),
+                    IsEnabled = true,
+                });
+            }
+
             DbContext.SaveChanges();
         }
 
-        public static async Task<RegistryFixture> CreateAsync(bool includeReservationTools = false)
+        public static async Task<RegistryFixture> CreateAsync(
+            bool includeReservationTools = false,
+            bool includeUnsupportedTool = false)
         {
-            return new RegistryFixture(await PostgresWorkerDatabase.CreateAsync(), includeReservationTools);
+            return new RegistryFixture(
+                await PostgresWorkerDatabase.CreateAsync(),
+                includeReservationTools,
+                includeUnsupportedTool);
         }
 
         public Guid CompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
@@ -184,5 +236,27 @@ public sealed class CompanyToolRegistryTests
             using var document = JsonDocument.Parse(json);
             return document.RootElement.Clone();
         }
+
+        private sealed class FakeAgentTool(
+            string toolKey,
+            string description,
+            bool isMutating) : AgentTool<FakeRequest>
+        {
+            public override string ToolKey => toolKey;
+
+            public override bool IsMutating => isMutating;
+
+            public override string Description => description;
+
+            protected override Task<ToolExecution> ExecuteToolAsync(
+                ToolExecutionContext context,
+                FakeRequest request,
+                CancellationToken cancellationToken)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        private sealed class FakeRequest;
     }
 }

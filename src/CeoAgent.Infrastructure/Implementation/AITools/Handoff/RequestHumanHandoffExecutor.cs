@@ -1,41 +1,30 @@
-using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Application.Abstractions.AITools;
+using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
-using CeoAgent.Shared.AI;
-using CeoAgent.Shared.AITools;
 using CeoAgent.Shared.Constants;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 
-/// <summary>
-/// Bridges the request_human_handoff tool call into <see cref="HumanHandoffToolExecutor"/>,
-/// reusing the shared validation and idempotent persistence pipeline.
-/// </summary>
-public sealed class RequestHumanHandoffExecutor(
-    HumanHandoffToolExecutor executor,
-    ToolExecutionGatewayHelper helper) : IToolExecutor
+public sealed class RequestHumanHandoffTool(
+    HumanHandoffToolExecutor executor) : AgentTool<RequestHumanHandoffRequest>
 {
-    public string ToolKey => MvpToolKeys.RequestHumanHandoff;
+    public override string ToolKey => MvpToolKeys.RequestHumanHandoff;
 
-    public async Task<ToolExecutionGatewayResult> ExecuteAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        string idempotencyKey,
+    public override bool IsMutating => true;
+
+    public override string Description => "Escalate the conversation to a human agent when the customer asks for a person or automation cannot continue.";
+
+    public override bool Validate(RequestHumanHandoffRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.Reason);
+    }
+
+    protected override async Task<ToolExecution> ExecuteToolAsync(
+        ToolExecutionContext context,
+        RequestHumanHandoffRequest request,
         CancellationToken cancellationToken)
     {
-        return await helper.ExecuteValidatedAsync<RequestHumanHandoffRequest>(
-            request,
-            descriptor,
-            idempotencyKey,
-            ToolExecutionGatewayHelper.IsValid,
-            (arguments, token) => executor.RequestHandoffAsync(
-                request.CompanyId,
-                request.ConversationId,
-                descriptor.CompanyToolId,
-                request.TriggerMessageId,
-                arguments,
-                idempotencyKey,
-                token),
-            cancellationToken);
+        return await executor.RequestHandoffAsync(context, request, cancellationToken);
     }
 }

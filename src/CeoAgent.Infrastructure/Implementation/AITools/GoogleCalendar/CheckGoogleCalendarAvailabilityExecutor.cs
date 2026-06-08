@@ -1,37 +1,31 @@
-using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Application.Abstractions.AITools;
+using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
-using CeoAgent.Shared.AI;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
-using CeoAgent.Shared.AITools;
 using CeoAgent.Shared.Constants;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 
-public sealed class CheckGoogleCalendarAvailabilityExecutor(
-    GoogleCalendarToolExecutor executor,
-    ToolExecutionGatewayHelper helper) : IToolExecutor
+public sealed class CheckGoogleCalendarAvailabilityTool(
+    GoogleCalendarToolExecutor executor) : AgentTool<CheckAvailabilityRequest>
 {
-    public string ToolKey => MvpToolKeys.CheckGoogleCalendarAvailability;
+    public override string ToolKey => MvpToolKeys.CheckGoogleCalendarAvailability;
 
-    public async Task<ToolExecutionGatewayResult> ExecuteAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        string idempotencyKey,
+    public override bool IsMutating => false;
+
+    public override string Description => "Check Google Calendar availability before offering or confirming reservation times.";
+
+    public override bool Validate(CheckAvailabilityRequest request)
+    {
+        return request.Date != default
+            && request.PartySize > 0;
+    }
+
+    protected override async Task<ToolExecution> ExecuteToolAsync(
+        ToolExecutionContext context,
+        CheckAvailabilityRequest request,
         CancellationToken cancellationToken)
     {
-        return await helper.ExecuteValidatedAsync<CheckAvailabilityRequest>(
-            request,
-            descriptor,
-            idempotencyKey,
-            ToolExecutionGatewayHelper.IsValid,
-            (arguments, token) => executor.CheckAvailabilityAsync(
-                request.CompanyId,
-                request.ConversationId,
-                descriptor.CompanyToolId,
-                request.TriggerMessageId,
-                arguments,
-                idempotencyKey,
-                token),
-            cancellationToken);
+        return await executor.CheckAvailabilityAsync(context, request, cancellationToken);
     }
 }

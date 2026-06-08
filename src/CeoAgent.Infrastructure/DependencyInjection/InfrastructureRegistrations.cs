@@ -1,5 +1,6 @@
 using CeoAgent.Application.Abstractions.Company;
 using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Application.Abstractions.OpenAI;
 using CeoAgent.Infrastructure.ApiClient.WhatsApp;
@@ -102,13 +103,36 @@ public static class InfrastructureRegistrations
         services.AddScoped<GoogleCalendarToolExecutor>();
         services.AddScoped<HumanHandoffToolExecutor>();
         services.AddScoped<ToolExecutionGatewayHelper>();
-        services.AddScoped<IToolExecutor, RequestHumanHandoffExecutor>();
-        services.AddScoped<IToolExecutor, CheckGoogleCalendarAvailabilityExecutor>();
-        services.AddScoped<IToolExecutor, CreateGoogleCalendarReservationExecutor>();
-        services.AddScoped<IToolExecutor, FindGoogleCalendarReservationsExecutor>();
-        services.AddScoped<IToolExecutor, UpdateGoogleCalendarReservationExecutor>();
-        services.AddScoped<IToolExecutor, CancelGoogleCalendarReservationExecutor>();
+        services.AddScoped<IAgentToolInvoker, AgentToolInvoker>();
+        services.AddScoped<IAgentToolCatalog, CompositeAgentToolCatalog>();
+        services.AddScoped<IDynamicAgentToolProvider, NoOpDynamicAgentToolProvider>();
+        services.AddAgentToolsFromInfrastructureAssembly();
         services.AddScoped<ToolExecutionGateway>();
+
+        return services;
+    }
+
+    private static IServiceCollection AddAgentToolsFromInfrastructureAssembly(this IServiceCollection services)
+    {
+        var agentToolType = typeof(IAgentTool);
+        var agentToolTypes = typeof(InfrastructureRegistrations).Assembly
+            .DefinedTypes
+            .Where(type => type is { IsAbstract: false, IsInterface: false }
+                && agentToolType.IsAssignableFrom(type))
+            .Select(type => type.AsType())
+            .ToArray();
+
+        foreach (var implementationType in agentToolTypes)
+        {
+            services.AddScoped(typeof(IAgentTool), implementationType);
+
+            foreach (var serviceType in implementationType.GetInterfaces()
+                         .Where(type => type.IsGenericType
+                             && type.GetGenericTypeDefinition() == typeof(IAgentTool<>)))
+            {
+                services.AddScoped(serviceType, implementationType);
+            }
+        }
 
         return services;
     }

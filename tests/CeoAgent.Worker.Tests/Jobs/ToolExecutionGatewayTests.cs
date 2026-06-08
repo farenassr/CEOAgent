@@ -278,18 +278,19 @@ public sealed class ToolExecutionGatewayTests
             CompanyContext.SetCompany(CompanyId);
             DbContext = database.Context;
             Calendar = new FakeCalendarIntegration();
-            Registry = new CompanyToolRegistry(DbContext);
             var executor = new GoogleCalendarToolExecutor(
                 DbContext,
                 Calendar,
                 new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
             var helper = new ToolExecutionGatewayHelper(DbContext);
-            var executors = new IToolExecutor[]
-            {
-                new CheckGoogleCalendarAvailabilityExecutor(executor, helper),
-                new CreateGoogleCalendarReservationExecutor(executor, helper)
-            };
-            Gateway = new ToolExecutionGateway(executors, helper);
+            var catalog = new CompositeAgentToolCatalog(
+            [
+                new CheckGoogleCalendarAvailabilityTool(executor),
+                new CreateGoogleCalendarReservationTool(executor)
+            ],
+            []);
+            Registry = new CompanyToolRegistry(DbContext, catalog);
+            Gateway = new ToolExecutionGateway(new AgentToolInvoker(catalog, DbContext, helper), helper);
 
             var company = new Company
             {
