@@ -31,6 +31,24 @@ public sealed class WhatsAppCloudIntegrationTests
     }
 
     [Test]
+    public async Task SecretValueProvider_WhenReferenceUsesKvScheme_ReadsConfiguredSecretAlias()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Secrets:whatsapp:contoso:access-token"] = "local-kv-alias-token",
+            })
+            .Build();
+        var provider = new SecretValueProvider(configuration, new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
+
+        var value = await provider.GetSecretValueAsync(
+            "kv://whatsapp/contoso/access-token",
+            CancellationToken.None);
+
+        value.ShouldBe("local-kv-alias-token");
+    }
+
+    [Test]
     public async Task SendTextAsync_UsesCompanyChannelCredentialReferenceAsBearerToken()
     {
         var companyId = Guid.CreateVersion7();

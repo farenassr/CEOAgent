@@ -71,6 +71,50 @@ public sealed class WhatsAppWebhookEndpointTests
     }
 
     [Test]
+    public async Task PostWebhook_WhenSignedRawBodyContainsUtf8Bom_AcceptsWebhook()
+    {
+        const string appSecret = "local-app-secret";
+        var previousAppSecret = Environment.GetEnvironmentVariable("WhatsApp__AppSecret");
+        try
+        {
+            Environment.SetEnvironmentVariable("WhatsApp__AppSecret", appSecret);
+
+            var queue = new RecordingIncomingMessageQueue();
+            await using var factory = new ApiFactory(configureServices: services =>
+            {
+                services.RemoveAll<IIncomingMessageJobEnqueuer>();
+                services.AddSingleton<IIncomingMessageJobEnqueuer>(queue);
+            });
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
+                SeedCompany(dbContext);
+            }
+
+            var bodyBytes = Encoding.UTF8.GetPreamble()
+                .Concat(Encoding.UTF8.GetBytes(WebhookJson))
+                .ToArray();
+            using var client = factory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/whatsapp")
+            {
+                Content = new ByteArrayContent(bodyBytes),
+            };
+            request.Content.Headers.ContentType = new("application/json");
+            request.Headers.Add("X-Hub-Signature-256", Sign(bodyBytes, appSecret));
+
+            using var response = await client.SendAsync(request);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            queue.Jobs.Single().CompanyId.ShouldBe(CompanyId);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WhatsApp__AppSecret", previousAppSecret);
+        }
+    }
+
+    [Test]
     public async Task PostWebhook_WhenJsonIsMalformed_ReturnsBadRequest()
     {
         const string appSecret = "local-app-secret";
@@ -129,10 +173,47 @@ public sealed class WhatsAppWebhookEndpointTests
         }
     }
 
+    [Test]
+    public async Task PostWebhook_WhenBodyWithoutContentLengthExceedsConfiguredLimit_ReturnsPayloadTooLarge()
+    {
+        const string appSecret = "local-app-secret";
+        var previousAppSecret = Environment.GetEnvironmentVariable("WhatsApp__AppSecret");
+        var previousMaxBytes = Environment.GetEnvironmentVariable("WhatsApp__MaxWebhookBodyBytes");
+        try
+        {
+            Environment.SetEnvironmentVariable("WhatsApp__AppSecret", appSecret);
+            Environment.SetEnvironmentVariable("WhatsApp__MaxWebhookBodyBytes", "8");
+
+            await using var factory = new ApiFactory();
+            using var client = factory.CreateClient();
+            var bodyBytes = Encoding.UTF8.GetBytes("{\"entry\":[]}");
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/whatsapp")
+            {
+                Content = new UnknownLengthContent(bodyBytes),
+            };
+            request.Content.Headers.ContentType = new("application/json");
+            request.Headers.Add("X-Hub-Signature-256", Sign(bodyBytes, appSecret));
+
+            using var response = await client.SendAsync(request);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WhatsApp__AppSecret", previousAppSecret);
+            Environment.SetEnvironmentVariable("WhatsApp__MaxWebhookBodyBytes", previousMaxBytes);
+        }
+    }
+
     private static string Sign(string requestBody, string secret)
     {
+        return Sign(Encoding.UTF8.GetBytes(requestBody), secret);
+    }
+
+    private static string Sign(byte[] requestBody, string secret)
+    {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
-        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(requestBody));
+        var hash = hmac.ComputeHash(requestBody);
         return "sha256=" + Convert.ToHexString(hash).ToLowerInvariant();
     }
 
@@ -209,6 +290,20 @@ public sealed class WhatsAppWebhookEndpointTests
         {
             Jobs.Add(job);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class UnknownLengthContent(byte[] bytes) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            return stream.WriteAsync(bytes).AsTask();
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 }

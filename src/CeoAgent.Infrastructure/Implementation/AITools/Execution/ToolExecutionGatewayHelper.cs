@@ -9,6 +9,7 @@ using CeoAgent.Shared.AITools;
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Shared.AI;
 using CeoAgent.Shared.Enums;
+using Microsoft.EntityFrameworkCore;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.Execution;
 
@@ -42,6 +43,46 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
             IdempotencyKey = idempotencyKey,
             Status = ToolExecutionStatus.Denied,
             FailureReason = failureReason,
+        };
+
+        dbContext.ToolExecutions.Add(execution);
+        return await ToGatewayResultAsync(request.ToolCall, execution, cancellationToken);
+    }
+
+    public async Task<ToolExecutionGatewayResult> PersistToolNotEnabledDeniedAsync(
+        ToolExecutionGatewayRequest request,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(
+            request.CompanyId,
+            idempotencyKey,
+            cancellationToken);
+        if (existing is not null)
+        {
+            return await ToGatewayResultAsync(request.ToolCall, existing, cancellationToken);
+        }
+
+        var companyTool = await dbContext.CompanyTools
+            .SingleOrDefaultAsync(
+                tool => tool.CompanyId == request.CompanyId
+                    && tool.ToolKey == request.ToolCall.Name,
+                cancellationToken);
+        if (companyTool is null)
+        {
+            return Denied(request.ToolCall, "tool_not_enabled");
+        }
+
+        var execution = new ToolExecution
+        {
+            CompanyId = request.CompanyId,
+            ConversationId = request.ConversationId,
+            CompanyToolId = companyTool.Id,
+            TriggerMessageId = request.TriggerMessageId,
+            ToolKey = request.ToolCall.Name,
+            IdempotencyKey = idempotencyKey,
+            Status = ToolExecutionStatus.Denied,
+            FailureReason = "tool_not_enabled",
         };
 
         dbContext.ToolExecutions.Add(execution);
@@ -83,5 +124,17 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalArguments));
         var hash = Convert.ToHexString(hashBytes);
         return $"{request.ConversationId:N}:{request.InboundMessageId:N}:{request.ToolCall.Name}:{hash[..16]}";
+    }
+
+    private static ToolExecutionGatewayResult Denied(AgentToolCall toolCall, string failureReason)
+    {
+        var content = JsonSerializer.Serialize(new
+        {
+            toolKey = toolCall.Name,
+            status = "denied",
+            failureReason,
+        }, SerializerOptions);
+
+        return new ToolExecutionGatewayResult(toolCall.Id, toolCall.Name, content);
     }
 }

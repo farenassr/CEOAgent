@@ -13,6 +13,7 @@ namespace CeoAgent.Infrastructure.Implementation.Secrets;
 public sealed class SecretValueProvider : ISecretValueProvider
 {
     private const string ConfigScheme = "config://";
+    private const string KeyVaultAliasScheme = "kv://";
     private static readonly DefaultAzureCredential Credential = new();
     private static readonly ConcurrentDictionary<Uri, SecretClient> Clients = new();
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
@@ -36,6 +37,11 @@ public sealed class SecretValueProvider : ISecretValueProvider
         if (reference.StartsWith(ConfigScheme, StringComparison.OrdinalIgnoreCase))
         {
             return GetConfiguredSecret(reference[ConfigScheme.Length..]);
+        }
+
+        if (reference.StartsWith(KeyVaultAliasScheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return GetConfiguredSecret(ToKeyVaultAliasConfigurationKey(reference[KeyVaultAliasScheme.Length..]));
         }
 
         if (cache.TryGetValue(reference, out string? cachedValue)
@@ -73,7 +79,7 @@ public sealed class SecretValueProvider : ISecretValueProvider
             || !string.Equals(secretUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
             || !secretUri.Host.EndsWith(".vault.azure.net", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Credential reference must be a config:// key or Azure Key Vault secret URI.");
+            throw new InvalidOperationException("Credential reference must be a kv:// alias, config:// key, or Azure Key Vault secret URI.");
         }
 
         var pathSegments = secretUri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -106,5 +112,17 @@ public sealed class SecretValueProvider : ISecretValueProvider
             : await client.GetSecretAsync(pathSegments[1], cancellationToken: cancellationToken);
 
         return secret.Value.Value;
+    }
+
+    private static string ToKeyVaultAliasConfigurationKey(string aliasPath)
+    {
+        var segments = aliasPath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length == 0)
+        {
+            throw new InvalidOperationException("Key Vault alias reference requires a non-empty path.");
+        }
+
+        return "Secrets:" + string.Join(':', segments);
     }
 }

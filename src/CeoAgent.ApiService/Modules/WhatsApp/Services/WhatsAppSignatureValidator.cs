@@ -13,7 +13,7 @@ public sealed class WhatsAppSignatureValidator : IWhatsAppSignatureValidator
     /// <summary>
     /// Recomputes the expected x-hub-signature-256 value and compares it to the supplied header.
     /// </summary>
-    public bool IsValid(string requestBody, string? signatureHeader, string appSecret)
+    public bool IsValid(byte[] requestBody, string? signatureHeader, string appSecret)
     {
         if (string.IsNullOrWhiteSpace(signatureHeader) || string.IsNullOrWhiteSpace(appSecret))
         {
@@ -27,7 +27,7 @@ public sealed class WhatsAppSignatureValidator : IWhatsAppSignatureValidator
         }
 
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(appSecret));
-        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(requestBody));
+        var hash = hmac.ComputeHash(requestBody);
         var expectedHex = Convert.ToHexString(hash);
 
         var expectedBytes = Encoding.ASCII.GetBytes(expectedHex.ToLowerInvariant());

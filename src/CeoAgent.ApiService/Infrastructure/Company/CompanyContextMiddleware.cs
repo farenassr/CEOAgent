@@ -17,14 +17,6 @@ public sealed class CompanyContextMiddleware(
         {
             companyContextAccessor.SetCompany(companyIdFromAdminApiKey);
         }
-        else if (!context.Request.Path.StartsWithSegments("/v1/admin", StringComparison.Ordinal))
-        {
-            if (context.Request.Headers.TryGetValue(HeaderName, out var values)
-                && Guid.TryParse(values.FirstOrDefault(), out var companyId))
-            {
-                companyContextAccessor.SetCompany(companyId);
-            }
-        }
 
         try
         {

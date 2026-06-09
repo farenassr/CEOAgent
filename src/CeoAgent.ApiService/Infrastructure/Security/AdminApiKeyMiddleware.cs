@@ -1,5 +1,7 @@
 using System;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -32,7 +34,7 @@ public static class AdminApiKeyMiddlewareExtensions
                 return;
             }
 
-            if (!string.Equals(providedApiKey, options.Key, StringComparison.Ordinal))
+            if (!IsValidApiKey(providedApiKey.ToString(), options.Key))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.Response.ContentType = "text/plain";
@@ -49,5 +51,17 @@ public static class AdminApiKeyMiddlewareExtensions
 
             await next(context);
         });
+    }
+
+    private static bool IsValidApiKey(string providedApiKey, string configuredApiKey)
+    {
+        if (string.IsNullOrWhiteSpace(providedApiKey) || string.IsNullOrWhiteSpace(configuredApiKey))
+        {
+            return false;
+        }
+
+        var providedHash = SHA256.HashData(Encoding.UTF8.GetBytes(providedApiKey));
+        var configuredHash = SHA256.HashData(Encoding.UTF8.GetBytes(configuredApiKey));
+        return CryptographicOperations.FixedTimeEquals(providedHash, configuredHash);
     }
 }

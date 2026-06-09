@@ -191,17 +191,7 @@ public sealed class CompanyMapperTests
             {
                 CalendarId = "primary",
                 Scope = "calendar.events",
-                Type = "service_account",
-                ProjectId = "gen-lang-client-0728870398",
-                PrivateKeyId = "private-key-id",
-                PrivateKey = "-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n",
-                ClientEmail = "ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com",
-                ClientId = "1111",
-                AuthUri = "https://accounts.google.com/o/oauth2/auth",
-                TokenUri = "https://oauth2.googleapis.com/token",
-                AuthProviderX509CertUrl = "https://www.googleapis.com/oauth2/v1/certs",
-                ClientX509CertUrl = "https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com",
-                UniverseDomain = "googleapis.com",
+                ExpiresAt = new DateTimeOffset(2026, 6, 8, 12, 0, 0, TimeSpan.Zero),
             }),
         };
 
@@ -215,6 +205,8 @@ public sealed class CompanyMapperTests
         response.Metadata.ShouldNotBeNull();
         response.Metadata.Value.GetProperty("provider").GetString().ShouldBe("google_calendar");
         response.Metadata.Value.GetProperty("google_calendar").GetProperty("calendarId").GetString().ShouldBe("primary");
+        response.Metadata.Value.GetProperty("google_calendar").TryGetProperty("private_key", out _).ShouldBeFalse();
+        response.Metadata.Value.GetProperty("google_calendar").TryGetProperty("client_email", out _).ShouldBeFalse();
     }
 
     private static JsonElement ParseSchema(string json)

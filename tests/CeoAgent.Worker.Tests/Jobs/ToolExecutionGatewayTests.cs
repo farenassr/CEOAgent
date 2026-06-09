@@ -87,7 +87,7 @@ public sealed class ToolExecutionGatewayTests
     }
 
     [Test]
-    public async Task ExecuteAsync_ForDisabledTool_ReturnsDeniedResultWithoutSideEffect()
+    public async Task ExecuteAsync_ForDisabledTool_ReturnsDeniedResultWithoutSideEffectAndPersistsAuditRow()
     {
         await using var fixture = await GatewayFixture.CreateAsync();
         var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
@@ -114,7 +114,12 @@ public sealed class ToolExecutionGatewayTests
         result.Content.ShouldContain("\"status\":\"denied\"");
         result.Content.ShouldContain("\"failureReason\":\"tool_not_enabled\"");
         fixture.Calendar.ReservationRequests.ShouldBeEmpty();
-        (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(0);
+        await fixture.DbContext.SaveChangesAsync();
+        var execution = await fixture.DbContext.ToolExecutions.SingleAsync();
+        execution.ToolKey.ShouldBe(MvpToolKeys.CreateGoogleCalendarReservation);
+        execution.Status.ShouldBe(ToolExecutionStatus.Denied);
+        execution.FailureReason.ShouldBe("tool_not_enabled");
+        execution.Request.ShouldBeNull();
     }
 
     [Test]
