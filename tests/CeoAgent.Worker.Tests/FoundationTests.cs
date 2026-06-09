@@ -10,6 +10,6 @@ public sealed class FoundationTests
     [Test]
     public void WorkerProjectAssembly_IsLoadable()
     {
-        typeof(CeoAgent.Worker.Worker).Assembly.GetName().Name.ShouldBe("CeoAgent.Worker");
+        typeof(CeoAgent.Worker.Jobs.IncomingMessageQueueWorker).Assembly.GetName().Name.ShouldBe("CeoAgent.Worker");
     }
 }

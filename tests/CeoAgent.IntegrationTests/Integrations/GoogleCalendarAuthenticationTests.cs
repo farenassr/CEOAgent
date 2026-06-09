@@ -36,7 +36,7 @@ public sealed class GoogleCalendarAuthenticationTests
     }
 
     [Test]
-    public async Task ServiceFactory_WhenCredentialMaterialIsJson_DoesNotReadSecretProvider()
+    public async Task ServiceFactory_WhenCredentialReferenceIsInlineJson_RejectsWithoutReadingSecretProvider()
     {
         var secrets = new RecordingSecretValueProvider
         {
@@ -45,9 +45,10 @@ public sealed class GoogleCalendarAuthenticationTests
         using var cache = new MemoryCache(new MemoryCacheOptions());
         var factory = new GoogleCalendarServiceFactory(secrets, cache);
 
-        await Should.ThrowAsync<InvalidOperationException>(
+        var exception = await Should.ThrowAsync<InvalidOperationException>(
             factory.CreateAsync("{}", CancellationToken.None));
 
+        exception.Message.ShouldBe("Google Calendar credential reference must not contain inline credential JSON.");
         secrets.References.ShouldBeEmpty();
     }
 

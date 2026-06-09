@@ -15,14 +15,6 @@ public static class GoogleCalendarCredentialMaterialResolver
             throw NotConfigured();
         }
 
-        var googleCalendarMetadata = credentialReference.Metadata?.GoogleCalendar;
-
-        if (googleCalendarMetadata is not null
-            && googleCalendarMetadata.HasServiceAccountCredentials())
-        {
-            return googleCalendarMetadata.ToServiceAccountJson();
-        }
-
         if (!string.IsNullOrWhiteSpace(credentialReference.Reference))
         {
             return credentialReference.Reference;

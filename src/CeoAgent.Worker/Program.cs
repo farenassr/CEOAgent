@@ -33,7 +33,6 @@ if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddWorkerRuntime();
-builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
 

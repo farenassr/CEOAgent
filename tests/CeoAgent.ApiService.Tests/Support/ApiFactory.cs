@@ -38,6 +38,8 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         // Point Npgsql at the Testcontainers instance instead of InMemory.
         builder.UseSetting("Persistence:UseInMemoryDatabase", "false");
         builder.UseSetting("ConnectionStrings:CeoAgent", _postgres.GetConnectionString());
+        builder.UseSetting("AdminApiKey:Key", "test-admin-key");
+        builder.UseSetting("AdminApiKey:CompanyId", Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30").ToString());
         builder.ConfigureServices(services => _configureServices?.Invoke(services));
     }
 

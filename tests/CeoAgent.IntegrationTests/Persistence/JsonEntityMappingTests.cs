@@ -274,7 +274,7 @@ public sealed class JsonEntityMappingTests
     }
 
     [Test]
-    public async Task IntegrationCredentialReference_RoundTripsGoogleCalendarServiceAccountMetadata()
+    public async Task IntegrationCredentialReference_RoundTripsGoogleCalendarReferenceOnlyMetadata()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         var companyId = Guid.CreateVersion7();
@@ -291,20 +291,12 @@ public sealed class JsonEntityMappingTests
             CompanyId = companyId,
             Provider = IntegrationProvider.GoogleCalendar,
             Purpose = "google_calendar",
-            Reference = "stored://google-calendar/service-account",
+            Reference = "kv://google-calendar/contoso/service-account",
             Metadata = CredentialMetadata.ForGoogleCalendar(new GoogleCalendarCredentialMetadata
             {
-                Type = "service_account",
-                ProjectId = "gen-lang-client-0728870398",
-                PrivateKeyId = "private-key-id",
-                PrivateKey = "-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n",
-                ClientEmail = "ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com",
-                ClientId = "1111",
-                AuthUri = "https://accounts.google.com/o/oauth2/auth",
-                TokenUri = "https://oauth2.googleapis.com/token",
-                AuthProviderX509CertUrl = "https://www.googleapis.com/oauth2/v1/certs",
-                ClientX509CertUrl = "https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com",
-                UniverseDomain = "googleapis.com",
+                CalendarId = "primary",
+                Scope = "calendar.events",
+                ExpiresAt = new DateTimeOffset(2026, 6, 8, 12, 0, 0, TimeSpan.Zero),
             }),
         };
         database.Context.IntegrationCredentialReferences.Add(credential);
@@ -316,17 +308,9 @@ public sealed class JsonEntityMappingTests
         loaded.Metadata.ShouldNotBeNull();
         var metadata = loaded.Metadata.GoogleCalendar;
         metadata.ShouldNotBeNull();
-        metadata.Type.ShouldBe("service_account");
-        metadata.ProjectId.ShouldBe("gen-lang-client-0728870398");
-        metadata.PrivateKeyId.ShouldBe("private-key-id");
-        metadata.PrivateKey.ShouldBe("-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n");
-        metadata.ClientEmail.ShouldBe("ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com");
-        metadata.ClientId.ShouldBe("1111");
-        metadata.AuthUri.ShouldBe("https://accounts.google.com/o/oauth2/auth");
-        metadata.TokenUri.ShouldBe("https://oauth2.googleapis.com/token");
-        metadata.AuthProviderX509CertUrl.ShouldBe("https://www.googleapis.com/oauth2/v1/certs");
-        metadata.ClientX509CertUrl.ShouldBe("https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com");
-        metadata.UniverseDomain.ShouldBe("googleapis.com");
+        metadata.CalendarId.ShouldBe("primary");
+        metadata.Scope.ShouldBe("calendar.events");
+        metadata.ExpiresAt.ShouldBe(new DateTimeOffset(2026, 6, 8, 12, 0, 0, TimeSpan.Zero));
     }
 
     private static void AssertJsonComplexProperty<TEntity, TProperty>(

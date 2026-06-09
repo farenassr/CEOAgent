@@ -186,6 +186,49 @@ public sealed class AdminEndpointAccessTests
         body.Metadata.Value.GetProperty("whatsapp_cloud").GetProperty("phone_number_id").GetString().ShouldBe("123456");
     }
 
+    [Test]
+    public async Task RegisterIntegrationCredential_WhenMetadataContainsCredentialMaterial_ReturnsBadRequest()
+    {
+        var adminKey = "test-admin-key";
+        await using var factory = new ApiFactory(configureServices: services =>
+        {
+            services.Configure<AdminApiKeyOptions>(options =>
+            {
+                options.Key = adminKey;
+            });
+        });
+
+        using var client = factory.CreateClient();
+        var companyId = await CreateCompanyAsync(client, "Company A", adminKey);
+
+        var adminOptions = factory.Services.GetRequiredService<IOptions<AdminApiKeyOptions>>().Value;
+        adminOptions.CompanyId = companyId;
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{companyId}/integration-credentials")
+        {
+            Content = JsonContent.Create(new
+            {
+                provider = "google_calendar",
+                purpose = "calendar",
+                reference = "kv://google-calendar/contoso/service-account",
+                metadata = new
+                {
+                    provider = "google_calendar",
+                    google_calendar = new
+                    {
+                        calendarId = "primary",
+                        private_key = "-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n",
+                    },
+                },
+            }),
+        };
+        request.Headers.Add("X-Admin-Api-Key", adminKey);
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name, string? apiKey = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/companies")

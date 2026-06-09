@@ -62,8 +62,11 @@ if (!builder.Environment.IsEnvironment("Testing"))
 }
 
 // Add services to the container.
-builder.Services.Configure<AdminApiKeyOptions>(
-    builder.Configuration.GetSection("AdminApiKey"));
+builder.Services.AddOptions<AdminApiKeyOptions>()
+    .BindConfiguration("AdminApiKey")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.Key), "AdminApiKey:Key must be configured.")
+    .Validate(options => options.CompanyId != Guid.Empty, "AdminApiKey:CompanyId must be configured.")
+    .ValidateOnStart();
 
 builder.Services.AddOptions<QueueDiagnosticsOptions>()
     .BindConfiguration(QueueDiagnosticsOptions.SectionName)

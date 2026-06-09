@@ -31,17 +31,6 @@ public sealed class IntegrationCredentialReferenceConfiguration : IEntityTypeCon
             googleCalendar.Property(entity => entity.CalendarId).HasJsonPropertyName("calendarId");
             googleCalendar.Property(entity => entity.Scope).HasJsonPropertyName("scope");
             googleCalendar.Property(entity => entity.ExpiresAt).HasJsonPropertyName("expiresAt");
-            googleCalendar.Property(entity => entity.Type).HasJsonPropertyName("type");
-            googleCalendar.Property(entity => entity.ProjectId).HasJsonPropertyName("project_id");
-            googleCalendar.Property(entity => entity.PrivateKeyId).HasJsonPropertyName("private_key_id");
-            googleCalendar.Property(entity => entity.PrivateKey).HasJsonPropertyName("private_key");
-            googleCalendar.Property(entity => entity.ClientEmail).HasJsonPropertyName("client_email");
-            googleCalendar.Property(entity => entity.ClientId).HasJsonPropertyName("client_id");
-            googleCalendar.Property(entity => entity.AuthUri).HasJsonPropertyName("auth_uri");
-            googleCalendar.Property(entity => entity.TokenUri).HasJsonPropertyName("token_uri");
-            googleCalendar.Property(entity => entity.AuthProviderX509CertUrl).HasJsonPropertyName("auth_provider_x509_cert_url");
-            googleCalendar.Property(entity => entity.ClientX509CertUrl).HasJsonPropertyName("client_x509_cert_url");
-            googleCalendar.Property(entity => entity.UniverseDomain).HasJsonPropertyName("universe_domain");
 
             var whatsAppCloud = metadata.ComplexProperty(entity => entity.WhatsAppCloud);
             whatsAppCloud.HasJsonPropertyName("whatsapp_cloud");

@@ -1,8 +1,6 @@
 using CeoAgent.Application.Abstractions.AITools;
-using System.Text.Json;
 using System.Diagnostics;
 using CeoAgent.Application;
-using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Shared.AI;
 using CeoAgent.Shared.AITools;
 
@@ -10,8 +8,6 @@ namespace CeoAgent.Infrastructure.Implementation.AITools.Execution;
 
 public sealed class ToolExecutionGateway
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
     private readonly IAgentToolInvoker _invoker;
     private readonly ToolExecutionGatewayHelper _helper;
 
@@ -40,13 +36,18 @@ public sealed class ToolExecutionGateway
             string.Equals(tool.Name, request.ToolCall.Name, StringComparison.Ordinal));
         if (descriptor is null)
         {
+            var deniedIdempotencyKey = ToolExecutionGatewayHelper.CreateIdempotencyKey(request);
+            var denied = await _helper.PersistToolNotEnabledDeniedAsync(
+                request,
+                deniedIdempotencyKey,
+                cancellationToken);
             stopwatch.Stop();
             CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
             CeoAgentTelemetry.ToolExecutionFailures.Add(1);
             activity?.SetTag("tool.status", "denied");
             activity?.SetTag("tool.failure_reason", "tool_not_enabled");
             activity?.SetStatus(ActivityStatusCode.Ok);
-            return Denied(request.ToolCall, "tool_not_enabled");
+            return denied;
         }
 
         activity?.SetTag("tool.mutating", descriptor.IsMutating);
@@ -84,15 +85,4 @@ public sealed class ToolExecutionGateway
         }
     }
 
-    private static ToolExecutionGatewayResult Denied(AgentToolCall toolCall, string failureReason)
-    {
-        var content = JsonSerializer.Serialize(new
-        {
-            toolKey = toolCall.Name,
-            status = "denied",
-            failureReason,
-        }, SerializerOptions);
-
-        return new ToolExecutionGatewayResult(toolCall.Id, toolCall.Name, content);
-    }
 }

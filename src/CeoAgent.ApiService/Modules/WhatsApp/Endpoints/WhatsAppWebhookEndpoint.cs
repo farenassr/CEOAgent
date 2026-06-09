@@ -1,5 +1,6 @@
 using FastEndpoints;
 using Microsoft.Extensions.Options;
+using System.Text;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
@@ -27,9 +28,8 @@ public sealed class WhatsAppWebhookEndpoint(
             return;
         }
 
-        using var reader = new StreamReader(HttpContext.Request.Body);
-        var body = await reader.ReadToEndAsync(cancellationToken);
-        if (System.Text.Encoding.UTF8.GetByteCount(body) > maxBodyBytes)
+        var bodyBytes = await ReadBodyBytesAsync(HttpContext.Request.Body, maxBodyBytes, cancellationToken);
+        if (bodyBytes is null)
         {
             await Send.StatusCodeAsync(StatusCodes.Status413PayloadTooLarge, cancellationToken);
             return;
@@ -48,11 +48,11 @@ public sealed class WhatsAppWebhookEndpoint(
             request.ContentLength,
             !string.IsNullOrWhiteSpace(signature),
             signature.Length,
-            body.Length);
+            bodyBytes.Length);
 
 
 
-        if (!signatureValidator.IsValid(body, signature, appSecret ?? string.Empty))
+        if (!signatureValidator.IsValid(bodyBytes, signature, appSecret ?? string.Empty))
         {
             logger.LogWarning(
                 WebhookSignatureRejectedEvent,
@@ -60,15 +60,53 @@ public sealed class WhatsAppWebhookEndpoint(
                 request.Path.Value,
                 !string.IsNullOrWhiteSpace(signature),
                 signature.Length,
-                body.Length);
+                bodyBytes.Length);
 
             await Send.ForbiddenAsync(cancellationToken);
             return;
         }
 
+        var body = DecodeUtf8Body(bodyBytes);
         var correlationId = HttpContext.TraceIdentifier;
         var result = await ingestionService.IngestAsync(body, correlationId, cancellationToken);
         await Send.OkAsync(result, cancellationToken);
+    }
+
+    private static async Task<byte[]?> ReadBodyBytesAsync(
+        Stream body,
+        int maxBodyBytes,
+        CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream(capacity: Math.Min(maxBodyBytes, 64 * 1024));
+        var chunk = new byte[16 * 1024];
+
+        while (true)
+        {
+            var bytesRead = await body.ReadAsync(chunk, cancellationToken);
+            if (bytesRead == 0)
+            {
+                return buffer.ToArray();
+            }
+
+            if (buffer.Length + bytesRead > maxBodyBytes)
+            {
+                return null;
+            }
+
+            buffer.Write(chunk, 0, bytesRead);
+        }
+    }
+
+    private static string DecodeUtf8Body(byte[] bodyBytes)
+    {
+        var body = bodyBytes.AsSpan();
+        var preamble = Encoding.UTF8.GetPreamble();
+        if (body.StartsWith(preamble))
+        {
+            body = body[preamble.Length..];
+        }
+
+        return Encoding.UTF8.GetString(body);
     }
 
 }

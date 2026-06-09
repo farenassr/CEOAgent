@@ -29,9 +29,12 @@ public sealed class GoogleCalendarServiceFactory(ISecretValueProvider secrets, I
             return cachedService;
         }
 
-        var serviceAccountJson = IsServiceAccountJson(credentialReference)
-            ? credentialReference
-            : await secrets.GetSecretValueAsync(credentialReference, cancellationToken);
+        if (IsServiceAccountJson(credentialReference))
+        {
+            throw new InvalidOperationException("Google Calendar credential reference must not contain inline credential JSON.");
+        }
+
+        var serviceAccountJson = await secrets.GetSecretValueAsync(credentialReference, cancellationToken);
 
         var credential = CredentialFactory.FromJson<ServiceAccountCredential>(serviceAccountJson)
             .ToGoogleCredential()

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -48,11 +47,6 @@ public sealed class CredentialMetadata
 
 public sealed class GoogleCalendarCredentialMetadata
 {
-    private static readonly JsonSerializerOptions ServiceAccountSerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
     /// <summary>
     /// Google Calendar identifier used by calendar tools.
     /// </summary>
@@ -67,59 +61,6 @@ public sealed class GoogleCalendarCredentialMetadata
     /// UTC expiration timestamp for the credential when available.
     /// </summary>
     public DateTimeOffset? ExpiresAt { get; set; }
-
-    [JsonPropertyName("type")]
-    public required string Type { get; set; }
-
-    [JsonPropertyName("project_id")]
-    public required string ProjectId { get; set; }
-
-    [JsonPropertyName("private_key_id")]
-    public required string PrivateKeyId { get; set; }
-
-    [JsonPropertyName("private_key")]
-    public required string PrivateKey { get; set; }
-
-    [JsonPropertyName("client_email")]
-    public required string ClientEmail { get; set; }
-
-    [JsonPropertyName("client_id")]
-    public required string ClientId { get; set; }
-
-    [JsonPropertyName("auth_uri")]
-    public required string AuthUri { get; set; }
-
-    [JsonPropertyName("token_uri")]
-    public required string TokenUri { get; set; }
-
-    [JsonPropertyName("auth_provider_x509_cert_url")]
-    public required string AuthProviderX509CertUrl { get; set; }
-
-    [JsonPropertyName("client_x509_cert_url")]
-    public required string ClientX509CertUrl { get; set; }
-
-    [JsonPropertyName("universe_domain")]
-    public required string UniverseDomain { get; set; }
-
-    public bool HasServiceAccountCredentials()
-    {
-        return !string.IsNullOrWhiteSpace(Type)
-            && !string.IsNullOrWhiteSpace(ProjectId)
-            && !string.IsNullOrWhiteSpace(PrivateKeyId)
-            && !string.IsNullOrWhiteSpace(PrivateKey)
-            && !string.IsNullOrWhiteSpace(ClientEmail)
-            && !string.IsNullOrWhiteSpace(ClientId)
-            && !string.IsNullOrWhiteSpace(AuthUri)
-            && !string.IsNullOrWhiteSpace(TokenUri)
-            && !string.IsNullOrWhiteSpace(AuthProviderX509CertUrl)
-            && !string.IsNullOrWhiteSpace(ClientX509CertUrl)
-            && !string.IsNullOrWhiteSpace(UniverseDomain);
-    }
-
-    public string ToServiceAccountJson()
-    {
-        return JsonSerializer.Serialize(this, ServiceAccountSerializerOptions);
-    }
 }
 
 public sealed class WhatsAppCloudCredentialMetadata

@@ -58,10 +58,7 @@ public sealed class GoogleCalendarToolEndpointTests
         body.UnavailabilityReason.ShouldBe("slot_unavailable");
 
         var calendarRequest = calendar.AvailabilityRequests.Single();
-        using var credentialJson = JsonDocument.Parse(calendarRequest.CredentialReference);
-        credentialJson.RootElement.GetProperty("type").GetString().ShouldBe("service_account");
-        credentialJson.RootElement.GetProperty("project_id").GetString().ShouldBe("gen-lang-client-0728870398");
-        credentialJson.RootElement.GetProperty("client_email").GetString().ShouldBe("ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com");
+        calendarRequest.CredentialReference.ShouldBe("kv://google-calendar/contoso/service-account");
         calendarRequest.CalendarId.ShouldBe("primary");
         calendarRequest.Start.ShouldBe(new DateTimeOffset(2026, 6, 1, 16, 0, 0, TimeSpan.FromHours(-5)));
         calendarRequest.End.ShouldBe(new DateTimeOffset(2026, 6, 1, 17, 0, 0, TimeSpan.FromHours(-5)));
@@ -110,8 +107,7 @@ public sealed class GoogleCalendarToolEndpointTests
         body.EventUrl.ShouldBe("https://calendar.google.com/event?eid=event-123");
 
         var calendarRequest = calendar.ReservationRequests.Single();
-        using var credentialJson = JsonDocument.Parse(calendarRequest.CredentialReference);
-        credentialJson.RootElement.GetProperty("private_key").GetString().ShouldBe("-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n");
+        calendarRequest.CredentialReference.ShouldBe("kv://google-calendar/contoso/service-account");
         calendarRequest.CalendarId.ShouldBe("primary");
         calendarRequest.Summary.ShouldBe("Reservation for 2");
         calendarRequest.Description.ShouldBe($"Window table{Environment.NewLine}Customer: Ada Lovelace");
@@ -330,7 +326,7 @@ public sealed class GoogleCalendarToolEndpointTests
             {
                 provider = "google_calendar",
                 purpose = "google_calendar",
-                reference = "stored://google-calendar/service-account",
+                reference = "kv://google-calendar/contoso/service-account",
                 metadata = new
                 {
                     provider = "google_calendar",
@@ -338,17 +334,6 @@ public sealed class GoogleCalendarToolEndpointTests
                     {
                         calendarId = "primary",
                         scope = "https://www.googleapis.com/auth/calendar",
-                        type = "service_account",
-                        project_id = "gen-lang-client-0728870398",
-                        private_key_id = "private-key-id",
-                        private_key = "-----BEGIN PRIVATE KEY-----\\nxxx\\n-----END PRIVATE KEY-----\\n",
-                        client_email = "ceoagent@gen-lang-client-0728870398.iam.gserviceaccount.com",
-                        client_id = "1111",
-                        auth_uri = "https://accounts.google.com/o/oauth2/auth",
-                        token_uri = "https://oauth2.googleapis.com/token",
-                        auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs",
-                        client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/ceoagent%40gen-lang-client-0728870398.iam.gserviceaccount.com",
-                        universe_domain = "googleapis.com",
                     },
                 },
             }),
