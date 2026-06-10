@@ -21,7 +21,11 @@ public sealed record AgentRunResult(
     string? AssistantText,
     IReadOnlyList<AgentToolCall> ToolCalls,
     string? ResponseId = null,
-    string? FinishReason = null);
+    string? FinishReason = null,
+    int? InputTokenCount = null,
+    int? OutputTokenCount = null,
+    int? TotalTokenCount = null,
+    double? EstimatedCostUsd = null);
 
 public sealed record AgentToolCall(
     string Id,

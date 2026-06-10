@@ -84,10 +84,8 @@ public static class InfrastructureRegistrations
         services.AddOptions<OpenAIAgentRuntimeOptions>()
             .BindConfiguration(OpenAIAgentRuntimeOptions.SectionName);
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
-        services.AddSingleton<IOpenAIResponsesClientFactory, OpenAIResponsesClientFactory>();
-        services.AddScoped<IAgentRuntime, OpenAIAgentRuntime>();
-        services.AddScoped<IGoogleCalendarServiceFactory, GoogleCalendarServiceFactory>();
-        services.AddScoped<IGoogleCalendarIntegration, GoogleCalendarIntegration>();
+        services.AddOpenAIImplementation();
+        services.AddGoogleCalendarImplementation();
         services.AddScoped<IMessageChannelIntegration>(provider =>
         {
             var integration = provider.GetRequiredService<WhatsAppCloudIntegration>();

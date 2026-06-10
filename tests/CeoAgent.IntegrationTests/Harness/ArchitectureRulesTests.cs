@@ -129,30 +129,12 @@ public sealed partial class ArchitectureRulesTests
                     "src",
                     "CeoAgent.Infrastructure",
                     "CEOAgent.Infrastructure.csproj");
-                var isApplicationProviderFactory = relativePath == Path.Combine(
-                        "src",
-                        "CeoAgent.Application",
-                        "Abstractions",
-                        "AITools",
-                        "GoogleCalendar",
-                        "IGoogleCalendarServiceFactory.cs")
-                    || relativePath == Path.Combine(
-                        "src",
-                        "CeoAgent.Application",
-                        "Abstractions",
-                        "OpenAI",
-                        "IOpenAIResponsesClientFactory.cs")
-                    || relativePath == Path.Combine(
-                        "src",
-                        "CeoAgent.Application",
-                        "CEOAgent.Application.csproj");
                 var text = File.ReadAllText(filePath);
                 foreach (var marker in providerMarkers)
                 {
                     if (!isInfrastructureImplementation
                         && !isInfrastructureApiClient
                         && !isInfrastructureProjectFile
-                        && !isApplicationProviderFactory
                         && text.Contains(marker, StringComparison.Ordinal))
                     {
                         violations.Add($"{relativePath} contains {marker}");
@@ -324,11 +306,36 @@ public sealed partial class ArchitectureRulesTests
     /// Verifies that PostgreSQL 18 uses a fresh local data volume instead of the previous PostgreSQL 17 volume.
     /// </summary>
     [Test]
-    public void AppHost_Postgres18_UsesVersionSpecificDataVolume()
+    public void AppHost_Postgres_UsesStableDataVolume()
     {
         var repoRoot = FindRepositoryRoot();
         var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
         appHost.ShouldContain(".WithDataVolume(\"ceoagent-postgres-database-volume\")");
+    }
+
+    [Test]
+    public void Migrations_DoNotContainSecretShapedCredentialMetadata()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var bannedMarkers = new[]
+        {
+            "private_key",
+            "private_key_id",
+            "client_email",
+            "access_token",
+            "refresh_token",
+            "service_account_json",
+        };
+        var migrationRoot = Path.Combine(repoRoot, "src", "CeoAgent.Infrastructure", "Persistence", "Migrations");
+        var violations = Directory.EnumerateFiles(migrationRoot, "*.cs", SearchOption.AllDirectories)
+            .SelectMany(filePath => File.ReadLines(filePath)
+                .Select((line, index) => new { line, index })
+                .SelectMany(item => bannedMarkers
+                    .Where(marker => item.line.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                    .Select(marker => $"{Path.GetRelativePath(repoRoot, filePath)}:{item.index + 1} contains {marker}")))
+            .ToArray();
+
+        violations.ShouldBeEmpty();
     }
 
     private static string[] FindMatchingSourceLines(string marker)

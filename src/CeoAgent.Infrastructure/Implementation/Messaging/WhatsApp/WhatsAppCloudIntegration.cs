@@ -2,10 +2,12 @@ using CeoAgent.Application.Abstractions.Secrets;
 using CeoAgent.Infrastructure.ApiClient.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.Secrets;
 using CeoAgent.Application.Abstractions.Messaging;
+using CeoAgent.Application.Errors;
 using CeoAgent.Shared.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Refit;
+using System.Net;
 
 namespace CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
 
@@ -131,8 +133,24 @@ public sealed class WhatsAppCloudIntegration(
                 request.Type,
                 !string.IsNullOrWhiteSpace(idempotencyKey));
 
-            throw;
+            throw new IntegrationException(
+                "whatsapp_cloud",
+                MapWhatsAppFailureReason(exception.StatusCode),
+                "WhatsApp Cloud send failed.",
+                exception);
         }
+    }
+
+    private static string MapWhatsAppFailureReason(HttpStatusCode statusCode)
+    {
+        return statusCode switch
+        {
+            HttpStatusCode.TooManyRequests => "rate_limited",
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "channel_access_denied",
+            HttpStatusCode.BadGateway or HttpStatusCode.GatewayTimeout or HttpStatusCode.ServiceUnavailable
+                or HttpStatusCode.InternalServerError => "upstream_error",
+            _ => "upstream_error",
+        };
     }
 
     private async Task<WhatsAppCredential> LoadCredentialAsync(Guid companyChannelId, CancellationToken cancellationToken)

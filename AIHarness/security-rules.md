@@ -15,6 +15,14 @@ Never commit:
 - raw connection strings
 
 Database rows store credential references only, such as `kv://...`.
+Accepted credential reference formats are:
+
+- `kv://...` aliases resolved through configuration-backed Key Vault mappings.
+- `config://...` keys for local or test configuration secrets.
+- `https://*.vault.azure.net/secrets/...` Azure Key Vault secret URIs.
+
+Reject raw tokens, bearer strings, inline JSON, unsupported schemes, and
+provider credential material in metadata at the API edge.
 
 ## Webhooks
 

@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
+using CeoAgent.Application.Errors;
 using CeoAgent.Shared.Calendar;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using Google;
@@ -13,7 +14,7 @@ namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integrat
 /// <summary>
 /// Implements calendar availability and reservation operations against Google Calendar.
 /// </summary>
-public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory googleCalendarServiceFactory)
+public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<CalendarService> googleCalendarServiceFactory)
     : IGoogleCalendarIntegration
 {
     private const int MaxEventListPages = 20;
@@ -32,47 +33,54 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var service = await googleCalendarServiceFactory.CreateAsync(request.CredentialReference, cancellationToken);
-        var duration = request.End - request.Start;
-        var queryStart = request.SearchWindowStart.AddMinutes(-request.BufferMinutes);
-        var queryEnd = request.SearchWindowEnd.Add(duration).AddMinutes(request.BufferMinutes);
-        var busyRanges = await GetBusyRangesAsync(service, request.CalendarId, queryStart, queryEnd, cancellationToken);
-
-        if (busyRanges is null)
+        try
         {
-            return new CalendarAvailabilityResult(
-                Available: false,
-                AlternativeStarts: [],
-                UnavailabilityReason: "slot_unavailable");
-        }
+            var service = await googleCalendarServiceFactory.CreateAsync(request.CredentialReference, cancellationToken);
+            var duration = request.End - request.Start;
+            var queryStart = request.SearchWindowStart.AddMinutes(-request.BufferMinutes);
+            var queryEnd = request.SearchWindowEnd.Add(duration).AddMinutes(request.BufferMinutes);
+            var busyRanges = await GetBusyRangesAsync(service, request.CalendarId, queryStart, queryEnd, cancellationToken);
 
-        var primaryAvailable = request.RequestedSlotEligible
-            && IsAvailable(busyRanges, request.Start, request.End, request.BufferMinutes);
-
-        if (primaryAvailable)
-        {
-            return new CalendarAvailabilityResult(Available: true, [], UnavailabilityReason: null);
-        }
-
-        var alternatives = new List<DateTimeOffset>();
-
-        foreach (var alternativeStart in request.AlternativeSearchStarts)
-        {
-            var alternativeEnd = alternativeStart + duration;
-            if (IsAvailable(busyRanges, alternativeStart, alternativeEnd, request.BufferMinutes))
+            if (busyRanges is null)
             {
-                alternatives.Add(alternativeStart);
-                if (alternatives.Count == GoogleCalendarSchedulingPolicy.MaxAlternativeStarts)
+                return new CalendarAvailabilityResult(
+                    Available: false,
+                    AlternativeStarts: [],
+                    UnavailabilityReason: "slot_unavailable");
+            }
+
+            var primaryAvailable = request.RequestedSlotEligible
+                && IsAvailable(busyRanges, request.Start, request.End, request.BufferMinutes);
+
+            if (primaryAvailable)
+            {
+                return new CalendarAvailabilityResult(Available: true, [], UnavailabilityReason: null);
+            }
+
+            var alternatives = new List<DateTimeOffset>();
+
+            foreach (var alternativeStart in request.AlternativeSearchStarts)
+            {
+                var alternativeEnd = alternativeStart + duration;
+                if (IsAvailable(busyRanges, alternativeStart, alternativeEnd, request.BufferMinutes))
                 {
-                    break;
+                    alternatives.Add(alternativeStart);
+                    if (alternatives.Count == GoogleCalendarSchedulingPolicy.MaxAlternativeStarts)
+                    {
+                        break;
+                    }
                 }
             }
-        }
 
-        return new CalendarAvailabilityResult(
-            Available: false,
-            AlternativeStarts: alternatives,
-            UnavailabilityReason: "slot_unavailable");
+            return new CalendarAvailabilityResult(
+                Available: false,
+                AlternativeStarts: alternatives,
+                UnavailabilityReason: "slot_unavailable");
+        }
+        catch (GoogleApiException exception)
+        {
+            return new CalendarAvailabilityResult(false, [], MapGoogleFailureReason(exception));
+        }
     }
 
     /// <summary>
@@ -106,7 +114,19 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory goog
                 return existing;
             }
 
-            throw;
+            throw new IntegrationException(
+                "google_calendar",
+                MapGoogleFailureReason(exception),
+                "Google Calendar reservation creation failed.",
+                exception);
+        }
+        catch (GoogleApiException exception)
+        {
+            throw new IntegrationException(
+                "google_calendar",
+                MapGoogleFailureReason(exception),
+                "Google Calendar reservation creation failed.",
+                exception);
         }
 
         return new CalendarReservationResult(created.Id, created.HtmlLink);

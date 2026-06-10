@@ -1,8 +1,4 @@
 using CeoAgent.Application.Errors;
-using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
-using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
-using CeoAgent.Shared.Calendar;
-using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Request.GoogleCalendar;
 using CeoAgent.Shared.Response.GoogleCalendar;
 using FastEndpoints;
@@ -13,10 +9,7 @@ namespace CeoAgent.ApiService.Modules.GoogleCalendar;
 /// <summary>
 /// Creates a Google Calendar reservation for a company-scoped calendar tool.
 /// </summary>
-public sealed class CreateGoogleCalendarReservationEndpoint(
-    GoogleCalendarCompanyToolResolver resolver,
-    IGoogleCalendarIntegration calendarIntegration,
-    TimeProvider timeProvider)
+public sealed class CreateGoogleCalendarReservationEndpoint
     : Endpoint<CreateGoogleCalendarReservationRequest, GoogleCalendarReservationResponse>
 {
     public override void Configure()
@@ -24,83 +17,13 @@ public sealed class CreateGoogleCalendarReservationEndpoint(
         Post("/v1/admin/companies/{companyId}/google-calendar/reservations");
     }
 
-    public override async Task HandleAsync(
+    public override Task HandleAsync(
         CreateGoogleCalendarReservationRequest request,
         CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
-        var context = await resolver.ResolveAsync(
-            companyId,
-            MvpToolKeys.CreateGoogleCalendarReservation,
-            cancellationToken);
-
-        if (!GoogleCalendarSchedulingPolicy.IsWithinAdvanceWindow(
-            DateOnly.FromDateTime(request.Start.DateTime),
-            context.Company.TimeZoneId,
-            timeProvider.GetUtcNow(),
-            context.Configuration.AdvanceBookingDays))
-        {
-            throw new BusinessRuleException(
-                "outside_advance_booking_window",
-                "Reservation must be within the configured advance booking window.");
-        }
-
-        if (!GoogleCalendarSchedulingPolicy.IsWithinWorkingHours(
-            context.Company.WorkingHours,
-            request.Start,
-            request.End,
-            context.Configuration.BufferMinutes))
-        {
-            throw new BusinessRuleException(
-                "outside_working_hours",
-                "Reservation must be within configured company working hours.");
-        }
-
-        var result = await calendarIntegration.CreateReservationAsync(
-            new CalendarReservationRequest(
-                CredentialReference: context.CredentialReference,
-                CalendarId: context.Configuration.CalendarId,
-                Start: request.Start,
-                End: request.End,
-                Summary: request.Summary,
-                IdempotencyKey: request.IdempotencyKey,
-                Description: BuildDescription(request),
-                CustomerEmail: request.CustomerEmail),
-            cancellationToken);
-
-        await Send.OkAsync(
-            new GoogleCalendarReservationResponse
-            {
-                EventId = result.EventId,
-                EventUrl = result.EventUrl,
-            },
-            cancellationToken);
-    }
-
-    private static string? BuildDescription(CreateGoogleCalendarReservationRequest request)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(request.Description))
-        {
-            parts.Add(request.Description);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.CustomerName))
-        {
-            parts.Add($"Customer: {request.CustomerName}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.CustomerEmail))
-        {
-            parts.Add($"Email: {request.CustomerEmail}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Notes))
-        {
-            parts.Add($"Notes: {request.Notes}");
-        }
-
-        return parts.Count == 0 ? null : string.Join(Environment.NewLine, parts);
+        throw new BusinessRuleException(
+            "admin_google_calendar_mutation_disabled",
+            "Create reservations through the audited Google Calendar tool execution path.");
     }
 }
 

@@ -113,7 +113,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
-    public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_PersistsReplyWithSingleSaveChanges()
+    public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_PersistsReplyBeforeSendAndProviderReferenceAfterSend()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         fixture.InboundMessage.Type = MessageType.Text;
@@ -139,7 +139,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.ReadMessages.ShouldBeEmpty();
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
         fixture.Agent.Requests.Count.ShouldBe(1);
-        saveChangesCount.ShouldBe(1);
+        saveChangesCount.ShouldBe(2);
 
         var assistant = fixture.DbContext.ChangeTracker
             .Entries<Message>()
@@ -228,7 +228,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
-    public async Task ProcessAsync_ForTextMessageWithMutatingTool_PersistsAllDatabaseChangesWithSingleSaveChanges()
+    public async Task ProcessAsync_ForTextMessageWithMutatingTool_PersistsReplyBeforeSendAndProviderReferenceAfterSend()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         fixture.InboundMessage.Type = MessageType.Text;
@@ -268,7 +268,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 "correlation-123"),
             CancellationToken.None);
 
-        saveChangesCount.ShouldBe(1);
+        saveChangesCount.ShouldBe(2);
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
         fixture.CompanyContext.SetCompany(fixture.CompanyId);
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);

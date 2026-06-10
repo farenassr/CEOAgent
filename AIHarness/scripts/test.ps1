@@ -2,7 +2,8 @@
 param(
     [string]$Solution = "CEOAgent.slnx",
     [string]$Configuration = "Debug",
-    [string]$Filter = "",
+    [Alias("Filter")]
+    [string]$TreeNodeFilter = "",
     [switch]$NoBuild
 )
 
@@ -18,11 +19,12 @@ try {
         $arguments += "--no-build"
     }
 
-    if ($Filter.Length -gt 0) {
-        $arguments += @("--filter", $Filter)
+    if ($TreeNodeFilter.Length -gt 0) {
+        $arguments += @("--treenode-filter", $TreeNodeFilter)
     }
 
     dotnet @arguments
+    exit $LASTEXITCODE
 }
 finally {
     Pop-Location

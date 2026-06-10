@@ -1,12 +1,6 @@
-using OpenAI.Responses;
-
 namespace CeoAgent.Application.Abstractions.OpenAI;
 
-#pragma warning disable OPENAI001
-
-public interface IOpenAIResponsesClientFactory
+public interface IOpenAIResponsesClientFactory<TClient>
 {
-    Task<ResponsesClient> GetClientAsync(CancellationToken cancellationToken);
+    Task<TClient> GetClientAsync(CancellationToken cancellationToken);
 }
-
-#pragma warning restore OPENAI001

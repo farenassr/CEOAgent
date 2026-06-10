@@ -68,8 +68,15 @@ public sealed class WhatsAppWebhookEndpoint(
 
         var body = DecodeUtf8Body(bodyBytes);
         var correlationId = HttpContext.TraceIdentifier;
-        var result = await ingestionService.IngestAsync(body, correlationId, cancellationToken);
-        await Send.OkAsync(result, cancellationToken);
+        try
+        {
+            var result = await ingestionService.IngestAsync(body, correlationId, cancellationToken);
+            await Send.OkAsync(result, cancellationToken);
+        }
+        catch (InvalidWhatsAppWebhookPayloadException)
+        {
+            await Send.StatusCodeAsync(StatusCodes.Status400BadRequest, cancellationToken);
+        }
     }
 
     private static async Task<byte[]?> ReadBodyBytesAsync(

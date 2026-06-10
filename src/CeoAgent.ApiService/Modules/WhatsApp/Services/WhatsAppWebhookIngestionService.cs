@@ -40,22 +40,56 @@ public sealed class WhatsAppWebhookIngestionService(
             correlationId,
             requestBody.Length);
 
-        using var document = JsonDocument.Parse(requestBody);
-        var message = Parse(document.RootElement);
-        if (message is null)
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(requestBody);
+        }
+        catch (JsonException)
         {
             logger.LogInformation(
                 WebhookMessageNotFoundEvent,
-                "WhatsAppWebhookMessageNotFound CorrelationId={CorrelationId} BodyLength={BodyLength}",
+                "WhatsAppWebhookInvalidJson CorrelationId={CorrelationId} BodyLength={BodyLength}",
                 correlationId,
                 requestBody.Length);
 
-            return new WhatsAppWebhookIngestionResult(
-                Enqueued: false,
-                CompanyId: null,
-                ConversationId: null,
-                MessageId: null);
+            throw new InvalidWhatsAppWebhookPayloadException();
         }
+
+        using (document)
+        {
+            var messages = Parse(document.RootElement);
+            if (messages.Count == 0)
+            {
+                logger.LogInformation(
+                    WebhookMessageNotFoundEvent,
+                    "WhatsAppWebhookMessageNotFound CorrelationId={CorrelationId} BodyLength={BodyLength}",
+                    correlationId,
+                    requestBody.Length);
+
+                return EmptyResult();
+            }
+
+            WhatsAppWebhookIngestionResult? firstResult = null;
+            var anyEnqueued = false;
+            foreach (var message in messages)
+            {
+                var result = await IngestMessageAsync(message, correlationId, cancellationToken);
+                firstResult ??= result;
+                anyEnqueued |= result.Enqueued;
+            }
+
+            return firstResult is null
+                ? EmptyResult()
+                : firstResult with { Enqueued = anyEnqueued };
+        }
+    }
+
+    private async Task<WhatsAppWebhookIngestionResult> IngestMessageAsync(
+        ParsedWhatsAppMessage message,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
 
         logger.LogInformation(
             WebhookMessageParsedEvent,
@@ -75,8 +109,18 @@ public sealed class WhatsAppWebhookIngestionService(
                 entity => entity.Provider == CompanyChannelProvider.WhatsAppCloud
                     && entity.ProviderChannelId == message.PhoneNumberId)
             .Select(entity => new WebhookChannelContext(entity.Id, entity.CompanyId))
-            .SingleAsync(
+            .SingleOrDefaultAsync(
                 cancellationToken);
+        if (channel is null)
+        {
+            logger.LogInformation(
+                "WhatsAppWebhookUnknownChannel CorrelationId={CorrelationId} PhoneNumberId={PhoneNumberId} ProviderMessageId={ProviderMessageId}",
+                correlationId,
+                message.PhoneNumberId,
+                message.ProviderMessageId);
+
+            return EmptyResult();
+        }
 
         logger.LogInformation(
             WebhookChannelResolvedEvent,
@@ -104,39 +148,13 @@ public sealed class WhatsAppWebhookIngestionService(
                 channel.Id,
                 message.ProviderMessageId);
 
-            var replyClientMessageId = $"reply:{existingMessage.Id}";
-            var hasReply = await dbContext.Messages
-                .IgnoreQueryFilters()
-                .AnyAsync(
-                    entity => entity.CompanyId == channel.CompanyId
-                        && entity.ConversationId == existingMessage.ConversationId
-                        && entity.Role == MessageRole.Assistant
-                        && entity.ProviderMessageId == replyClientMessageId,
-                    cancellationToken);
-
-            if (!hasReply)
-            {
-                logger.LogInformation(
-                    "Re-enqueueing unprocessed duplicate webhook message. CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId}",
-                    channel.CompanyId,
-                    existingMessage.ConversationId,
-                    existingMessage.Id);
-
-                var retryJob = new ProcessIncomingMessageJob(channel.CompanyId, existingMessage.ConversationId, existingMessage.Id, correlationId);
-                await incomingMessageJobEnqueuer.EnqueueAsync(retryJob, cancellationToken);
-
-                return new WhatsAppWebhookIngestionResult(
-                    Enqueued: true,
-                    CompanyId: channel.CompanyId,
-                    ConversationId: existingMessage.ConversationId,
-                    MessageId: existingMessage.Id);
-            }
-
-            return new WhatsAppWebhookIngestionResult(
-                Enqueued: false,
-                CompanyId: channel.CompanyId,
-                ConversationId: existingMessage.ConversationId,
-                MessageId: existingMessage.Id);
+            return await HandleDuplicateInboundAsync(
+                channel.CompanyId,
+                existingMessage.ConversationId,
+                existingMessage.Id,
+                correlationId,
+                "preexisting",
+                cancellationToken);
         }
 
         var customer = await ResolveCustomerAsync(channel, message, cancellationToken);
@@ -165,39 +183,13 @@ public sealed class WhatsAppWebhookIngestionService(
                 channel.Id,
                 message.ProviderMessageId);
 
-            var replyClientMessageId = $"reply:{existing.Id}";
-            var hasReply = await dbContext.Messages
-                .IgnoreQueryFilters()
-                .AnyAsync(
-                    entity => entity.CompanyId == channel.CompanyId
-                        && entity.ConversationId == existing.ConversationId
-                        && entity.Role == MessageRole.Assistant
-                        && entity.ProviderMessageId == replyClientMessageId,
-                    cancellationToken);
-
-            if (!hasReply)
-            {
-                logger.LogInformation(
-                    "Re-enqueueing unprocessed duplicate webhook message after DB concurrency. CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId}",
-                    channel.CompanyId,
-                    existing.ConversationId,
-                    existing.Id);
-
-                var retryJob = new ProcessIncomingMessageJob(channel.CompanyId, existing.ConversationId, existing.Id, correlationId);
-                await incomingMessageJobEnqueuer.EnqueueAsync(retryJob, cancellationToken);
-
-                return new WhatsAppWebhookIngestionResult(
-                    Enqueued: true,
-                    CompanyId: channel.CompanyId,
-                    ConversationId: existing.ConversationId,
-                    MessageId: existing.Id);
-            }
-
-            return new WhatsAppWebhookIngestionResult(
-                Enqueued: false,
-                CompanyId: channel.CompanyId,
-                ConversationId: existing.ConversationId,
-                MessageId: existing.Id);
+            return await HandleDuplicateInboundAsync(
+                channel.CompanyId,
+                existing.ConversationId,
+                existing.Id,
+                correlationId,
+                "db_concurrency",
+                cancellationToken);
         }
 
         var job = new ProcessIncomingMessageJob(channel.CompanyId, conversation.Id, inbound.Id, correlationId);
@@ -219,6 +211,59 @@ public sealed class WhatsAppWebhookIngestionService(
             CompanyId: channel.CompanyId,
             ConversationId: conversation.Id,
             MessageId: inbound.Id);
+    }
+
+    private async Task<WhatsAppWebhookIngestionResult> HandleDuplicateInboundAsync(
+        Guid companyId,
+        Guid conversationId,
+        Guid messageId,
+        string? correlationId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var replyClientMessageId = $"reply:{messageId}";
+        var hasReply = await dbContext.Messages
+            .IgnoreQueryFilters()
+            .AnyAsync(
+                entity => entity.CompanyId == companyId
+                    && entity.ConversationId == conversationId
+                    && entity.Role == MessageRole.Assistant
+                    && entity.ProviderMessageId == replyClientMessageId,
+                cancellationToken);
+
+        if (!hasReply)
+        {
+            logger.LogInformation(
+                "Re-enqueueing unprocessed duplicate webhook message. CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId} Reason={Reason}",
+                companyId,
+                conversationId,
+                messageId,
+                reason);
+
+            var retryJob = new ProcessIncomingMessageJob(companyId, conversationId, messageId, correlationId);
+            await incomingMessageJobEnqueuer.EnqueueAsync(retryJob, cancellationToken);
+
+            return new WhatsAppWebhookIngestionResult(
+                Enqueued: true,
+                CompanyId: companyId,
+                ConversationId: conversationId,
+                MessageId: messageId);
+        }
+
+        return new WhatsAppWebhookIngestionResult(
+            Enqueued: false,
+            CompanyId: companyId,
+            ConversationId: conversationId,
+            MessageId: messageId);
+    }
+
+    private static WhatsAppWebhookIngestionResult EmptyResult()
+    {
+        return new WhatsAppWebhookIngestionResult(
+            Enqueued: false,
+            CompanyId: null,
+            ConversationId: null,
+            MessageId: null);
     }
 
     private async Task<Customer> ResolveCustomerAsync(
@@ -335,13 +380,14 @@ public sealed class WhatsAppWebhookIngestionService(
         return inbound;
     }
 
-    private static ParsedWhatsAppMessage? Parse(JsonElement root)
+    private static List<ParsedWhatsAppMessage> Parse(JsonElement root)
     {
         if (!root.TryGetProperty("entry", out var entries) || entries.ValueKind != JsonValueKind.Array)
         {
-            return null;
+            return [];
         }
 
+        var parsed = new List<ParsedWhatsAppMessage>();
         foreach (var entry in entries.EnumerateArray())
         {
             if (!entry.TryGetProperty("changes", out var changes) || changes.ValueKind != JsonValueKind.Array)
@@ -359,34 +405,40 @@ public sealed class WhatsAppWebhookIngestionService(
                     continue;
                 }
 
-                var message = messages[0];
                 if (!value.TryGetProperty("metadata", out var metadata)
-                    || !metadata.TryGetProperty("phone_number_id", out var phoneNumberId)
-                    || !message.TryGetProperty("id", out var id)
-                    || !message.TryGetProperty("from", out var from))
+                    || !metadata.TryGetProperty("phone_number_id", out var phoneNumberId))
                 {
                     continue;
                 }
 
-                var type = message.TryGetProperty("type", out var typeElement)
-                    ? typeElement.GetString() ?? "text"
-                    : "text";
-                var text = type == "text" && message.TryGetProperty("text", out var textElement)
-                    && textElement.TryGetProperty("body", out var textBody)
-                    ? textBody.GetString()
-                    : null;
-                return new ParsedWhatsAppMessage(
-                    phoneNumberId.GetString() ?? string.Empty,
-                    id.GetString() ?? string.Empty,
-                    from.GetString() ?? string.Empty,
-                    ContactName(value),
-                    type,
-                    text,
-                    OccurredAt(message));
+                foreach (var message in messages.EnumerateArray())
+                {
+                    if (!message.TryGetProperty("id", out var id)
+                        || !message.TryGetProperty("from", out var from))
+                    {
+                        continue;
+                    }
+
+                    var type = message.TryGetProperty("type", out var typeElement)
+                        ? typeElement.GetString() ?? "text"
+                        : "text";
+                    var text = type == "text" && message.TryGetProperty("text", out var textElement)
+                        && textElement.TryGetProperty("body", out var textBody)
+                        ? textBody.GetString()
+                        : null;
+                    parsed.Add(new ParsedWhatsAppMessage(
+                        phoneNumberId.GetString() ?? string.Empty,
+                        id.GetString() ?? string.Empty,
+                        from.GetString() ?? string.Empty,
+                        ContactName(value),
+                        type,
+                        text,
+                        OccurredAt(message)));
+                }
             }
         }
 
-        return null;
+        return parsed;
     }
 
     private static string? ContactName(JsonElement value)

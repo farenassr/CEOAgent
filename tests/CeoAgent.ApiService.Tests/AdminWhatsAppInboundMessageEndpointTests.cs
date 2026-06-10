@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Modules.WhatsApp;
 using CeoAgent.ApiService.Tests.Support;
 using CeoAgent.Infrastructure;
@@ -11,7 +10,6 @@ using CeoAgent.Shared.Jobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Shouldly;
 
 namespace CeoAgent.ApiService.Tests;
@@ -23,24 +21,18 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
     public async Task ReceiveWhatsAppMessage_PersistsUserMessageAsWhatsAppAndEnqueuesWorkerJob()
     {
         var queue = new RecordingIncomingMessageQueue();
-        const string adminKey = "test-admin-key";
         await using var factory = new ApiFactory(configureServices: services =>
         {
             services.RemoveAll<IIncomingMessageJobEnqueuer>();
             services.AddSingleton<IIncomingMessageJobEnqueuer>(queue);
-            services.Configure<AdminApiKeyOptions>(options =>
-            {
-                options.Key = adminKey;
-            });
         });
         using (var scope = factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
             SeedCompany(dbContext);
         }
-        factory.Services.GetRequiredService<IOptions<AdminApiKeyOptions>>().Value.CompanyId = CompanyId;
 
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient(CompanyId);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"/v1/admin/companies/{CompanyId}/whatsapp")
@@ -51,7 +43,6 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
                 externalCustomerId = "573001112233",
             }),
         };
-        request.Headers.Add("X-Admin-Api-Key", adminKey);
 
         using var response = await client.SendAsync(request);
 

@@ -38,14 +38,10 @@ public sealed class AgentPromptBuilderTests
         prompt.ShouldContain("check_google_calendar_availability");
         prompt.ShouldContain("create_google_calendar_reservation");
         prompt.ShouldNotContain("Rules:");
-        prompt.ShouldNotContain("- Keep replies concise and useful.");
-        prompt.ShouldNotContain("- Do not invent availability, reservations, customer names, phone numbers, or contact details.");
-        prompt.ShouldNotContain("- Do not ask for the customer's phone number to find, update, or cancel reservations when this conversation comes from WhatsApp.");
-        prompt.ShouldNotContain("- Use find_google_calendar_reservations to look up reservations for the current customer.");
-        prompt.ShouldNotContain("- If multiple matching reservations are found, ask which reservation before updating or cancelling.");
-        prompt.ShouldNotContain("- Do not confirm reservation updates or cancellations without a successful tool result.");
-        prompt.ShouldNotContain("- Call check_google_calendar_availability before offering or confirming new reservation times.");
-        prompt.ShouldNotContain("- Only call create_google_calendar_reservation after explicit customer confirmation and after the customer has provided their name.");
+        prompt.ShouldNotContain("Do not invent availability");
+        prompt.ShouldNotContain("Do not confirm reservation updates or cancellations");
+        prompt.ShouldNotContain("Call check_google_calendar_availability before offering or confirming new reservation times");
+        prompt.ShouldNotContain("Only call create_google_calendar_reservation after explicit customer confirmation");
     }
 
     [Test]

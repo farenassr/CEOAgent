@@ -28,17 +28,16 @@ public sealed class CompanyToolRegistry(
             {
                 entity.Id,
                 entity.ToolKey,
-                entity.ParametersSchema,
             })
             .ToArrayAsync(cancellationToken);
 
         return tools
-            .Where(tool => tool.ParametersSchema is not null && catalogToolsByKey.ContainsKey(tool.ToolKey))
+            .Where(tool => catalogToolsByKey.ContainsKey(tool.ToolKey))
             .Select(tool => new AgentToolDescriptor(
                 tool.Id,
                 tool.ToolKey,
                 catalogToolsByKey[tool.ToolKey].Description,
-                tool.ParametersSchema!.Value.Clone(),
+                catalogToolsByKey[tool.ToolKey].ParametersSchema.Clone(),
                 catalogToolsByKey[tool.ToolKey].IsMutating))
             .ToArray();
     }

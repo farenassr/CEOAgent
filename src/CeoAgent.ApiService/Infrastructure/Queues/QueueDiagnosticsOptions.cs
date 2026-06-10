@@ -14,9 +14,14 @@ public sealed class QueueDiagnosticsOptions
     public const string SectionName = "QueueDiagnostics";
 
     /// <summary>
-    /// Queue names allowed for diagnostic reads and writes.
+    /// Queue names allowed for diagnostic reads and writes when writes are explicitly enabled.
     /// </summary>
     public string[] AllowedQueueNames { get; set; } = [IncomingMessageQueueNames.ProcessIncomingMessage];
+
+    /// <summary>
+    /// Enables administrative queue writes. Keep false outside local break-glass diagnostics.
+    /// </summary>
+    public bool EnableWrites { get; set; }
 
     /// <summary>
     /// Default number of messages to peek when a request omits or invalidates the limit.

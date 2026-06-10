@@ -1,5 +1,4 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
@@ -21,7 +20,7 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 /// </summary>
 public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext,
+    IAdminTenantGuard tenantGuard,
     IIncomingMessageJobEnqueuer incomingMessageJobEnqueuer,
     TimeProvider timeProvider) : Endpoint<ReceiveWhatsAppMessageRequest, ReceiveWhatsAppMessageResponse>
 {
@@ -35,7 +34,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     public override async Task HandleAsync(ReceiveWhatsAppMessageRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        await EnsureCompanyIsAccessibleAsync(companyId, cancellationToken);
+        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
 
         var channel = await dbContext.CompanyChannels
             .WithDefaultTracking(trackChanges: true)
@@ -80,17 +79,6 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
                 Enqueued = true,
             },
             cancellationToken);
-    }
-
-    private async Task EnsureCompanyIsAccessibleAsync(Guid companyId, CancellationToken cancellationToken)
-    {
-        if (companyContext.CompanyId != companyId
-            || !await dbContext.Companies
-                .WithDefaultTracking()
-                .AnyAsync(entity => entity.Id == companyId, cancellationToken))
-        {
-            throw new NotFoundException("company", companyId);
-        }
     }
 
     private async Task<Customer> ResolveCustomerAsync(

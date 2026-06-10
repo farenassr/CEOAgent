@@ -148,6 +148,72 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    [Test]
+    public async Task SaveChanges_WhenCompanyToolReferencesCredentialFromDifferentCompany_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        var otherCompanyId = Guid.CreateVersion7();
+        await database.SeedCompanyGraphAsync(companyId);
+        await database.SeedCompanyGraphAsync(otherCompanyId);
+        var otherCredential = new IntegrationCredentialReference
+        {
+            CompanyId = otherCompanyId,
+            Provider = IntegrationProvider.GoogleCalendar,
+            Purpose = "calendar",
+            Reference = "kv://other-company/google-calendar",
+        };
+        database.Context.IntegrationCredentialReferences.Add(otherCredential);
+        await database.Context.SaveChangesAsync();
+
+        database.Context.CompanyTools.Add(new CompanyTool
+        {
+            CompanyId = companyId,
+            ToolKey = "cross_company_tool",
+            CredentialReferenceId = otherCredential.Id,
+        });
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(database.Context.SaveChangesAsync());
+        exception.Message.ShouldContain("cross-company relationship");
+    }
+
+    [Test]
+    public async Task SaveChanges_WhenConversationReferencesCustomerFromDifferentCompany_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        var otherCompanyId = Guid.CreateVersion7();
+        var seed = await database.SeedCompanyGraphAsync(companyId);
+        var otherSeed = await database.SeedCompanyGraphAsync(otherCompanyId);
+
+        database.Context.Conversations.Add(CreateConversation(
+            companyId,
+            otherSeed.CustomerId,
+            seed.ChannelId,
+            seed.AgentProfileId));
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(database.Context.SaveChangesAsync());
+        exception.Message.ShouldContain("cross-company relationship");
+    }
+
+    [Test]
+    public async Task SaveChanges_WhenMessageReferencesConversationFromDifferentCompany_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var companyId = Guid.CreateVersion7();
+        var otherCompanyId = Guid.CreateVersion7();
+        var seed = await database.SeedCompanyGraphAsync(companyId);
+        var otherSeed = await database.SeedCompanyGraphAsync(otherCompanyId);
+        var otherConversation = CreateConversation(otherCompanyId, otherSeed.CustomerId, otherSeed.ChannelId, otherSeed.AgentProfileId);
+        database.Context.Conversations.Add(otherConversation);
+        await database.Context.SaveChangesAsync();
+
+        database.Context.Messages.Add(CreateMessage(companyId, otherConversation.Id, "wamid.cross-company"));
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(database.Context.SaveChangesAsync());
+        exception.Message.ShouldContain("cross-company relationship");
+    }
+
     /// <summary>
     /// Verifies that a conversation cannot change its agent profile after creation.
     /// </summary>

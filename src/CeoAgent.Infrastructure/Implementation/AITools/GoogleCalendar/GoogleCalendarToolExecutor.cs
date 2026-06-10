@@ -1,4 +1,5 @@
 using CeoAgent.Application.Abstractions.AITools;
+using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -134,6 +135,21 @@ public sealed class GoogleCalendarToolExecutor(
             config.BufferMinutes);
 
         var calendarResult = await calendarIntegration.CheckAvailabilityAsync(calendarRequest, cancellationToken);
+        if (calendarResult.UnavailabilityReason is { } availabilityFailure
+            && IsProviderFailureReason(availabilityFailure))
+        {
+            return await PersistExecutionAsync(
+                context,
+                executionContext.TriggerMessageId,
+                MvpToolKeys.CheckGoogleCalendarAvailability,
+                executionContext.IdempotencyKey,
+                ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
+                result: null,
+                ToolExecutionStatus.Failed,
+                availabilityFailure,
+                cancellationToken);
+        }
+
         var result = new CheckAvailabilityResult
         {
             Available = requestedSlotEligible && calendarResult.Available,
@@ -211,21 +227,66 @@ public sealed class GoogleCalendarToolExecutor(
                 cancellationToken);
         }
 
-        var calendarResult = await calendarIntegration.CreateReservationAsync(
-            new CalendarReservationRequest(
+        var availabilityResult = await calendarIntegration.CheckAvailabilityAsync(
+            new CalendarAvailabilityRequest(
                 CredentialReference: context.CredentialReference,
                 CalendarId: config.CalendarId,
                 Start: request.Start,
                 End: request.End,
-                Summary: request.Summary,
-                IdempotencyKey: executionContext.IdempotencyKey,
-                Description: $"Customer: {request.CustomerName.Trim()}",
-                CustomerEmail: null,
-                CompanyId: context.Company.Id.ToString("D"),
-                ConversationId: context.Conversation.Id.ToString("D"),
-                CustomerExternalId: context.Customer.ExternalCustomerId,
-                ReservationId: executionContext.IdempotencyKey),
-            cancellationToken: cancellationToken);
+                SearchWindowStart: request.Start,
+                SearchWindowEnd: request.Start,
+                PartySize: 1,
+                AlternativeSearchStarts: [],
+                RequestedSlotEligible: true,
+                BufferMinutes: config.BufferMinutes),
+            cancellationToken);
+        if (!availabilityResult.Available)
+        {
+            var failureReason = availabilityResult.UnavailabilityReason ?? "slot_unavailable";
+            return await PersistExecutionAsync(
+                context,
+                executionContext.TriggerMessageId,
+                MvpToolKeys.CreateGoogleCalendarReservation,
+                executionContext.IdempotencyKey,
+                ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
+                result: null,
+                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
+                failureReason,
+                cancellationToken);
+        }
+
+        CalendarReservationResult calendarResult;
+        try
+        {
+            calendarResult = await calendarIntegration.CreateReservationAsync(
+                new CalendarReservationRequest(
+                    CredentialReference: context.CredentialReference,
+                    CalendarId: config.CalendarId,
+                    Start: request.Start,
+                    End: request.End,
+                    Summary: request.Summary,
+                    IdempotencyKey: executionContext.IdempotencyKey,
+                    Description: $"Customer: {request.CustomerName.Trim()}",
+                    CustomerEmail: null,
+                    CompanyId: context.Company.Id.ToString("D"),
+                    ConversationId: context.Conversation.Id.ToString("D"),
+                    CustomerExternalId: context.Customer.ExternalCustomerId,
+                    ReservationId: executionContext.IdempotencyKey),
+                cancellationToken: cancellationToken);
+        }
+        catch (IntegrationException exception)
+        {
+            return await PersistExecutionAsync(
+                context,
+                executionContext.TriggerMessageId,
+                MvpToolKeys.CreateGoogleCalendarReservation,
+                executionContext.IdempotencyKey,
+                ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
+                result: null,
+                ToolExecutionStatus.Failed,
+                exception.FailureReason,
+                cancellationToken);
+        }
 
         return await PersistExecutionAsync(
             context,

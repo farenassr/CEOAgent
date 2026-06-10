@@ -26,7 +26,7 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 
     public static async Task<PostgresTestDatabase> CreateAsync()
     {
-        var postgres = new PostgreSqlBuilder("postgres:18-alpine")
+        var postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilCommandIsCompleted("pg_isready", options => options.WithTimeout(TimeSpan.FromMinutes(3))))
             .Build();

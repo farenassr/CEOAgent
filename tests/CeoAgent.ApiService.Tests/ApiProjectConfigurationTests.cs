@@ -27,4 +27,23 @@ public sealed class ApiProjectConfigurationTests
 
         userSecretsId.ShouldNotBeNullOrWhiteSpace();
     }
+
+    [Test]
+    public void Program_AppliesAuthenticationBeforeAuthorization()
+    {
+        var programPath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "src",
+            "CeoAgent.ApiService",
+            "Program.cs"));
+        var program = File.ReadAllText(programPath);
+
+        program.IndexOf("app.UseAuthentication();", StringComparison.Ordinal)
+            .ShouldBeLessThan(program.IndexOf("app.UseAuthorization();", StringComparison.Ordinal));
+    }
 }

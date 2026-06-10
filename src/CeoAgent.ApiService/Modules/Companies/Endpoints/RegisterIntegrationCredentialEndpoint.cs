@@ -1,14 +1,11 @@
-using CeoAgent.Application.Errors;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
-using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
 using FluentValidation;
-using Microsoft.EntityFrameworkCore;
 using CeoAgent.Infrastructure;
 using CeoAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Shared.Security;
 using System.Text.Json;
 
 namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
@@ -18,7 +15,7 @@ namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 /// </summary>
 public sealed class RegisterIntegrationCredentialEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : Endpoint<IntegrationCredentialRequest, IntegrationCredentialResponse>
+    IAdminTenantGuard tenantGuard) : Endpoint<IntegrationCredentialRequest, IntegrationCredentialResponse>
 {
     public override void Configure()
     {
@@ -28,7 +25,7 @@ public sealed class RegisterIntegrationCredentialEndpoint(
     public override async Task HandleAsync(IntegrationCredentialRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, cancellationToken);
+        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
 
         var credential = CompanyMapper.ToEntity(request, companyId);
 
@@ -36,21 +33,6 @@ public sealed class RegisterIntegrationCredentialEndpoint(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         await Send.OkAsync(CompanyMapper.ToResponse(credential), cancellationToken);
-    }
-
-    private static async Task EnsureCompanyIsAccessibleAsync(
-        CeoAgentDbContext dbContext,
-        ICompanyContext companyContext,
-        Guid companyId,
-        CancellationToken cancellationToken)
-    {
-        if (companyContext.CompanyId != companyId
-            || !await dbContext.Companies
-                .WithDefaultTracking()
-                .AnyAsync(entity => entity.Id == companyId, cancellationToken))
-        {
-            throw new NotFoundException("company", companyId);
-        }
     }
 }
 
@@ -63,17 +45,11 @@ public sealed class IntegrationCredentialValidator : Validator<IntegrationCreden
         RuleFor(request => request.Reference)
             .NotEmpty()
             .MaximumLength(300)
-            .Must(NotInlineCredentialJson)
-            .WithMessage("Credential reference must be a secret reference, not inline credential JSON.");
+            .Must(CredentialReference.IsSupportedSecretReference)
+            .WithMessage("Credential reference must be a kv:// alias, config:// key, or Azure Key Vault secret URI.");
         RuleFor(request => request.Metadata)
             .Must(NotContainCredentialMaterial)
             .WithMessage("Credential metadata must not contain credential material.");
-    }
-
-    private static bool NotInlineCredentialJson(string? reference)
-    {
-        return string.IsNullOrWhiteSpace(reference)
-            || !reference.TrimStart().StartsWith('{');
     }
 
     private static bool NotContainCredentialMaterial(JsonElement? metadata)

@@ -10,9 +10,11 @@ using CeoAgent.ApiService.Modules.WhatsApp;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.ServiceDefaults;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using ZLogger;
 
@@ -62,10 +64,11 @@ if (!builder.Environment.IsEnvironment("Testing"))
 }
 
 // Add services to the container.
-builder.Services.AddOptions<AdminApiKeyOptions>()
-    .BindConfiguration("AdminApiKey")
-    .Validate(options => !string.IsNullOrWhiteSpace(options.Key), "AdminApiKey:Key must be configured.")
-    .Validate(options => options.CompanyId != Guid.Empty, "AdminApiKey:CompanyId must be configured.")
+builder.Services.AddOptions<KeycloakOptions>()
+    .BindConfiguration(KeycloakOptions.SectionName)
+    .Validate(
+        KeycloakOptions.IsValid,
+        "Keycloak must configure ClientId and an absolute Issuer URI.")
     .ValidateOnStart();
 
 builder.Services.AddOptions<QueueDiagnosticsOptions>()
@@ -76,6 +79,26 @@ builder.Services.TryAddSingleton<IIncomingMessageJobEnqueuer, UnavailableIncomin
 builder.Services.TryAddSingleton<IQueueDiagnosticsService, UnavailableQueueDiagnosticsService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+var keycloakOptions = builder.Configuration
+    .GetSection(KeycloakOptions.SectionName)
+    .Get<KeycloakOptions>() ?? new KeycloakOptions();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = keycloakOptions.Issuer;
+        options.Audience = keycloakOptions.ClientId;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = keycloakOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = keycloakOptions.ClientId,
+            NameClaimType = "preferred_username",
+        };
+    });
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
@@ -107,10 +130,10 @@ app.MapDefaultEndpoints();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseExceptionHandler();
-app.UseAdminApiKey();
-app.UseMiddleware<CompanyContextMiddleware>();
-app.UseConfiguredCors();
 app.UseRateLimiter();
+app.UseConfiguredCors();
+app.UseAuthentication();
+app.UseMiddleware<CompanyContextMiddleware>();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

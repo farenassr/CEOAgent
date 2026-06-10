@@ -28,7 +28,7 @@ public sealed class CompanyToolRegistryTests
         descriptor.CompanyToolId.ShouldBe(fixture.EnabledToolId);
         descriptor.Description.ShouldBe("Code-first check availability description.");
         descriptor.ParametersSchema.GetProperty("type").GetString().ShouldBe("object");
-        descriptor.ParametersSchema.GetProperty("properties").TryGetProperty("fromCompanyTool", out _).ShouldBeTrue();
+        descriptor.ParametersSchema.GetProperty("properties").TryGetProperty("fromCompanyTool", out _).ShouldBeFalse();
         descriptor.ParametersSchema.GetProperty("additionalProperties").GetBoolean().ShouldBeFalse();
     }
 

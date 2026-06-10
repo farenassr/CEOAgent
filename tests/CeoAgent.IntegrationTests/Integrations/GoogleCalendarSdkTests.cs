@@ -66,7 +66,7 @@ public sealed class GoogleCalendarSdkTests
         typeof(GoogleCalendarIntegration)
             .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
             .SelectMany(constructor => constructor.GetParameters())
-            .Any(parameter => parameter.ParameterType == typeof(IGoogleCalendarServiceFactory))
+            .Any(parameter => parameter.ParameterType == typeof(IGoogleCalendarServiceFactory<CalendarService>))
             .ShouldBeTrue();
     }
 
@@ -606,7 +606,7 @@ public sealed class GoogleCalendarSdkTests
     }
 
     private sealed class RecordingGoogleCalendarServiceFactory(RecordingGoogleCalendarHandler handler)
-        : IGoogleCalendarServiceFactory
+        : IGoogleCalendarServiceFactory<CalendarService>
     {
         public Task<CalendarService> CreateAsync(
             string credentialReference,

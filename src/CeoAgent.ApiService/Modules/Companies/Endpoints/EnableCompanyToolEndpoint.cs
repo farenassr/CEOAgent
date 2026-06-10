@@ -1,6 +1,6 @@
 using CeoAgent.Application.Errors;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.AITools;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -20,7 +20,8 @@ namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 /// </summary>
 public sealed class EnableCompanyToolEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : Endpoint<CompanyToolRequest, CompanyToolResponse>
+    IAdminTenantGuard tenantGuard,
+    IAgentToolCatalog agentToolCatalog) : Endpoint<CompanyToolRequest, CompanyToolResponse>
 {
     public override void Configure()
     {
@@ -30,8 +31,9 @@ public sealed class EnableCompanyToolEndpoint(
     public override async Task HandleAsync(CompanyToolRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        await EnsureCompanyIsAccessibleAsync(dbContext, companyContext, companyId, cancellationToken);
-        await EnsureCredentialReferenceIsAccessibleAsync(dbContext, request.CredentialReferenceId, cancellationToken);
+        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
+        await tenantGuard.EnsureCredentialReferenceAccessibleAsync(companyId, request.CredentialReferenceId, cancellationToken);
+        var catalogTool = await ResolveCatalogToolAsync(agentToolCatalog, companyId, request.ToolKey, cancellationToken);
 
         var tool = await dbContext.CompanyTools
             .WithDefaultTracking(trackChanges: true)
@@ -46,40 +48,13 @@ public sealed class EnableCompanyToolEndpoint(
         }
 
         CompanyMapper.ApplyToEntity(request, tool);
+        tool.Description = string.IsNullOrWhiteSpace(request.Description) ? catalogTool.Description : request.Description;
+        tool.ParametersSchema = catalogTool.ParametersSchema.Clone();
         ValidateConfiguration(tool.Configuration);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
         await Send.OkAsync(CompanyMapper.ToResponse(tool), cancellationToken);
-    }
-
-    private static async Task EnsureCompanyIsAccessibleAsync(
-        CeoAgentDbContext dbContext,
-        ICompanyContext companyContext,
-        Guid companyId,
-        CancellationToken cancellationToken)
-    {
-        if (companyContext.CompanyId != companyId
-            || !await dbContext.Companies
-                .WithDefaultTracking()
-                .AnyAsync(entity => entity.Id == companyId, cancellationToken))
-        {
-            throw new NotFoundException("company", companyId);
-        }
-    }
-
-    private static async Task EnsureCredentialReferenceIsAccessibleAsync(
-        CeoAgentDbContext dbContext,
-        Guid? credentialReferenceId,
-        CancellationToken cancellationToken)
-    {
-        if (credentialReferenceId is { } id
-            && !await dbContext.IntegrationCredentialReferences
-                .WithDefaultTracking()
-                .AnyAsync(entity => entity.Id == id, cancellationToken))
-        {
-            throw new NotFoundException("integration_credential_reference", id);
-        }
     }
 
     private static void ValidateConfiguration(ToolConfiguration? configuration)
@@ -88,6 +63,17 @@ public sealed class EnableCompanyToolEndpoint(
         {
             GoogleCalendarConfigValidator.Validate(googleCalendar);
         }
+    }
+
+    private static async Task<IAgentTool> ResolveCatalogToolAsync(
+        IAgentToolCatalog catalog,
+        Guid companyId,
+        string toolKey,
+        CancellationToken cancellationToken)
+    {
+        var tools = await catalog.GetToolsAsync(new AgentToolCatalogContext(companyId), cancellationToken);
+        return tools.SingleOrDefault(tool => string.Equals(tool.ToolKey, toolKey, StringComparison.Ordinal))
+            ?? throw new NotFoundException("agent_tool", toolKey);
     }
 }
 
@@ -98,8 +84,8 @@ public sealed class CompanyToolValidator : Validator<CompanyToolRequest>
         RuleFor(request => request.ToolKey).NotEmpty().MaximumLength(120);
         RuleFor(request => request.Description).MaximumLength(1000);
         RuleFor(request => request.ParametersSchema)
-            .NotNull()
             .Must(BeObjectSchema)
+            .When(request => request.ParametersSchema is not null)
             .WithMessage("Parameters schema must be a JSON object.");
     }
 

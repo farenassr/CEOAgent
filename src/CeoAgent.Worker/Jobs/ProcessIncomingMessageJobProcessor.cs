@@ -133,6 +133,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
             dbContext.Messages.Add(assistant);
             context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
+            await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
 
             var sent = await messaging.SendTextAsync(
                 new ChannelTextMessage(
@@ -184,6 +185,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
         dbContext.Messages.Add(assistant);
         context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
+        await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
 
         var sent = await messaging.SendTextAsync(
             new ChannelTextMessage(
@@ -260,6 +262,19 @@ public sealed class ProcessIncomingMessageJobProcessor(
     {
         assistant.Payload ??= new MessagePayload();
         assistant.Payload.ProviderMessageId = sent.ProviderMessageId;
+    }
+
+    private static void RecordTokenTelemetry(AgentRunResult agentResult)
+    {
+        if (agentResult.TotalTokenCount is { } totalTokens)
+        {
+            CeoAgentTelemetry.LlmTokensConsumed.Add(totalTokens);
+        }
+
+        if (agentResult.EstimatedCostUsd is { } estimatedCost)
+        {
+            CeoAgentTelemetry.LlmEstimatedCost.Add(estimatedCost);
+        }
     }
 
     private async Task<ProcessorContext> LoadContextAsync(ProcessIncomingMessageJob job, CancellationToken cancellationToken)
@@ -339,6 +354,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                     cancellationToken);
                 stopwatch.Stop();
                 CeoAgentTelemetry.LlmCallDuration.Record(stopwatch.ElapsedMilliseconds);
+                RecordTokenTelemetry(agentResult);
                 activity?.SetTag("llm.response.id", agentResult.ResponseId);
                 activity?.SetTag("llm.finish_reason", agentResult.FinishReason);
                 activity?.SetTag("llm.tool_call_count", agentResult.ToolCalls.Count);
