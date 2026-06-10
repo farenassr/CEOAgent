@@ -15,14 +15,80 @@ namespace CeoAgent.ApiService.Tests;
 public sealed class WhatsAppWebhookIngestionServiceTests
 {
     [Test]
-    public async Task IngestAsync_WhenDuplicateMessageHasNoReply_ReenqueuesExistingMessage()
+    public async Task IngestAsync_WhenInitialQueueEnqueueFails_PersistsOutboxAndDispatchesLater()
+    {
+        var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        await using var database = await PostgresApiDatabase.CreateAsync();
+        var dbContext = database.Context;
+        var queue = new FakeIncomingMessageQueue { FailNextEnqueue = true };
+        var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
+        var dispatcherLogger = new RecordingLogger<IncomingMessageOutboxDispatcher>();
+        var dispatcher = new IncomingMessageOutboxDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
+        var service = new WhatsAppWebhookIngestionService(dbContext, dispatcher, TimeProvider.System, logger);
+        SeedCompany(dbContext, companyId);
+
+        const string webhookJson = """
+            {
+              "entry": [
+                {
+                  "changes": [
+                    {
+                      "value": {
+                        "metadata": {
+                          "phone_number_id": "1152556904604978"
+                        },
+                        "contacts": [
+                          {
+                            "wa_id": "15551234567",
+                            "profile": { "name": "Ada" }
+                          }
+                        ],
+                        "messages": [
+                          {
+                            "id": "wamid.enqueue-fails",
+                            "from": "15551234567",
+                            "timestamp": "1779987600",
+                            "type": "text",
+                            "text": { "body": "Hola" }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        var result = await service.IngestAsync(webhookJson, "correlation-fail", CancellationToken.None);
+
+        result.Enqueued.ShouldBeFalse();
+        result.MessageId.ShouldNotBeNull();
+        queue.Jobs.ShouldBeEmpty();
+        var pendingOutbox = await dbContext.IncomingMessageOutbox
+            .IgnoreQueryFilters()
+            .SingleAsync(row => row.MessageId == result.MessageId.Value);
+        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.Failed);
+        pendingOutbox.AttemptCount.ShouldBe(1);
+
+        var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
+
+        dispatched.ShouldBe(1);
+        queue.Jobs.Count.ShouldBe(1);
+        queue.Jobs[0].MessageId.ShouldBe(result.MessageId.Value);
+        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.Dispatched);
+        pendingOutbox.AttemptCount.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task IngestAsync_WhenDuplicateMessageHasNoReplyAndOutboxAlreadyDispatched_DoesNotReenqueueExistingMessage()
     {
         var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
-        var service = new WhatsAppWebhookIngestionService(dbContext, queue, TimeProvider.System, logger);
+        var service = CreateService(dbContext, queue, logger);
         SeedCompany(dbContext, companyId);
 
         const string webhookJson = """
@@ -62,8 +128,8 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var second = await service.IngestAsync(webhookJson, "correlation-2", CancellationToken.None);
 
         first.Enqueued.ShouldBeTrue();
-        second.Enqueued.ShouldBeTrue();
-        queue.Jobs.Count.ShouldBe(2);
+        second.Enqueued.ShouldBeFalse();
+        queue.Jobs.Count.ShouldBe(1);
         first.MessageId.ShouldNotBeNull();
         second.MessageId.ShouldBe(first.MessageId);
 
@@ -83,7 +149,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
-        var service = new WhatsAppWebhookIngestionService(dbContext, queue, TimeProvider.System, logger);
+        var service = CreateService(dbContext, queue, logger);
         SeedCompany(dbContext, companyId);
 
         const string webhookJson = """
@@ -148,7 +214,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
-        var service = new WhatsAppWebhookIngestionService(dbContext, queue, TimeProvider.System, logger);
+        var service = CreateService(dbContext, queue, logger);
         SeedCompany(dbContext, companyId);
 
         const string webhookJson = """
@@ -196,7 +262,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         await using var database = await PostgresApiDatabase.CreateAsync();
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
-        var service = new WhatsAppWebhookIngestionService(database.Context, queue, TimeProvider.System, logger);
+        var service = CreateService(database.Context, queue, logger);
 
         await Should.ThrowAsync<InvalidWhatsAppWebhookPayloadException>(
             service.IngestAsync("{not valid json", "correlation-invalid", CancellationToken.None));
@@ -211,7 +277,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
-        var service = new WhatsAppWebhookIngestionService(dbContext, queue, TimeProvider.System, logger);
+        var service = CreateService(dbContext, queue, logger);
         SeedCompany(dbContext, companyId);
 
         const string webhookJson = """
@@ -275,12 +341,30 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         dbContext.SaveChanges();
     }
 
+    private static WhatsAppWebhookIngestionService CreateService(
+        CeoAgentDbContext dbContext,
+        FakeIncomingMessageQueue queue,
+        RecordingLogger<WhatsAppWebhookIngestionService> logger)
+    {
+        var dispatcherLogger = new RecordingLogger<IncomingMessageOutboxDispatcher>();
+        var dispatcher = new IncomingMessageOutboxDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
+        return new WhatsAppWebhookIngestionService(dbContext, dispatcher, TimeProvider.System, logger);
+    }
+
     private sealed class FakeIncomingMessageQueue : IIncomingMessageJobEnqueuer
     {
         public List<ProcessIncomingMessageJob> Jobs { get; } = [];
 
+        public bool FailNextEnqueue { get; set; }
+
         public Task EnqueueAsync(ProcessIncomingMessageJob job, CancellationToken cancellationToken)
         {
+            if (FailNextEnqueue)
+            {
+                FailNextEnqueue = false;
+                throw new InvalidOperationException("Simulated queue outage.");
+            }
+
             Jobs.Add(job);
             return Task.CompletedTask;
         }

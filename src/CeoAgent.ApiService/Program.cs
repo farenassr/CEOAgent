@@ -54,6 +54,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
         builder.Services.AddSingleton<IIncomingMessageJobEnqueuer, AzureIncomingMessageJobEnqueuer>();
         builder.Services.AddSingleton<IQueueDiagnosticsService, AzureQueueDiagnosticsService>();
         builder.Services.AddHostedService<AzureQueueProvisioner>();
+        builder.Services.AddHostedService<IncomingMessageOutboxHostedService>();
     }
 
     if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
@@ -109,6 +110,7 @@ builder.Services.AddOptions<WhatsAppOptions>()
     .Validate(options => options.MaxWebhookBodyBytes > 0, "WhatsApp webhook body limit must be positive.")
     .ValidateOnStart();
 builder.Services.AddScoped<WhatsAppWebhookIngestionService>();
+builder.Services.AddScoped<IncomingMessageOutboxDispatcher>();
 builder.Services.AddSingleton<IWhatsAppSignatureValidator, WhatsAppSignatureValidator>();
 builder.Services.AddSingleton<WhatsAppWebhookVerificationService>();
 builder.Services.AddOpenApi();

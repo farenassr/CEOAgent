@@ -15,7 +15,7 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 /// </summary>
 public sealed class WhatsAppWebhookIngestionService(
     CeoAgentDbContext dbContext,
-    IIncomingMessageJobEnqueuer incomingMessageJobEnqueuer,
+    IncomingMessageOutboxDispatcher incomingMessageOutboxDispatcher,
     TimeProvider timeProvider,
     ILogger<WhatsAppWebhookIngestionService> logger)
 {
@@ -160,9 +160,17 @@ public sealed class WhatsAppWebhookIngestionService(
         var customer = await ResolveCustomerAsync(channel, message, cancellationToken);
         var conversation = await ResolveConversationAsync(channel, customer, cancellationToken);
         var inbound = CreateInboundMessage(channel.CompanyId, conversation.Id, message);
+        var outbox = new IncomingMessageOutbox
+        {
+            CompanyId = channel.CompanyId,
+            ConversationId = conversation.Id,
+            MessageId = inbound.Id,
+            CorrelationId = correlationId,
+        };
 
         conversation.LastMessageAt = inbound.OccurredAt;
         dbContext.Messages.Add(inbound);
+        dbContext.IncomingMessageOutbox.Add(outbox);
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -192,22 +200,24 @@ public sealed class WhatsAppWebhookIngestionService(
                 cancellationToken);
         }
 
-        var job = new ProcessIncomingMessageJob(channel.CompanyId, conversation.Id, inbound.Id, correlationId);
-        await incomingMessageJobEnqueuer.EnqueueAsync(job, cancellationToken);
+        var dispatched = await incomingMessageOutboxDispatcher.DispatchAsync(outbox.Id, cancellationToken);
 
-        logger.LogInformation(
-            WebhookMessageEnqueuedEvent,
-            "WhatsAppWebhookMessageEnqueued CorrelationId={CorrelationId} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} ProviderMessageId={ProviderMessageId} QueueCorrelationId={QueueCorrelationId}",
-            correlationId,
-            channel.CompanyId,
-            channel.Id,
-            conversation.Id,
-            inbound.Id,
-            message.ProviderMessageId,
-            job.CorrelationId);
+        if (dispatched)
+        {
+            logger.LogInformation(
+                WebhookMessageEnqueuedEvent,
+                "WhatsAppWebhookMessageEnqueued CorrelationId={CorrelationId} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} ProviderMessageId={ProviderMessageId} QueueCorrelationId={QueueCorrelationId}",
+                correlationId,
+                channel.CompanyId,
+                channel.Id,
+                conversation.Id,
+                inbound.Id,
+                message.ProviderMessageId,
+                outbox.CorrelationId);
+        }
 
         return new WhatsAppWebhookIngestionResult(
-            Enqueued: true,
+            Enqueued: dispatched,
             CompanyId: channel.CompanyId,
             ConversationId: conversation.Id,
             MessageId: inbound.Id);
@@ -240,11 +250,15 @@ public sealed class WhatsAppWebhookIngestionService(
                 messageId,
                 reason);
 
-            var retryJob = new ProcessIncomingMessageJob(companyId, conversationId, messageId, correlationId);
-            await incomingMessageJobEnqueuer.EnqueueAsync(retryJob, cancellationToken);
+            var dispatched = await EnsureOutboxAndDispatchAsync(
+                companyId,
+                conversationId,
+                messageId,
+                correlationId,
+                cancellationToken);
 
             return new WhatsAppWebhookIngestionResult(
-                Enqueued: true,
+                Enqueued: dispatched,
                 CompanyId: companyId,
                 ConversationId: conversationId,
                 MessageId: messageId);
@@ -255,6 +269,40 @@ public sealed class WhatsAppWebhookIngestionService(
             CompanyId: companyId,
             ConversationId: conversationId,
             MessageId: messageId);
+    }
+
+    private async Task<bool> EnsureOutboxAndDispatchAsync(
+        Guid companyId,
+        Guid conversationId,
+        Guid messageId,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        var outbox = await dbContext.IncomingMessageOutbox
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(
+                entity => entity.CompanyId == companyId && entity.MessageId == messageId,
+                cancellationToken);
+
+        if (outbox is null)
+        {
+            outbox = new IncomingMessageOutbox
+            {
+                CompanyId = companyId,
+                ConversationId = conversationId,
+                MessageId = messageId,
+                CorrelationId = correlationId,
+            };
+            dbContext.IncomingMessageOutbox.Add(outbox);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        if (outbox.Status == IncomingMessageOutboxStatus.Dispatched)
+        {
+            return false;
+        }
+
+        return await incomingMessageOutboxDispatcher.DispatchAsync(outbox.Id, cancellationToken);
     }
 
     private static WhatsAppWebhookIngestionResult EmptyResult()
