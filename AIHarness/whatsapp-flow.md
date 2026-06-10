@@ -17,7 +17,8 @@ WhatsApp Cloud webhook
   -> resolve or create customer by wa_id/from
   -> resolve or create open conversation
   -> persist inbound message with provider_message_id
-  -> enqueue ProcessIncomingMessageJob
+  -> persist incoming message outbox row in the same DB transaction
+  -> dispatch pending outbox row to enqueue ProcessIncomingMessageJob
   -> return 200 quickly
 ```
 
@@ -27,13 +28,15 @@ WhatsApp Cloud webhook
 - Use constant-time signature comparison.
 - Resolve company by provider channel ID, not customer phone number.
 - Persist inbound messages idempotently by provider message ID.
+- Persist a durable incoming-message outbox row in the same transaction as the
+  inbound message before any queue side effect.
 - Duplicate webhook delivery returns 200. If the inbound message already has a
   persisted assistant reply, do not enqueue duplicate work. If the inbound
-  message exists but no assistant reply exists, re-enqueue the existing message
-  as a recovery path for a prior enqueue failure.
-- The recovery path is not a substitute for a durable outbox. If webhook save
-  and queue enqueue must be guaranteed without provider retry, add a
-  transactionally persisted processing marker or outbox row.
+  message exists but no assistant reply exists, dispatch its pending or failed
+  outbox row as a recovery path. Already dispatched outbox rows must not enqueue
+  duplicate work.
+- Queue dispatch failure must leave the outbox row retryable by the dispatcher;
+  recovery must not depend on provider redelivery.
 - Keep webhook response fast; long work belongs in Worker jobs.
 - Do not log secrets or raw payloads by default.
 

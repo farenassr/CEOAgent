@@ -29,6 +29,8 @@ public sealed class CeoAgentDbContext(
 
     public DbSet<Message> Messages => Set<Message>();
 
+    public DbSet<IncomingMessageOutbox> IncomingMessageOutbox => Set<IncomingMessageOutbox>();
+
     public DbSet<ConversationState> ConversationStates => Set<ConversationState>();
 
     public DbSet<ToolExecution> ToolExecutions => Set<ToolExecution>();
@@ -129,6 +131,20 @@ public sealed class CeoAgentDbContext(
                 message.CompanyId,
                 message.ConversationId,
                 "Message.ConversationId",
+                cancellationToken);
+        }
+
+        foreach (var outbox in Changed<IncomingMessageOutbox>())
+        {
+            await EnsureSameCompanyAsync<Conversation>(
+                outbox.CompanyId,
+                outbox.ConversationId,
+                "IncomingMessageOutbox.ConversationId",
+                cancellationToken);
+            await EnsureSameCompanyAsync<Message>(
+                outbox.CompanyId,
+                outbox.MessageId,
+                "IncomingMessageOutbox.MessageId",
                 cancellationToken);
         }
 
