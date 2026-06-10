@@ -2,6 +2,7 @@ using CeoAgent.ApiService.Infrastructure.Company;
 using CeoAgent.Infrastructure.Implementation.Company;
 using Microsoft.AspNetCore.Http;
 using Shouldly;
+using System.Security.Claims;
 
 namespace CeoAgent.ApiService.Tests;
 
@@ -28,7 +29,7 @@ public sealed class CompanyContextMiddlewareTests
     }
 
     [Test]
-    public async Task InvokeAsync_WhenAdminApiKeySetCompanyItem_SetsCompanyContextForRequestOnly()
+    public async Task InvokeAsync_WhenJwtContainsCompanyIdClaim_SetsCompanyContextForRequestOnly()
     {
         var companyId = Guid.NewGuid();
         var accessor = new CompanyContextAccessor();
@@ -40,7 +41,9 @@ public sealed class CompanyContextMiddlewareTests
         });
         var context = new DefaultHttpContext();
         context.Request.Path = "/v1/admin/companies";
-        context.Items["CompanyId"] = companyId;
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("company_id", companyId.ToString())],
+            authenticationType: "Bearer"));
 
         await middleware.InvokeAsync(context, accessor);
 

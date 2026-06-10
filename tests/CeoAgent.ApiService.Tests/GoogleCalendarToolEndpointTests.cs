@@ -29,10 +29,9 @@ public sealed class GoogleCalendarToolEndpointTests
                 ],
                 UnavailabilityReason: "slot_unavailable"),
         };
-        const string adminKey = "test-admin-key";
-        await using var factory = CreateFactory(calendar, adminApiKey: adminKey);
-        using var client = factory.CreateClient();
-        var companyId = await CreateConfiguredCompanyAsync(factory, client, MvpToolKeys.CheckGoogleCalendarAvailability, adminKey);
+        await using var factory = CreateFactory(calendar);
+        using var client = factory.CreateAuthenticatedClient();
+        var companyId = await CreateConfiguredCompanyAsync(client, MvpToolKeys.CheckGoogleCalendarAvailability);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -45,9 +44,6 @@ public sealed class GoogleCalendarToolEndpointTests
                 preferredTime = "16:00:00",
             }),
         };
-        request.Headers.Add("X-Company-Id", companyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminKey);
-
         using var response = await client.SendAsync(request);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -68,7 +64,7 @@ public sealed class GoogleCalendarToolEndpointTests
     }
 
     [Test]
-    public async Task CreateReservation_WithEnabledGoogleCalendarTool_ReturnsCreatedEvent()
+    public async Task CreateReservation_WithEnabledGoogleCalendarTool_ReturnsBusinessRule()
     {
         var calendar = new RecordingCalendarIntegration
         {
@@ -76,10 +72,9 @@ public sealed class GoogleCalendarToolEndpointTests
                 "event-123",
                 "https://calendar.google.com/event?eid=event-123"),
         };
-        const string adminKey = "test-admin-key";
-        await using var factory = CreateFactory(calendar, adminApiKey: adminKey);
-        using var client = factory.CreateClient();
-        var companyId = await CreateConfiguredCompanyAsync(factory, client, MvpToolKeys.CreateGoogleCalendarReservation, adminKey);
+        await using var factory = CreateFactory(calendar);
+        using var client = factory.CreateAuthenticatedClient();
+        var companyId = await CreateConfiguredCompanyAsync(client, MvpToolKeys.CreateGoogleCalendarReservation);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -95,36 +90,24 @@ public sealed class GoogleCalendarToolEndpointTests
                 idempotencyKey = "reservation-123",
             }),
         };
-        request.Headers.Add("X-Company-Id", companyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminKey);
-
         using var response = await client.SendAsync(request);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<GoogleCalendarReservationResponse>();
-        body.ShouldNotBeNull();
-        body.EventId.ShouldBe("event-123");
-        body.EventUrl.ShouldBe("https://calendar.google.com/event?eid=event-123");
-
-        var calendarRequest = calendar.ReservationRequests.Single();
-        calendarRequest.CredentialReference.ShouldBe("kv://google-calendar/contoso/service-account");
-        calendarRequest.CalendarId.ShouldBe("primary");
-        calendarRequest.Summary.ShouldBe("Reservation for 2");
-        calendarRequest.Description.ShouldBe($"Window table{Environment.NewLine}Customer: Ada Lovelace");
-        calendarRequest.IdempotencyKey.ShouldBe("reservation-123");
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        problem.ShouldNotBeNull();
+        problem.Extensions["code"]?.ToString().ShouldBe("admin_google_calendar_mutation_disabled");
+        calendar.ReservationRequests.ShouldBeEmpty();
     }
 
     [Test]
-    public async Task CheckAvailability_WhenHeaderCompanyDiffersFromRoute_ReturnsNotFound()
+    public async Task CheckAvailability_WhenJwtCompanyDiffersFromRoute_ReturnsNotFound()
     {
-        const string adminKey = "test-admin-key";
-        await using var factory = CreateFactory(new RecordingCalendarIntegration(), adminApiKey: adminKey);
-        using var client = factory.CreateClient();
-        var companyId = await CreateConfiguredCompanyAsync(factory, client, MvpToolKeys.CheckGoogleCalendarAvailability, adminKey);
-        var otherCompanyId = await CreateCompanyAsync(client, "Other Company", adminKey);
-
-        var adminOptions = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>>().Value;
-        adminOptions.CompanyId = otherCompanyId;
+        await using var factory = CreateFactory(new RecordingCalendarIntegration());
+        using var client = factory.CreateAuthenticatedClient();
+        var companyId = await CreateConfiguredCompanyAsync(client, MvpToolKeys.CheckGoogleCalendarAvailability);
+        client.DefaultRequestHeaders.Authorization = TestAuthentication.BootstrapBearer();
+        var otherCompanyId = await CreateCompanyAsync(client, "Other Company");
+        client.DefaultRequestHeaders.Authorization = TestAuthentication.CompanyBearer(otherCompanyId);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -137,9 +120,6 @@ public sealed class GoogleCalendarToolEndpointTests
                 preferredTime = "16:00:00",
             }),
         };
-        request.Headers.Add("X-Company-Id", otherCompanyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminKey);
-
         using var response = await client.SendAsync(request);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -148,13 +128,11 @@ public sealed class GoogleCalendarToolEndpointTests
     [Test]
     public async Task CheckAvailability_WhenGoogleCalendarToolIsMissing_ReturnsBusinessRule()
     {
-        const string adminKey = "test-admin-key";
-        await using var factory = CreateFactory(new RecordingCalendarIntegration(), adminApiKey: adminKey);
-        using var client = factory.CreateClient();
-        var companyId = await CreateCompanyAsync(client, "Company Without Tool", adminKey);
-        var adminOptions = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>>().Value;
-        adminOptions.CompanyId = companyId;
-        await ConfigureWorkingHoursAsync(client, companyId, adminKey);
+        await using var factory = CreateFactory(new RecordingCalendarIntegration());
+        using var client = factory.CreateAuthenticatedClient();
+        var companyId = await CreateCompanyAsync(client, "Company Without Tool");
+        client.DefaultRequestHeaders.Authorization = TestAuthentication.CompanyBearer(companyId);
+        await ConfigureWorkingHoursAsync(client, companyId);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -167,9 +145,6 @@ public sealed class GoogleCalendarToolEndpointTests
                 preferredTime = "16:00:00",
             }),
         };
-        request.Headers.Add("X-Company-Id", companyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminKey);
-
         using var response = await client.SendAsync(request);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
 
@@ -181,13 +156,11 @@ public sealed class GoogleCalendarToolEndpointTests
     [Test]
     public async Task EnableGoogleCalendarTool_WhenSlotMinutesIsZero_ReturnsBusinessRule()
     {
-        const string adminKey = "test-admin-key";
-        await using var factory = CreateFactory(new RecordingCalendarIntegration(), adminApiKey: adminKey);
-        using var client = factory.CreateClient();
-        var companyId = await CreateCompanyAsync(client, "Invalid Calendar Config Company", adminKey);
-        var adminOptions = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>>().Value;
-        adminOptions.CompanyId = companyId;
-        var credentialId = await RegisterGoogleCalendarCredentialAsync(client, companyId, adminKey);
+        await using var factory = CreateFactory(new RecordingCalendarIntegration());
+        using var client = factory.CreateAuthenticatedClient();
+        var companyId = await CreateCompanyAsync(client, "Invalid Calendar Config Company");
+        client.DefaultRequestHeaders.Authorization = TestAuthentication.CompanyBearer(companyId);
+        var credentialId = await RegisterGoogleCalendarCredentialAsync(client, companyId);
 
         using var request = CreateEnableGoogleCalendarToolRequest(
             companyId,
@@ -201,8 +174,7 @@ public sealed class GoogleCalendarToolEndpointTests
                 reservationMinutes = 60,
                 advanceBookingDays = 14,
                 slotMinutes = 0,
-            },
-            adminKey);
+            });
 
         using var response = await client.SendAsync(request);
         var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
@@ -215,8 +187,7 @@ public sealed class GoogleCalendarToolEndpointTests
     [Test]
     public async Task OpenApiDocument_IncludesGoogleCalendarToolEndpointsInDevelopment()
     {
-        const string adminKey = "test-admin-key";
-        await using var factory = CreateFactory(new RecordingCalendarIntegration(), "Development", adminApiKey: adminKey);
+        await using var factory = CreateFactory(new RecordingCalendarIntegration(), "Development");
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/openapi/v1.json");
@@ -230,8 +201,7 @@ public sealed class GoogleCalendarToolEndpointTests
 
     private static ApiFactory CreateFactory(
         IGoogleCalendarIntegration calendar,
-        string environmentName = "Testing",
-        string? adminApiKey = null)
+        string environmentName = "Testing")
     {
         return new ApiFactory(environmentName, services =>
         {
@@ -239,30 +209,22 @@ public sealed class GoogleCalendarToolEndpointTests
             services.AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
             services.RemoveAll<IGoogleCalendarIntegration>();
             services.AddSingleton(calendar);
-
-            services.Configure<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>(options =>
-            {
-                options.Key = adminApiKey ?? "test-admin-key";
-            });
         });
     }
 
     private static async Task<Guid> CreateConfiguredCompanyAsync(
-        ApiFactory factory,
         HttpClient client,
-        string toolKey,
-        string adminApiKey)
+        string toolKey)
     {
-        var companyId = await CreateCompanyAsync(client, "Contoso Bistro", adminApiKey);
-        var adminOptions = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CeoAgent.ApiService.Infrastructure.Security.AdminApiKeyOptions>>().Value;
-        adminOptions.CompanyId = companyId;
-        await ConfigureWorkingHoursAsync(client, companyId, adminApiKey);
-        var credentialId = await RegisterGoogleCalendarCredentialAsync(client, companyId, adminApiKey);
-        await EnableGoogleCalendarToolAsync(client, companyId, credentialId, toolKey, adminApiKey);
+        var companyId = await CreateCompanyAsync(client, "Contoso Bistro");
+        client.DefaultRequestHeaders.Authorization = TestAuthentication.CompanyBearer(companyId);
+        await ConfigureWorkingHoursAsync(client, companyId);
+        var credentialId = await RegisterGoogleCalendarCredentialAsync(client, companyId);
+        await EnableGoogleCalendarToolAsync(client, companyId, credentialId, toolKey);
         return companyId;
     }
 
-    private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name, string adminApiKey)
+    private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/companies")
         {
@@ -272,7 +234,6 @@ public sealed class GoogleCalendarToolEndpointTests
                 timeZoneId = "America/Bogota",
             })
         };
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<CompanyResponse>();
@@ -280,7 +241,7 @@ public sealed class GoogleCalendarToolEndpointTests
         return body.Id;
     }
 
-    private static async Task ConfigureWorkingHoursAsync(HttpClient client, Guid companyId, string adminApiKey)
+    private static async Task ConfigureWorkingHoursAsync(HttpClient client, Guid companyId)
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -309,14 +270,11 @@ public sealed class GoogleCalendarToolEndpointTests
                 },
             }),
         };
-        request.Headers.Add("X-Company-Id", companyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
-
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }
 
-    private static async Task<Guid> RegisterGoogleCalendarCredentialAsync(HttpClient client, Guid companyId, string adminApiKey)
+    private static async Task<Guid> RegisterGoogleCalendarCredentialAsync(HttpClient client, Guid companyId)
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -338,9 +296,6 @@ public sealed class GoogleCalendarToolEndpointTests
                 },
             }),
         };
-        request.Headers.Add("X-Company-Id", companyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
-
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<IntegrationCredentialResponse>();
@@ -352,8 +307,7 @@ public sealed class GoogleCalendarToolEndpointTests
         HttpClient client,
         Guid companyId,
         Guid credentialId,
-        string toolKey,
-        string adminApiKey)
+        string toolKey)
     {
         using var request = CreateEnableGoogleCalendarToolRequest(
             companyId,
@@ -364,8 +318,7 @@ public sealed class GoogleCalendarToolEndpointTests
                 calendarId = "primary",
                 timeZoneId = "America/Bogota",
                 bufferMinutes = 0,
-            },
-            adminApiKey);
+            });
 
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -375,8 +328,7 @@ public sealed class GoogleCalendarToolEndpointTests
         Guid companyId,
         Guid credentialId,
         string toolKey,
-        object googleCalendarConfiguration,
-        string adminApiKey)
+        object googleCalendarConfiguration)
     {
         var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -396,8 +348,6 @@ public sealed class GoogleCalendarToolEndpointTests
                 },
             }),
         };
-        request.Headers.Add("X-Company-Id", companyId.ToString());
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
         return request;
     }
 

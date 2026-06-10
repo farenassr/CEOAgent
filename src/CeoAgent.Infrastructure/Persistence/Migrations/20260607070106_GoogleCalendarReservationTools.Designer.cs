@@ -763,58 +763,14 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                             b1.ComplexProperty(typeof(Dictionary<string, object>), "GoogleCalendar", "CeoAgent.Infrastructure.Entities.IntegrationCredentialReference.Metadata#CredentialMetadata.GoogleCalendar#GoogleCalendarCredentialMetadata", b2 =>
                                 {
-                                    b2.Property<string>("AuthProviderX509CertUrl")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("auth_provider_x509_cert_url");
-
-                                    b2.Property<string>("AuthUri")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("auth_uri");
-
                                     b2.Property<string>("CalendarId")
                                         .HasJsonPropertyName("calendarId");
-
-                                    b2.Property<string>("ClientEmail")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("client_email");
-
-                                    b2.Property<string>("ClientId")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("client_id");
-
-                                    b2.Property<string>("ClientX509CertUrl")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("client_x509_cert_url");
 
                                     b2.Property<DateTimeOffset?>("ExpiresAt")
                                         .HasJsonPropertyName("expiresAt");
 
-                                    b2.Property<string>("PrivateKey")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("private_key");
-
-                                    b2.Property<string>("PrivateKeyId")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("private_key_id");
-
-                                    b2.Property<string>("ProjectId")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("project_id");
-
                                     b2.Property<string>("Scope")
                                         .HasJsonPropertyName("scope");
-
-                                    b2.Property<string>("TokenUri")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("token_uri");
-
-                                    b2.Property<string>("Type")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("type");
-
-                                    b2.Property<string>("UniverseDomain")
-                                        .IsRequired()
-                                        .HasJsonPropertyName("universe_domain");
 
                                     b2.HasJsonPropertyName("google_calendar");
                                 });

@@ -116,12 +116,9 @@ foreach ($projectDirectory in $productionProjects) {
         $isInfrastructureImplementation = $relativePath.StartsWith("src$([System.IO.Path]::DirectorySeparatorChar)CeoAgent.Infrastructure$([System.IO.Path]::DirectorySeparatorChar)Implementation$([System.IO.Path]::DirectorySeparatorChar)")
         $isInfrastructureApiClient = $relativePath.StartsWith("src$([System.IO.Path]::DirectorySeparatorChar)CeoAgent.Infrastructure$([System.IO.Path]::DirectorySeparatorChar)ApiClient$([System.IO.Path]::DirectorySeparatorChar)")
         $isInfrastructureProjectFile = $relativePath -eq "src$([System.IO.Path]::DirectorySeparatorChar)CeoAgent.Infrastructure$([System.IO.Path]::DirectorySeparatorChar)CEOAgent.Infrastructure.csproj"
-        $isApplicationProviderFactory = $relativePath -eq "src$([System.IO.Path]::DirectorySeparatorChar)CeoAgent.Application$([System.IO.Path]::DirectorySeparatorChar)Abstractions$([System.IO.Path]::DirectorySeparatorChar)AITools$([System.IO.Path]::DirectorySeparatorChar)GoogleCalendar$([System.IO.Path]::DirectorySeparatorChar)IGoogleCalendarServiceFactory.cs" -or
-            $relativePath -eq "src$([System.IO.Path]::DirectorySeparatorChar)CeoAgent.Application$([System.IO.Path]::DirectorySeparatorChar)Abstractions$([System.IO.Path]::DirectorySeparatorChar)OpenAI$([System.IO.Path]::DirectorySeparatorChar)IOpenAIResponsesClientFactory.cs" -or
-            $relativePath -eq "src$([System.IO.Path]::DirectorySeparatorChar)CeoAgent.Application$([System.IO.Path]::DirectorySeparatorChar)CEOAgent.Application.csproj"
         $content = Get-Content -LiteralPath $file.FullName -Raw
         foreach ($marker in $providerMarkers) {
-            if (-not $isInfrastructureImplementation -and -not $isInfrastructureApiClient -and -not $isInfrastructureProjectFile -and -not $isApplicationProviderFactory -and $content.Contains($marker)) {
+            if (-not $isInfrastructureImplementation -and -not $isInfrastructureApiClient -and -not $isInfrastructureProjectFile -and $content.Contains($marker)) {
                 Add-Violation "$relativePath contains provider SDK marker $marker"
             }
         }

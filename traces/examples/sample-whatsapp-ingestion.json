@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "scenario": "whatsapp-ingestion",
+  "correlationId": "trace-example",
+  "companyId": "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30",
+  "events": [
+    {
+      "name": "WhatsAppWebhookReceived",
+      "attributes": {
+        "provider": "whatsapp_cloud",
+        "signaturePresent": true,
+        "bodyLength": 512
+      }
+    },
+    {
+      "name": "WhatsAppWebhookMessageEnqueued",
+      "attributes": {
+        "providerMessageIdHash": "4D967A3F2A91",
+        "messageType": "text",
+        "queue": "process-incoming-message"
+      }
+    }
+  ]
+}

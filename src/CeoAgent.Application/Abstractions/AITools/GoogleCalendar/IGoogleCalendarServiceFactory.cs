@@ -1,10 +1,8 @@
-using Google.Apis.Calendar.v3;
-
 namespace CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 
-public interface IGoogleCalendarServiceFactory
+public interface IGoogleCalendarServiceFactory<TService>
 {
-    Task<CalendarService> CreateAsync(
+    Task<TService> CreateAsync(
         string credentialReference,
         CancellationToken cancellationToken);
 }

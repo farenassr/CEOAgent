@@ -3,6 +3,7 @@ using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Application.Abstractions.OpenAI;
 using CeoAgent.Shared.AI;
 using CeoAgent.Shared.Enums;
+using Microsoft.Extensions.Options;
 using OpenAI.Responses;
 
 namespace CeoAgent.Infrastructure.Implementation.OpenAI;
@@ -10,8 +11,11 @@ namespace CeoAgent.Infrastructure.Implementation.OpenAI;
 #pragma warning disable OPENAI001
 
 public sealed class OpenAIAgentRuntime(
-    IOpenAIResponsesClientFactory clientFactory) : IAgentRuntime
+    IOpenAIResponsesClientFactory<ResponsesClient> clientFactory,
+    IOptions<OpenAIAgentRuntimeOptions> options) : IAgentRuntime
 {
+    private readonly OpenAIAgentRuntimeOptions runtimeOptions = options.Value;
+
     public async Task<AgentRunResult> RunAsync(
         AgentRunRequest request,
         CancellationToken cancellationToken)
@@ -76,7 +80,7 @@ public sealed class OpenAIAgentRuntime(
         };
     }
 
-    private static AgentRunResult ToAgentRunResult(ResponseResult response)
+    private AgentRunResult ToAgentRunResult(ResponseResult response)
     {
         var toolCalls = response.OutputItems
             .OfType<FunctionCallResponseItem>()
@@ -87,16 +91,49 @@ public sealed class OpenAIAgentRuntime(
             response.GetOutputText(),
             toolCalls,
             response.Id,
-            response.Status?.ToString());
+            response.Status?.ToString(),
+            response.Usage?.InputTokenCount,
+            response.Usage?.OutputTokenCount,
+            response.Usage?.TotalTokenCount,
+            EstimatedCostUsd(response.Usage, runtimeOptions));
     }
 
     private static AgentToolCall ToToolCall(FunctionCallResponseItem item)
     {
-        using var document = JsonDocument.Parse(item.FunctionArguments.ToString());
+        using var document = ParseToolArguments(item.FunctionArguments.ToString());
         return new AgentToolCall(
             item.CallId,
             item.FunctionName,
             document.RootElement.Clone());
+    }
+
+    private static JsonDocument ParseToolArguments(string? arguments)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return JsonDocument.Parse("{}");
+        }
+
+        try
+        {
+            return JsonDocument.Parse(arguments);
+        }
+        catch (JsonException)
+        {
+            return JsonDocument.Parse("{}");
+        }
+    }
+
+    private static double? EstimatedCostUsd(ResponseTokenUsage? usage, OpenAIAgentRuntimeOptions options)
+    {
+        if (usage is null
+            || (options.InputTokenCostPerMillion <= 0 && options.OutputTokenCostPerMillion <= 0))
+        {
+            return null;
+        }
+
+        return (usage.InputTokenCount / 1_000_000d * options.InputTokenCostPerMillion)
+            + (usage.OutputTokenCount / 1_000_000d * options.OutputTokenCostPerMillion);
     }
 }
 

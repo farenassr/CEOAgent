@@ -1,6 +1,7 @@
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using CeoAgent.Application.Abstractions.Secrets;
+using CeoAgent.Shared.Security;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Concurrent;
@@ -12,8 +13,6 @@ namespace CeoAgent.Infrastructure.Implementation.Secrets;
 /// </summary>
 public sealed class SecretValueProvider : ISecretValueProvider
 {
-    private const string ConfigScheme = "config://";
-    private const string KeyVaultAliasScheme = "kv://";
     private static readonly DefaultAzureCredential Credential = new();
     private static readonly ConcurrentDictionary<Uri, SecretClient> Clients = new();
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
@@ -34,24 +33,30 @@ public sealed class SecretValueProvider : ISecretValueProvider
         string reference,
         CancellationToken cancellationToken)
     {
-        if (reference.StartsWith(ConfigScheme, StringComparison.OrdinalIgnoreCase))
+        if (!CredentialReference.TryParse(reference, out var credentialReference)
+            || credentialReference is null)
         {
-            return GetConfiguredSecret(reference[ConfigScheme.Length..]);
+            throw new InvalidOperationException("Credential reference must be a kv:// alias, config:// key, or Azure Key Vault secret URI.");
         }
 
-        if (reference.StartsWith(KeyVaultAliasScheme, StringComparison.OrdinalIgnoreCase))
+        if (credentialReference.Kind == CredentialReferenceKind.Configuration)
         {
-            return GetConfiguredSecret(ToKeyVaultAliasConfigurationKey(reference[KeyVaultAliasScheme.Length..]));
+            return GetConfiguredSecret(credentialReference.Value[CredentialReference.ConfigScheme.Length..]);
         }
 
-        if (cache.TryGetValue(reference, out string? cachedValue)
+        if (credentialReference.Kind == CredentialReferenceKind.KeyVaultAlias)
+        {
+            return GetConfiguredSecret(ToKeyVaultAliasConfigurationKey(credentialReference.Value[CredentialReference.KeyVaultAliasScheme.Length..]));
+        }
+
+        if (cache.TryGetValue(credentialReference.Value, out string? cachedValue)
             && cachedValue is not null)
         {
             return cachedValue;
         }
 
-        var value = await GetKeyVaultSecretValueAsync(reference, cancellationToken);
-        cache.Set(reference, value, CacheDuration);
+        var value = await GetKeyVaultSecretValueAsync(credentialReference.Value, cancellationToken);
+        cache.Set(credentialReference.Value, value, CacheDuration);
         return value;
     }
 
@@ -75,9 +80,7 @@ public sealed class SecretValueProvider : ISecretValueProvider
         string reference,
         CancellationToken cancellationToken)
     {
-        if (!Uri.TryCreate(reference, UriKind.Absolute, out var secretUri)
-            || !string.Equals(secretUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-            || !secretUri.Host.EndsWith(".vault.azure.net", StringComparison.OrdinalIgnoreCase))
+        if (!Uri.TryCreate(reference, UriKind.Absolute, out var secretUri))
         {
             throw new InvalidOperationException("Credential reference must be a kv:// alias, config:// key, or Azure Key Vault secret URI.");
         }

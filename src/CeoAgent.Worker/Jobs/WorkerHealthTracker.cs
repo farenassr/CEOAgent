@@ -13,9 +13,9 @@ public sealed class WorkerHealthTracker(TimeProvider timeProvider)
     {
         if (_lastPollTime == DateTimeOffset.MinValue)
         {
-            // Give it some grace period during startup
-            return true;
+            return false;
         }
+
         return (timeProvider.GetUtcNow() - _lastPollTime) < threshold;
     }
 }

@@ -13,6 +13,7 @@ Push-Location $repoRoot
 try {
     ./AIHarness/scripts/doc-gardening.ps1
     ./AIHarness/scripts/whatsapp-eval.ps1
+    ./AIHarness/scripts/whatsapp-behavior-eval.ps1
     ./AIHarness/scripts/architecture-check.ps1
 
     if ($IncludeFormat) {

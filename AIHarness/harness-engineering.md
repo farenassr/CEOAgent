@@ -24,6 +24,7 @@ Run focused checks first, then broaden when risk warrants it.
 | `AIHarness/scripts/architecture-check.ps1` | Enforces project references, no MediatR, no MVC controllers, provider SDK isolation, `/v1` FastEndpoints routes, critical contract uniqueness, scoped folder conventions, and namespace/folder alignment. |
 | `AIHarness/scripts/doc-gardening.ps1` | Checks markdown links, stale references to missing instruction files, scratch-doc references, and AIHarness index freshness. |
 | `AIHarness/scripts/whatsapp-eval.ps1` | Validates WhatsApp eval fixture structure, required invariants, and expected outcomes. |
+| `AIHarness/scripts/whatsapp-behavior-eval.ps1` | Runs WhatsApp fixture validation plus focused WhatsApp/API behavior tests. |
 | `AIHarness/scripts/harness-check.ps1` | Runs doc gardening, WhatsApp eval validation, and architecture checks. Use `-IncludeFormat`, `-IncludeBuild`, or `-IncludeTests` to broaden. |
 | `AIHarness/scripts/review-current-branch.ps1` | Generates a review context file for `docs/reviewer.md` using the current branch diff. |
 | `AIHarness/scripts/aspire-smoke.ps1` | Optionally starts AppHost, checks API health, captures AppHost logs, and points agents to local Aspire logs, traces, and metrics. |
@@ -77,5 +78,5 @@ steps:
 ## Harness Backlog
 
 - Add a sanitized trace schema validator for `traces/examples/`.
-- Add CI documentation mapping harness scripts to pipeline jobs.
+- Expand CI from focused test slices to a full matrix once runtime duration is stable.
 - Add a recurring doc-gardening task once CI or automations are available.

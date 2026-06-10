@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Application.Abstractions.Secrets;
+using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.Secrets;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Calendar.v3;
@@ -11,7 +11,7 @@ using System.Text;
 namespace CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
 
 public sealed class GoogleCalendarServiceFactory(ISecretValueProvider secrets, IMemoryCache cache)
-    : IGoogleCalendarServiceFactory
+    : IGoogleCalendarServiceFactory<CalendarService>
 {
     public static readonly IReadOnlyList<string> Scopes =
     [

@@ -1,6 +1,4 @@
-using CeoAgent.Application.Errors;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -17,7 +15,7 @@ namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 /// </summary>
 public sealed class ConfigureAgentProfileEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : Endpoint<AgentProfileRequest, AgentProfileResponse>
+    IAdminTenantGuard tenantGuard) : Endpoint<AgentProfileRequest, AgentProfileResponse>
 {
     public override void Configure()
     {
@@ -27,7 +25,7 @@ public sealed class ConfigureAgentProfileEndpoint(
     public override async Task HandleAsync(AgentProfileRequest request, CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        var company = await GetAccessibleCompanyAsync(dbContext, companyContext, companyId, cancellationToken);
+        var company = await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: true, cancellationToken);
 
         var profile = await dbContext.AgentProfiles
             .WithDefaultTracking(trackChanges: true)
@@ -46,24 +44,6 @@ public sealed class ConfigureAgentProfileEndpoint(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         await Send.OkAsync(CompanyMapper.ToResponse(profile), cancellationToken);
-    }
-
-    private static async Task<CeoAgent.Infrastructure.Entities.Company> GetAccessibleCompanyAsync(
-        CeoAgentDbContext dbContext,
-        ICompanyContext companyContext,
-        Guid companyId,
-        CancellationToken cancellationToken)
-    {
-        var company = await dbContext.Companies
-            .WithDefaultTracking(trackChanges: true)
-            .FirstOrDefaultAsync(entity => entity.Id == companyId, cancellationToken);
-
-        if (companyContext.CompanyId != companyId || company is null)
-        {
-            throw new NotFoundException("company", companyId);
-        }
-
-        return company;
     }
 }
 

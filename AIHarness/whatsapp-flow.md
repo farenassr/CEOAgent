@@ -92,5 +92,7 @@ Current focused tests live in `tests/CeoAgent.ApiService.Tests`:
 ## Eval Fixtures
 
 Scenario fixtures live in `AIHarness/evals/whatsapp/`. Run `AIHarness/scripts/whatsapp-eval.ps1`
-to validate their schema, expected invariants, and high-level outcomes. These
-fixtures keep WhatsApp behavior stable while the Worker and agent loop evolve.
+to validate their schema, expected invariants, and high-level outcomes. Run
+`AIHarness/scripts/whatsapp-behavior-eval.ps1` to combine fixture validation
+with focused WhatsApp/API behavior tests. These fixtures keep WhatsApp behavior
+stable while the Worker and agent loop evolve.

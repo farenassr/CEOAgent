@@ -1,4 +1,5 @@
 using FastEndpoints;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Modules.GoogleCalendar;
 
 namespace CeoAgent.ApiService.Dependencies;
@@ -17,6 +18,7 @@ public static class ApiRegistrations
         services.AddFastEndpoints(options => options.IncludeAbstractValidators = true);
 
         services.AddMediator(options => options.ServiceLifetime = ServiceLifetime.Scoped);
+        services.AddScoped<IAdminTenantGuard, AdminTenantGuard>();
         services.AddScoped<GoogleCalendarCompanyToolResolver>();
         services.AddCors();
         services.AddRateLimiter();

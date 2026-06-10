@@ -119,6 +119,30 @@ public sealed class GoogleCalendarToolExecutorTests
     }
 
     [Test]
+    public async Task CreateReservationAsync_WhenRequestedSlotIsBusy_DeniesWithoutCreatingCalendarEvent()
+    {
+        await using var fixture = await CalendarToolFixture.CreateAsync();
+        fixture.Calendar.RequestedSlotAvailable = false;
+        var request = new CreateCalendarEventRequest
+        {
+            Start = new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
+            End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
+            Summary = "Reservation for 2",
+            CustomerName = "Ada Lovelace",
+        };
+
+        var result = await fixture.Executor.CreateReservationAsync(
+            fixture.CreateExecutionContext("reservation-key"),
+            request,
+            CancellationToken.None);
+
+        result.Status.ShouldBe(ToolExecutionStatus.Denied);
+        result.FailureReason.ShouldBe("slot_unavailable");
+        fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
+        fixture.Calendar.ReservationRequests.ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task CreateReservationAsync_WithConfiguredCredentialReference_UsesStoredCredentialReference()
     {
         await using var fixture = await CalendarToolFixture.CreateAsync();
@@ -530,6 +554,8 @@ public sealed class GoogleCalendarToolExecutorTests
     {
         public List<DateTimeOffset> AvailableStarts { get; } = [];
 
+        public bool RequestedSlotAvailable { get; set; } = true;
+
         public List<CalendarAvailabilityRequest> AvailabilityRequests { get; } = [];
 
         public List<CalendarReservationRequest> ReservationRequests { get; } = [];
@@ -562,15 +588,18 @@ public sealed class GoogleCalendarToolExecutorTests
             CancellationToken cancellationToken)
         {
             AvailabilityRequests.Add(request);
+            var requestedSlotAvailable = request.AlternativeSearchStarts.Count == 0
+                ? RequestedSlotAvailable
+                : AvailableStarts.Contains(request.Start);
             var alternatives = request.AlternativeSearchStarts
                 .Where(start => AvailableStarts.Contains(start))
                 .Take(GoogleCalendarSchedulingPolicy.MaxAlternativeStarts)
                 .ToArray();
 
             return Task.FromResult(new CalendarAvailabilityResult(
-                Available: false,
+                Available: requestedSlotAvailable,
                 AlternativeStarts: alternatives,
-                UnavailabilityReason: "slot_unavailable"));
+                UnavailabilityReason: requestedSlotAvailable ? null : "slot_unavailable"));
         }
 
         public Task<CalendarReservationResult> CreateReservationAsync(

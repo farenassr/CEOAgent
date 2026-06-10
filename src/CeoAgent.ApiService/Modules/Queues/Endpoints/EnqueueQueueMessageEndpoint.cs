@@ -1,13 +1,16 @@
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
+using CeoAgent.ApiService.Infrastructure.Queues;
 using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
 using CeoAgent.ApiService.Modules.Queues.Contracts;
 using FastEndpoints;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 
 namespace CeoAgent.ApiService.Modules.Queues.Endpoints;
 
 public sealed class EnqueueQueueMessageEndpoint(
-    IQueueDiagnosticsService queueDiagnosticsService) : Endpoint<SendQueueMessageRequest, QueueMessageEnqueuedResponse>
+    IQueueDiagnosticsService queueDiagnosticsService,
+    IOptions<QueueDiagnosticsOptions> options) : Endpoint<SendQueueMessageRequest, QueueMessageEnqueuedResponse>
 {
     public override void Configure()
     {
@@ -16,6 +19,12 @@ public sealed class EnqueueQueueMessageEndpoint(
 
     public override async Task HandleAsync(SendQueueMessageRequest request, CancellationToken cancellationToken)
     {
+        if (!options.Value.EnableWrites)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
         var queueName = Route<string>("queueName") ?? string.Empty;
         var response = await queueDiagnosticsService.SendMessageAsync(
             new QueueMessageSendRequest(queueName, request.MessageText),

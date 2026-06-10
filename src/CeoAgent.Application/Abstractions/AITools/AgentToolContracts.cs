@@ -1,5 +1,6 @@
 using CeoAgent.Shared.AI;
 using CeoAgent.Shared.AITools;
+using System.Text.Json;
 
 namespace CeoAgent.Application.Abstractions.AITools;
 
@@ -14,6 +15,8 @@ public interface IAgentTool
     bool IsMutating { get; }
 
     string Description { get; }
+
+    JsonElement ParametersSchema { get; }
 
     Type RequestType { get; }
 

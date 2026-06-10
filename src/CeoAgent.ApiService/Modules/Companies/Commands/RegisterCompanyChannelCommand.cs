@@ -1,7 +1,6 @@
 using System.Text.Json;
 using CeoAgent.ApiService.Infrastructure.Json;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
@@ -22,12 +21,12 @@ public sealed record RegisterCompanyChannelCommand(
 
 public sealed class RegisterCompanyChannelCommandHandler(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : ICommandHandler<RegisterCompanyChannelCommand, CompanyChannel>
+    IAdminTenantGuard tenantGuard) : ICommandHandler<RegisterCompanyChannelCommand, CompanyChannel>
 {
     public async ValueTask<CompanyChannel> Handle(RegisterCompanyChannelCommand command, CancellationToken cancellationToken)
     {
-        await EnsureCompanyIsAccessibleAsync(command.CompanyId, cancellationToken);
-        await EnsureCredentialReferenceIsAccessibleAsync(command.CredentialReferenceId, cancellationToken);
+        await tenantGuard.GetAccessibleCompanyAsync(command.CompanyId, trackChanges: false, cancellationToken);
+        await tenantGuard.EnsureCredentialReferenceAccessibleAsync(command.CompanyId, command.CredentialReferenceId, cancellationToken);
 
         var channel = CreateCompanyChannel(command);
 
@@ -36,31 +35,6 @@ public sealed class RegisterCompanyChannelCommandHandler(
 
         return channel;
     }
-
-    private async Task EnsureCompanyIsAccessibleAsync(Guid companyId, CancellationToken cancellationToken)
-    {
-        if (companyContext.CompanyId != companyId
-            || !await dbContext.Companies
-                .WithDefaultTracking()
-                .AnyAsync(entity => entity.Id == companyId, cancellationToken))
-        {
-            throw new NotFoundException("company", companyId);
-        }
-    }
-
-    private async Task EnsureCredentialReferenceIsAccessibleAsync(
-        Guid? credentialReferenceId,
-        CancellationToken cancellationToken)
-    {
-        if (credentialReferenceId is { } id
-            && !await dbContext.IntegrationCredentialReferences
-                .WithDefaultTracking()
-                .AnyAsync(entity => entity.Id == id, cancellationToken))
-        {
-            throw new NotFoundException("integration_credential_reference", id);
-        }
-    }
-
     private static CompanyChannel CreateCompanyChannel(RegisterCompanyChannelCommand command)
     {
         var metadata = command.Metadata.DeserializeOptional<ChannelMetadata>() ?? new ChannelMetadata();

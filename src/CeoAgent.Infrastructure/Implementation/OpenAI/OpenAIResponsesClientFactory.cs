@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using CeoAgent.Application.Abstractions.OpenAI;
 using CeoAgent.Application.Abstractions.Secrets;
-using CeoAgent.Infrastructure.Implementation.Secrets;
 using Microsoft.Extensions.Options;
 using OpenAI.Responses;
 
@@ -11,7 +10,7 @@ namespace CeoAgent.Infrastructure.Implementation.OpenAI;
 
 internal sealed class OpenAIResponsesClientFactory(
     ISecretValueProvider secrets,
-    IOptions<OpenAIAgentRuntimeOptions> options) : IOpenAIResponsesClientFactory
+    IOptions<OpenAIAgentRuntimeOptions> options) : IOpenAIResponsesClientFactory<ResponsesClient>
 {
     private readonly ConcurrentDictionary<string, ResponsesClient> clients = new(StringComparer.Ordinal);
 
@@ -23,13 +22,15 @@ internal sealed class OpenAIResponsesClientFactory(
         }
 
         var apiKey = await secrets.GetSecretValueAsync(options.Value.ApiKeyReference, cancellationToken);
-        return clients.GetOrAdd(apiKey, static key =>
+        var cacheKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(options.Value.ApiKeyReference)));
+        return clients.GetOrAdd(cacheKey, _ =>
         {
             var clientOptions = new global::OpenAI.OpenAIClientOptions
             {
                 NetworkTimeout = TimeSpan.FromSeconds(30)
             };
-            return new ResponsesClient(new System.ClientModel.ApiKeyCredential(key), clientOptions);
+            return new ResponsesClient(new System.ClientModel.ApiKeyCredential(apiKey), clientOptions);
         });
     }
 }

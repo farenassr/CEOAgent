@@ -5,11 +5,12 @@ internal static class LangfuseEnvironmentExtensions
     public static void AddLangfuseEnvironment(
         this IDistributedApplicationBuilder builder,
         IResourceBuilder<ProjectResource> apiService,
-        IResourceBuilder<ProjectResource> worker)
+        IResourceBuilder<ProjectResource> worker,
+        IResourceBuilder<Aspire.Hosting.Azure.AzureKeyVaultResource>? keyVault = null)
     {
         if (builder.ExecutionContext.IsPublishMode)
         {
-            var keyVault = builder.AddAzureKeyVault("keyvault").PublishAsExisting("kv-ceo-agent-dev", "rg-ceo-agent-dev");
+            ArgumentNullException.ThrowIfNull(keyVault);
             apiService
                 .WithEnvironment("ServiceDefaults__Langfuse__PublicKey", keyVault.GetSecret("LangfusePublicKey"))
                 .WithEnvironment("ServiceDefaults__Langfuse__SecretKey", keyVault.GetSecret("LangfuseSecretKey"));

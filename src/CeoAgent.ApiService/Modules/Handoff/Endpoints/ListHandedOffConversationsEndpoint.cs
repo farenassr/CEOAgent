@@ -1,5 +1,4 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Application.Errors;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Persistence.Extensions;
 using CeoAgent.Shared.Constants;
@@ -16,7 +15,7 @@ namespace CeoAgent.ApiService.Modules.Handoff.Endpoints;
 /// </summary>
 public sealed class ListHandedOffConversationsEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : EndpointWithoutRequest<HandedOffConversationsResponse>
+    IAdminTenantGuard tenantGuard) : EndpointWithoutRequest<HandedOffConversationsResponse>
 {
     public override void Configure()
     {
@@ -26,55 +25,42 @@ public sealed class ListHandedOffConversationsEndpoint(
     public override async Task HandleAsync(CancellationToken cancellationToken)
     {
         var companyId = Route<Guid>("companyId");
-        EnsureCompanyAccess(companyId);
+        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
 
-        var conversations = await dbContext.Conversations
+        var items = await dbContext.Conversations
             .AsNoTracking()
             .ForCompany(companyId)
             .Where(entity => entity.Status == ConversationStatus.HandedOff)
             .OrderByDescending(entity => entity.LastMessageAt)
             .Select(entity => new
             {
-                entity.Id,
-                entity.CustomerId,
-                entity.CompanyChannelId,
-                entity.LastMessageAt,
+                Conversation = entity,
+                LatestHandoff = dbContext.ToolExecutions
+                    .AsNoTracking()
+                    .ForCompany(companyId)
+                    .Where(execution => execution.ToolKey == MvpToolKeys.RequestHumanHandoff
+                        && execution.ConversationId == entity.Id)
+                    .OrderByDescending(execution => execution.CreatedAt)
+                    .Select(execution => new
+                    {
+                        execution.CreatedAt,
+                        Request = execution.Request!.RequestHumanHandoff,
+                        Result = execution.Result!.RequestHumanHandoff,
+                    })
+                    .FirstOrDefault(),
+            })
+            .Select(item => new HandedOffConversationResponse
+            {
+                ConversationId = item.Conversation.Id,
+                CustomerId = item.Conversation.CustomerId,
+                CompanyChannelId = item.Conversation.CompanyChannelId,
+                LastMessageAt = item.Conversation.LastMessageAt,
+                HandoffTicketId = item.LatestHandoff == null ? null : item.LatestHandoff.Result!.HandoffTicketId,
+                Reason = item.LatestHandoff == null ? null : item.LatestHandoff.Request!.Reason,
+                EstimatedPickupAt = item.LatestHandoff == null ? null : item.LatestHandoff.Result!.EstimatedPickupAt,
+                RequestedAt = item.LatestHandoff == null ? null : item.LatestHandoff.CreatedAt,
             })
             .ToListAsync(cancellationToken);
-
-        var conversationIds = conversations.Select(conversation => conversation.Id).ToList();
-
-        var executions = await dbContext.ToolExecutions
-            .AsNoTracking()
-            .ForCompany(companyId)
-            .Where(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff
-                && conversationIds.Contains(entity.ConversationId))
-            .OrderByDescending(entity => entity.CreatedAt)
-            .ToListAsync(cancellationToken);
-
-        var latestByConversation = executions
-            .GroupBy(execution => execution.ConversationId)
-            .ToDictionary(group => group.Key, group => group.First());
-
-        var items = conversations
-            .ConvertAll(conversation =>
-            {
-                latestByConversation.TryGetValue(conversation.Id, out var execution);
-                var result = execution?.Result?.RequestHumanHandoff;
-                var request = execution?.Request?.RequestHumanHandoff;
-
-                return new HandedOffConversationResponse
-                {
-                    ConversationId = conversation.Id,
-                    CustomerId = conversation.CustomerId,
-                    CompanyChannelId = conversation.CompanyChannelId,
-                    LastMessageAt = conversation.LastMessageAt,
-                    HandoffTicketId = result?.HandoffTicketId,
-                    Reason = request?.Reason,
-                    EstimatedPickupAt = result?.EstimatedPickupAt,
-                    RequestedAt = execution?.CreatedAt,
-                };
-            });
 
         await Send.OkAsync(
             new HandedOffConversationsResponse
@@ -83,13 +69,5 @@ public sealed class ListHandedOffConversationsEndpoint(
                 Count = items.Count,
             },
             cancellationToken);
-    }
-
-    private void EnsureCompanyAccess(Guid companyId)
-    {
-        if (companyContext.CompanyId != companyId)
-        {
-            throw new NotFoundException("company", companyId);
-        }
     }
 }

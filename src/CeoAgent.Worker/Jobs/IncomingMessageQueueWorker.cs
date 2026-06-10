@@ -34,21 +34,33 @@ public sealed class IncomingMessageQueueWorker(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            healthTracker.RecordPoll();
             try
             {
                 var properties = await queue.GetPropertiesAsync(cancellationToken: stoppingToken);
-                //CeoAgentTelemetry.SetQueueBacklog(properties.Value.ApproximateMessagesCount);
+                CeoAgentTelemetry.SetQueueBacklog(properties.Value.ApproximateMessagesCount);
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to retrieve queue properties for backlog telemetry.");
             }
 
-            var messages = await queue.ReceiveMessagesAsync(
-                maxMessages: settings.MaxMessages > 0 ? settings.MaxMessages : 1,
-                visibilityTimeout: TimeSpan.FromMinutes(Math.Max(1, settings.VisibilityTimeoutMinutes)),
-                cancellationToken: stoppingToken);
+            Azure.Response<Azure.Storage.Queues.Models.QueueMessage[]> messages;
+            try
+            {
+                messages = await queue.ReceiveMessagesAsync(
+                    maxMessages: settings.MaxMessages > 0 ? settings.MaxMessages : 1,
+                    visibilityTimeout: TimeSpan.FromMinutes(Math.Max(1, settings.VisibilityTimeoutMinutes)),
+                    cancellationToken: stoppingToken);
+                healthTracker.RecordPoll();
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Failed to receive messages from the incoming message queue.");
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(Math.Max(100, settings.EmptyQueueDelayMilliseconds)),
+                    stoppingToken);
+                continue;
+            }
 
             if (messages.Value.Length == 0)
             {
@@ -78,6 +90,17 @@ public sealed class IncomingMessageQueueWorker(
     {
         var stopwatch = Stopwatch.StartNew();
         ProcessIncomingMessageJob? job = null;
+        var visibilityTimeout = TimeSpan.FromMinutes(Math.Max(1, options.Value.VisibilityTimeoutMinutes));
+        var popReceipt = message.PopReceipt;
+        using var renewalCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var renewalTask = RenewVisibilityUntilCancelledAsync(
+            queue,
+            message.MessageId,
+            message.MessageText,
+            () => popReceipt,
+            value => popReceipt = value,
+            visibilityTimeout,
+            renewalCancellation.Token);
 
         try
         {
@@ -90,7 +113,7 @@ public sealed class IncomingMessageQueueWorker(
             using var scope = scopeFactory.CreateScope();
             var processor = scope.ServiceProvider.GetRequiredService<ProcessIncomingMessageJobProcessor>();
             await processor.ProcessAsync(job, stoppingToken);
-            await queue.DeleteMessageAsync(message.MessageId, message.PopReceipt, stoppingToken);
+            await queue.DeleteMessageAsync(message.MessageId, popReceipt, stoppingToken);
         }
         catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
@@ -102,13 +125,54 @@ public sealed class IncomingMessageQueueWorker(
             {
                 CeoAgentTelemetry.QueuePoisonCount.Add(1);
                 await poisonQueue.SendMessageAsync(message.MessageText, stoppingToken);
-                await queue.DeleteMessageAsync(message.MessageId, message.PopReceipt, stoppingToken);
+                await queue.DeleteMessageAsync(message.MessageId, popReceipt, stoppingToken);
             }
         }
         finally
         {
+            await renewalCancellation.CancelAsync();
+            await renewalTask;
             stopwatch.Stop();
             CeoAgentTelemetry.QueueProcessingDuration.Record(stopwatch.ElapsedMilliseconds);
+        }
+    }
+
+    private async Task RenewVisibilityUntilCancelledAsync(
+        QueueClient queue,
+        string messageId,
+        string messageText,
+        Func<string> getPopReceipt,
+        Action<string> setPopReceipt,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken)
+    {
+        var renewalDelay = TimeSpan.FromMilliseconds(Math.Max(
+            TimeSpan.FromSeconds(15).TotalMilliseconds,
+            visibilityTimeout.TotalMilliseconds / 2));
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(renewalDelay, cancellationToken);
+                var receipt = await queue.UpdateMessageAsync(
+                    messageId,
+                    getPopReceipt(),
+                    messageText,
+                    visibilityTimeout,
+                    cancellationToken);
+                setPopReceipt(receipt.Value.PopReceipt);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                logger.ZLogWarning(
+                    exception,
+                    $"IncomingMessageVisibilityRenewalFailed message_id={messageId}");
+            }
         }
     }
 

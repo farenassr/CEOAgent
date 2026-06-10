@@ -1,4 +1,5 @@
 using CeoAgent.Infrastructure;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,8 @@ namespace CeoAgent.ApiService.Tests.Support;
 
 internal sealed class ApiFactory : WebApplicationFactory<Program>
 {
+    public static readonly Guid DefaultCompanyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+
     private readonly PostgreSqlContainer _postgres;
     private readonly string _environmentName;
     private readonly Action<IServiceCollection>? _configureServices;
@@ -38,9 +41,29 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         // Point Npgsql at the Testcontainers instance instead of InMemory.
         builder.UseSetting("Persistence:UseInMemoryDatabase", "false");
         builder.UseSetting("ConnectionStrings:CeoAgent", _postgres.GetConnectionString());
-        builder.UseSetting("AdminApiKey:Key", "test-admin-key");
-        builder.UseSetting("AdminApiKey:CompanyId", Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30").ToString());
-        builder.ConfigureServices(services => _configureServices?.Invoke(services));
+        builder.UseSetting("Keycloak:ClientId", "ceo-agent-web");
+        builder.UseSetting("Keycloak:Issuer", "https://keycloak.test/realms/ceo-agent");
+        builder.ConfigureServices(services =>
+        {
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = TestAuthentication.Scheme;
+                options.DefaultChallengeScheme = TestAuthentication.Scheme;
+            }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
+                TestAuthentication.Scheme,
+                options => { });
+
+            _configureServices?.Invoke(services);
+        });
+    }
+
+    public HttpClient CreateAuthenticatedClient(Guid? companyId = null)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = companyId is { } id
+            ? TestAuthentication.CompanyBearer(id)
+            : TestAuthentication.BootstrapBearer();
+        return client;
     }
 
     protected override IHost CreateHost(IHostBuilder builder)

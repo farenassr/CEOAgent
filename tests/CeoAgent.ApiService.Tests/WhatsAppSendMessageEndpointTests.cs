@@ -1,13 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using CeoAgent.ApiService.Tests.Support;
-using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Response.Company;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Shouldly;
 
 namespace CeoAgent.ApiService.Tests;
@@ -19,37 +17,26 @@ public sealed class WhatsAppSendMessageEndpointTests
     public async Task SendWhatsAppMessage_WithCompanyChannel_SendsThroughMessagingIntegration()
     {
         var messaging = new RecordingMessageChannelIntegration();
-        const string adminKey = "test-admin-key";
         await using var factory = new ApiFactory(configureServices: services =>
         {
             services.RemoveAll<IMessageChannelIntegration>();
             services.AddSingleton<IMessageChannelIntegration>(messaging);
-            services.Configure<AdminApiKeyOptions>(options =>
-            {
-                options.Key = adminKey;
-            });
         });
 
-        using var client = factory.CreateClient();
-        var companyId = await CreateCompanyAsync(client, "Company A", adminKey);
-        factory.Services.GetRequiredService<IOptions<AdminApiKeyOptions>>().Value.CompanyId = companyId;
-        var credentialId = await RegisterWhatsAppCredentialAsync(client, companyId, adminKey);
-        var channelId = await RegisterWhatsAppChannelAsync(client, companyId, credentialId, adminKey);
+        using var bootstrapClient = factory.CreateAuthenticatedClient();
+        var companyId = await CreateCompanyAsync(bootstrapClient, "Company A");
+        using var tenantClient = factory.CreateAuthenticatedClient(companyId);
+        var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient, companyId);
+        var channelId = await RegisterWhatsAppChannelAsync(tenantClient, companyId, credentialId);
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"/v1/admin/companies/{companyId}/channels/{channelId}/whatsapp/messages")
-        {
-            Content = JsonContent.Create(new
+        using var response = await tenantClient.PostAsJsonAsync(
+            $"/v1/admin/companies/{companyId}/channels/{channelId}/whatsapp/messages",
+            new
             {
                 recipientExternalId = "573001112233",
                 text = "Hola desde CeoAgent",
                 idempotencyKey = "manual-send-1",
-            }),
-        };
-        request.Headers.Add("X-Admin-Api-Key", adminKey);
-
-        using var response = await client.SendAsync(request);
+            });
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<SendWhatsAppMessageResponse>();
@@ -64,48 +51,42 @@ public sealed class WhatsAppSendMessageEndpointTests
         sent.IdempotencyKey.ShouldBe("manual-send-1");
     }
 
-    private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name, string adminApiKey)
+    private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/companies")
-        {
-            Content = JsonContent.Create(new { name }),
-        };
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
-
-        using var response = await client.SendAsync(request);
+        using var response = await client.PostAsJsonAsync(
+            "/v1/admin/companies",
+            new
+            {
+                name,
+                timeZoneId = "America/Bogota",
+            });
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<CompanyResponse>();
         body.ShouldNotBeNull();
         return body.Id;
     }
 
-    private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client, Guid companyId, string adminApiKey)
+    private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client, Guid companyId)
     {
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"/v1/admin/companies/{companyId}/integration-credentials")
-        {
-            Content = JsonContent.Create(new
+        using var response = await client.PostAsJsonAsync(
+            $"/v1/admin/companies/{companyId}/integration-credentials",
+            new
             {
                 provider = "whatsapp_cloud",
                 purpose = "whatsapp_cloud",
                 reference = "config://WhatsApp:AccessToken",
-            }),
-        };
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
-
-        using var response = await client.SendAsync(request);
+            });
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<IntegrationCredentialResponse>();
         body.ShouldNotBeNull();
         return body.Id;
     }
 
-    private static async Task<Guid> RegisterWhatsAppChannelAsync(HttpClient client, Guid companyId, Guid credentialId, string adminApiKey)
+    private static async Task<Guid> RegisterWhatsAppChannelAsync(HttpClient client, Guid companyId, Guid credentialId)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{companyId}/channels")
-        {
-            Content = JsonContent.Create(new
+        using var response = await client.PostAsJsonAsync(
+            $"/v1/admin/companies/{companyId}/channels",
+            new
             {
                 provider = "whatsapp_cloud",
                 providerChannelId = "1152556904604978",
@@ -118,11 +99,7 @@ public sealed class WhatsAppSendMessageEndpointTests
                         phone_number_id = "1152556904604978",
                     },
                 },
-            }),
-        };
-        request.Headers.Add("X-Admin-Api-Key", adminApiKey);
-
-        using var response = await client.SendAsync(request);
+            });
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<CompanyChannelResponse>();
         body.ShouldNotBeNull();

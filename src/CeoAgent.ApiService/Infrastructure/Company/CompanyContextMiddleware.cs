@@ -12,10 +12,10 @@ public sealed class CompanyContextMiddleware(
         HttpContext context,
         ICompanyContextAccessor companyContextAccessor)
     {
-        if (context.Items.TryGetValue("CompanyId", out var companyIdValue) &&
-            companyIdValue is Guid companyIdFromAdminApiKey)
+        var companyIdClaim = context.User.FindFirst("company_id")?.Value;
+        if (Guid.TryParse(companyIdClaim, out var companyId))
         {
-            companyContextAccessor.SetCompany(companyIdFromAdminApiKey);
+            companyContextAccessor.SetCompany(companyId);
         }
 
         try

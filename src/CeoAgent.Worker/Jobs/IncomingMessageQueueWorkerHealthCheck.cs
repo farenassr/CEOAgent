@@ -14,6 +14,6 @@ public sealed class IncomingMessageQueueWorkerHealthCheck(WorkerHealthTracker tr
             return Task.FromResult(HealthCheckResult.Healthy("Worker loop is polling active."));
         }
 
-        return Task.FromResult(HealthCheckResult.Unhealthy("Worker loop has not polled for more than 2 minutes."));
+        return Task.FromResult(HealthCheckResult.Unhealthy("Worker loop has not completed a queue poll recently."));
     }
 }

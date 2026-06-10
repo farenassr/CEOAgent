@@ -96,10 +96,10 @@ dotnet test CEOAgent.slnx --no-build
 Focused checks:
 
 ```powershell
-dotnet test CEOAgent.slnx --filter "WhatsApp|Webhook"
-dotnet test CEOAgent.slnx --filter "Calendar|Availability|Reservation"
-dotnet test CEOAgent.slnx --filter "Company|Admin|Persistence"
-dotnet test CEOAgent.slnx --filter "Queue|Blob|Job"
+./AIHarness/scripts/test.ps1 -TreeNodeFilter "/*/*/*WhatsApp*/*|/*/*/*Webhook*/*|/*/*/*/*WhatsApp*|/*/*/*/*Webhook*"
+./AIHarness/scripts/test.ps1 -TreeNodeFilter "/*/*/*Calendar*/*|/*/*/*Availability*/*|/*/*/*Reservation*/*|/*/*/*/*Calendar*|/*/*/*/*Availability*|/*/*/*/*Reservation*"
+./AIHarness/scripts/test.ps1 -TreeNodeFilter "/*/*/*Company*/*|/*/*/*Admin*/*|/*/*/*Persistence*/*|/*/*/*/*Company*|/*/*/*/*Admin*|/*/*/*/*Persistence*"
+./AIHarness/scripts/test.ps1 -TreeNodeFilter "/*/*/*Queue*/*|/*/*/*Blob*/*|/*/*/*Job*/*|/*/*/*/*Queue*|/*/*/*/*Blob*|/*/*/*/*Job*"
 ```
 
 Run the narrowest meaningful check first, then broaden when risk warrants it.

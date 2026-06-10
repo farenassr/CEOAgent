@@ -12,6 +12,8 @@ const int AzuriteTablePort = 10002;
 const string StorageResourceName = "storage";
 const string QueuesResourceName = "queues";
 const string BlobsResourceName = "blobs";
+const string KeyVaultName = "kv-ceo-agent-dev";
+const string KeyVaultResourceGroup = "rg-ceo-agent-dev";
 
 var postgresPassword = builder.AddParameter("postgres-password", "postgres", secret: true);
 var whatsAppAppSecret = builder.AddParameter("whatsapp-app-secret", secret: true);
@@ -19,8 +21,9 @@ var whatsAppAccessToken = builder.AddParameter("whatsapp-access-token", secret: 
 var laTerrazaGoogleCalendar = builder.AddParameter("la-terraza-google-calendar", secret: true);
 var openAIApiKey = builder.Configuration.GetConnectionString("openai");
 
-var adminApiKey = builder.AddParameter("admin-api-key", secret: true);
-var adminCompanyId = builder.AddParameter("admin-company-id");
+var keyVault = builder.ExecutionContext.IsPublishMode
+    ? builder.AddAzureKeyVault("keyvault").PublishAsExisting(KeyVaultName, KeyVaultResourceGroup)
+    : null;
 
 var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: 5432)
     .WithHostPort(PostgresHostPort)
@@ -47,8 +50,6 @@ var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
     .WithEnvironment("WhatsApp__AccessToken", whatsAppAccessToken)
     .WithEnvironment("GoogleCalendar__ServiceAccountJson", laTerrazaGoogleCalendar)
     .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
-    .WithEnvironment("AdminApiKey__Key", adminApiKey)
-    .WithEnvironment("AdminApiKey__CompanyId", adminCompanyId)
     .WithUrlForEndpoint("https", url =>
     {
         url.DisplayText = "Scalar API Reference";
@@ -72,6 +73,32 @@ if (!string.IsNullOrWhiteSpace(openAIApiKey))
         .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "config://OpenAI:ApiKey");
 }
 
-builder.AddLangfuseEnvironment(apiService, worker);
+AddKeycloakEnvironment(builder, apiService, keyVault);
+builder.AddLangfuseEnvironment(apiService, worker, keyVault);
 
 await builder.Build().RunAsync();
+
+static void AddKeycloakEnvironment(
+    IDistributedApplicationBuilder builder,
+    IResourceBuilder<ProjectResource> apiService,
+    IResourceBuilder<Aspire.Hosting.Azure.AzureKeyVaultResource>? keyVault)
+{
+    if (builder.ExecutionContext.IsPublishMode)
+    {
+        ArgumentNullException.ThrowIfNull(keyVault);
+        apiService
+            .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
+            .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty)
+            .WithEnvironment("Keycloak__RedirectUri", builder.Configuration["Keycloak:RedirectUri"] ?? string.Empty)
+            .WithEnvironment("Keycloak__ClientSecret", keyVault.GetSecret("KeycloakClientSecret"));
+        return;
+    }
+
+    var keycloakClientSecret = builder.AddParameter("keycloak-client-secret", secret: true);
+
+    apiService
+        .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
+        .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty)
+        .WithEnvironment("Keycloak__RedirectUri", builder.Configuration["Keycloak:RedirectUri"] ?? string.Empty)
+        .WithEnvironment("Keycloak__ClientSecret", keycloakClientSecret);
+}
