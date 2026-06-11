@@ -15,8 +15,8 @@ public sealed class CompanyToolConfiguration : IEntityTypeConfiguration<CompanyT
         builder.Property(entity => entity.ParametersSchema)
             .HasColumnName("parameters_schema_json")
             .HasColumnType("jsonb");
-        builder.HasIndex(entity => new { entity.CompanyId, entity.ToolKey }).IsUnique();
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.ToolKey }).IsUnique();
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.ComplexProperty(entity => entity.Configuration, configuration =>
         {
             configuration.ToJson("configuration_json");
@@ -46,7 +46,7 @@ public sealed class CompanyToolConfiguration : IEntityTypeConfiguration<CompanyT
         });
         builder.HasOne(entity => entity.Company)
             .WithMany(entity => entity.Tools)
-            .HasForeignKey(entity => entity.CompanyId)
+            .HasForeignKey(entity => entity.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.CredentialReference)
             .WithMany(entity => entity.CompanyTools)

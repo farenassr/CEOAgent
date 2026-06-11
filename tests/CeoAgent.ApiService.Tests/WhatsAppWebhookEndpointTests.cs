@@ -62,7 +62,7 @@ public sealed class WhatsAppWebhookEndpointTests
             using var response = await client.SendAsync(request);
 
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
-            queue.Jobs.Single().CompanyId.ShouldBe(CompanyId);
+            queue.Jobs.Single().OrganizationId.ShouldBe(OrganizationId);
         }
         finally
         {
@@ -106,7 +106,7 @@ public sealed class WhatsAppWebhookEndpointTests
             using var response = await client.SendAsync(request);
 
             response.StatusCode.ShouldBe(HttpStatusCode.OK);
-            queue.Jobs.Single().CompanyId.ShouldBe(CompanyId);
+            queue.Jobs.Single().OrganizationId.ShouldBe(OrganizationId);
         }
         finally
         {
@@ -221,20 +221,20 @@ public sealed class WhatsAppWebhookEndpointTests
     {
         var company = new Company
         {
-            Id = CompanyId,
+            Id = OrganizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         };
         var profile = new AgentProfile
         {
             Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32"),
-            CompanyId = CompanyId,
+            OrganizationId = OrganizationId,
             ModelName = "gpt-4.1-mini",
             DisplayName = "Contoso Assistant",
             Language = "es",
         };
         var channel = CompanyChannel.ForWhatsAppCloud(
-            CompanyId,
+            OrganizationId,
             "1152556904604978",
             new WhatsAppCloudMetadata
             {
@@ -247,7 +247,7 @@ public sealed class WhatsAppWebhookEndpointTests
         dbContext.SaveChanges();
     }
 
-    private static readonly Guid CompanyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+    private static readonly Guid OrganizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
 
     private const string WebhookJson = """
         {

@@ -119,7 +119,7 @@ public sealed class IncomingMessageQueueWorker(
         {
             logger.ZLogError(
                 exception,
-                $"IncomingMessageJobFailed message_id={message.MessageId} dequeue_count={message.DequeueCount} company_id={job?.CompanyId} conversation_id={job?.ConversationId} job_id={job?.JobId} correlation_id={job?.CorrelationId} trace_id={Activity.Current?.TraceId}");
+                $"IncomingMessageJobFailed message_id={message.MessageId} dequeue_count={message.DequeueCount} organization_id={job?.OrganizationId} conversation_id={job?.ConversationId} job_id={job?.JobId} correlation_id={job?.CorrelationId} trace_id={Activity.Current?.TraceId}");
 
             if (message.DequeueCount >= ProcessIncomingMessageJobRetryPolicy.MaxAttempts)
             {
@@ -181,7 +181,7 @@ public sealed class IncomingMessageQueueWorker(
         return logger.BeginScope(new Dictionary<string, object?>
         {
             ["correlation_id"] = job.CorrelationId,
-            ["company_id"] = job.CompanyId,
+            ["organization_id"] = job.OrganizationId,
             ["conversation_id"] = job.ConversationId,
             ["job_id"] = job.JobId,
             ["trace_id"] = Activity.Current?.TraceId.ToString(),

@@ -125,7 +125,7 @@ foreach ($projectDirectory in $productionProjects) {
     }
 }
 
-$monitoredContractNames = @("ICompanyContext", "ICompanyContextAccessor", "ICompanyOwned")
+$monitoredContractNames = @("IOrganizationContextProvider", "IOrganizationContextAccessor", "IOrganizationOwned")
 $contractDeclarations = @{}
 foreach ($projectDirectory in $productionProjects) {
     foreach ($file in Get-ProductionFile -ProjectDirectory $projectDirectory -Patterns @("*.cs")) {
@@ -159,7 +159,7 @@ foreach ($typeName in $contractDeclarations.Keys) {
 
 $implementationRoot = Join-Path $sourceRoot "CeoAgent.Infrastructure\Implementation"
 $resolvedImplementationRoot = (Resolve-Path -LiteralPath $implementationRoot).Path.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-$allowedImplementationTopLevelFolders = @("AI", "AITools", "Company", "GoogleCalendar", "Messaging", "OpenAI", "Secrets")
+$allowedImplementationTopLevelFolders = @("AI", "AITools", "Company", "Organization", "GoogleCalendar", "Messaging", "OpenAI", "Secrets")
 foreach ($file in Get-ChildItem -LiteralPath $implementationRoot -Recurse -File -Filter "*.cs" |
     Where-Object { $_.FullName -notmatch [regex]::Escape("\bin\") -and $_.FullName -notmatch [regex]::Escape("\obj\") }) {
     $relativePath = Get-RepoRelativePath -Path $file.FullName

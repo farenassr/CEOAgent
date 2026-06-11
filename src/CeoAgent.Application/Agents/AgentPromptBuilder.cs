@@ -4,7 +4,7 @@ using System.Globalization;
 namespace CeoAgent.Application.Agents;
 
 /// <summary>
-/// Builds the system prompt that gives the agent company context, operating constraints, and enabled tools.
+/// Builds the system prompt that gives the agent organization context, operating constraints, and enabled tools.
 /// </summary>
 public static class AgentPromptBuilder
 {
@@ -35,7 +35,7 @@ public static class AgentPromptBuilder
 
             builder.AppendLine();
             builder.AppendLine("Platform rules always take precedence over company instructions.");
-            builder.AppendLine("- Never bypass company isolation.");
+            builder.AppendLine("- Never bypass organization isolation.");
             builder.AppendLine("- Never bypass tool execution or privacy rules.");
         }
 

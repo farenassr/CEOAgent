@@ -13,9 +13,9 @@ public sealed class IncomingMessageOutboxConfiguration : IEntityTypeConfiguratio
         builder.Property(entity => entity.CorrelationId).HasMaxLength(120);
         builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(entity => entity.FailureReason).HasMaxLength(240);
-        builder.HasIndex(entity => new { entity.CompanyId, entity.MessageId }).IsUnique();
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.MessageId }).IsUnique();
         builder.HasIndex(entity => new { entity.Status, entity.CreatedAt }).IsDescending(false, false);
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Conversation)
             .WithMany()
             .HasForeignKey(entity => entity.ConversationId)

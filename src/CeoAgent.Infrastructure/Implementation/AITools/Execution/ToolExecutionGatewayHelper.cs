@@ -25,7 +25,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(
-            request.CompanyId,
+            request.OrganizationId,
             idempotencyKey,
             cancellationToken);
         if (existing is not null)
@@ -35,7 +35,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
 
         var execution = new ToolExecution
         {
-            CompanyId = request.CompanyId,
+            OrganizationId = request.OrganizationId,
             ConversationId = request.ConversationId,
             CompanyToolId = descriptor.CompanyToolId,
             TriggerMessageId = request.TriggerMessageId,
@@ -55,7 +55,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(
-            request.CompanyId,
+            request.OrganizationId,
             idempotencyKey,
             cancellationToken);
         if (existing is not null)
@@ -65,7 +65,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
 
         var companyTool = await dbContext.CompanyTools
             .SingleOrDefaultAsync(
-                tool => tool.CompanyId == request.CompanyId
+                tool => tool.OrganizationId == request.OrganizationId
                     && tool.ToolKey == request.ToolCall.Name,
                 cancellationToken);
         if (companyTool is null)
@@ -75,7 +75,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
 
         var execution = new ToolExecution
         {
-            CompanyId = request.CompanyId,
+            OrganizationId = request.OrganizationId,
             ConversationId = request.ConversationId,
             CompanyToolId = companyTool.Id,
             TriggerMessageId = request.TriggerMessageId,
@@ -105,7 +105,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         if (execution.ResultMessageId is { } resultMessageId)
         {
             var resultMessage = await dbContext.FindTrackedOrPersistedMessageAsync(
-                execution.CompanyId,
+                execution.OrganizationId,
                 resultMessageId,
                 cancellationToken);
 

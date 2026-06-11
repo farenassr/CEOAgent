@@ -45,7 +45,7 @@ public sealed class AgentToolInvoker(
 
         var companyTool = await dbContext.CompanyTools
             .AsNoTracking()
-            .ForCompany(request.CompanyId)
+            .ForOrganization(request.OrganizationId)
             .Where(entity => entity.Id == descriptor.CompanyToolId)
             .Select(entity => new
             {
@@ -55,7 +55,7 @@ public sealed class AgentToolInvoker(
             .SingleOrDefaultAsync(cancellationToken);
 
         var context = new ToolExecutionContext(
-            request.CompanyId,
+            request.OrganizationId,
             request.ConversationId,
             descriptor.CompanyToolId,
             request.TriggerMessageId,
@@ -72,7 +72,7 @@ public sealed class AgentToolInvoker(
         CancellationToken cancellationToken)
     {
         var tools = await catalog.GetToolsAsync(
-            new AgentToolCatalogContext(request.CompanyId),
+            new AgentToolCatalogContext(request.OrganizationId),
             cancellationToken);
 
         return tools.SingleOrDefault(tool =>

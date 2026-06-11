@@ -67,7 +67,7 @@ public sealed class AgentPromptBuilderTests
         reassertionIndex.ShouldBeGreaterThan(overrideIndex);
         prompt[reassertionIndex..].ShouldNotContain("Never bypass calendar availability checks");
         prompt[reassertionIndex..].ShouldNotContain("Never create a reservation without the customer's name");
-        prompt[reassertionIndex..].ShouldContain("Never bypass company isolation");
+        prompt[reassertionIndex..].ShouldContain("Never bypass organization isolation");
     }
 
     private static AgentToolDescriptor CreateTool(string name, string description)

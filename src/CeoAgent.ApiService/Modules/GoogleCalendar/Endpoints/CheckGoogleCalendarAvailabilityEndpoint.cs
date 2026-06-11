@@ -20,16 +20,16 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/google-calendar/availability");
+        Post("/v1/admin/companies/{organizationId}/google-calendar/availability");
     }
 
     public override async Task HandleAsync(
         CheckGoogleCalendarAvailabilityRequest request,
         CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
+        var organizationId = Route<Guid>("organizationId");
         var context = await resolver.ResolveAsync(
-            companyId,
+            organizationId,
             MvpToolKeys.CheckGoogleCalendarAvailability,
             cancellationToken);
 

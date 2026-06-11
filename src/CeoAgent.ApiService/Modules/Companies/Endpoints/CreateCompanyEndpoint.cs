@@ -4,13 +4,16 @@ using FastEndpoints;
 using FluentValidation;
 using CeoAgent.Infrastructure;
 using CeoAgent.ApiService.Modules.Companies.Mappers;
+using CeoAgent.Application.Abstractions.Organization;
 
 namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 
 /// <summary>
 /// Creates a company for manual platform onboarding.
 /// </summary>
-public sealed class CreateCompanyEndpoint(CeoAgentDbContext dbContext) : Endpoint<CreateCompanyRequest, CompanyResponse>
+public sealed class CreateCompanyEndpoint(
+    CeoAgentDbContext dbContext,
+    IOrganizationContextProvider organizationContext) : Endpoint<CreateCompanyRequest, CompanyResponse>
 {
     public override void Configure()
     {
@@ -19,7 +22,13 @@ public sealed class CreateCompanyEndpoint(CeoAgentDbContext dbContext) : Endpoin
 
     public override async Task HandleAsync(CreateCompanyRequest request, CancellationToken cancellationToken)
     {
-        var company = CompanyMapper.ToEntity(request);
+        if (organizationContext.OrganizationId is not { } organizationId)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var company = CompanyMapper.ToEntity(request, organizationId);
 
         dbContext.Companies.Add(company);
         await dbContext.SaveChangesAsync(cancellationToken);

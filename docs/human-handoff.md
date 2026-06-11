@@ -38,7 +38,7 @@ No new columns or entities were added. `HandoffTicketId` and `EstimatedPickupAt`
 A handoff produces two signals:
 
 - **Push (mandatory).** The executor emits a **sanitized** staff alert containing only
-  `HandoffTicketId`, `conversationId`, `companyId`, `companyChannelId`/provider, the categorical
+  `HandoffTicketId`, `conversationId`, `organizationId`, `companyChannelId`/provider, the categorical
   `reason`, and `EstimatedPickupAt`. It never includes the full phone number, the literal last
   message, prompts, or transcripts. The alert is always emitted as an observable, structured log
   + metric (`handoff.escalations`). When `RequestHumanHandoffConfig.NotifyUsers` contains
@@ -51,7 +51,7 @@ A handoff produces two signals:
   Message template:
   `Atencion humana requerida. Ticket: <handoffTicketId>. ConversationId: <id>. Motivo: <reason>. Canal: WhatsApp. ETA: <estimatedPickupAt>.`
 
-- **Pull (admin).** `GET /v1/admin/companies/{companyId}/conversations/handed-off` lists
+- **Pull (admin).** `GET /v1/admin/companies/{organizationId}/conversations/handed-off` lists
   conversations with `Status = HandedOff` and their last `request_human_handoff` execution
   (ticket, categorical reason, ETA, requested-at). Operator outbound messages are not recorded
   yet (see MVP decisions).
@@ -62,7 +62,7 @@ A handoff produces two signals:
 cleared.
 
 - **Explicit admin resume (mandatory):**
-  `POST /v1/admin/companies/{companyId}/conversations/{conversationId}/resume`.
+  `POST /v1/admin/companies/{organizationId}/conversations/{conversationId}/resume`.
 - **Timeout resume:** *deferred for MVP.* `EstimatedPickupAt` is persisted on the
   `ToolExecution.Result`, but the bot is **not** auto-reopened on timeout. The operator replies
   from the same WhatsApp Business number, so operator messages cannot be distinguished from

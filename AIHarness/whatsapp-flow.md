@@ -73,7 +73,7 @@ outbox is still required before claiming exactly-once customer-visible sends.
 Admin WhatsApp entry messages use the normal Worker prompt and tool-loop path
 and are treated as real WhatsApp inbound turns:
 
-- `POST /v1/admin/companies/{companyId}/whatsapp` accepts `messageText` and
+- `POST /v1/admin/companies/{organizationId}/whatsapp` accepts `messageText` and
   `externalCustomerId`,
 - the inbound message is persisted with `providerType` set to `whatsapp_cloud`,
 - no read receipt is sent because there is no provider-side `wamid`,

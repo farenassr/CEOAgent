@@ -57,7 +57,7 @@ calculate alternative times itself.
 Google Calendar reservations created by the tool path store private extended
 properties:
 
-- `ceoagent_company_id`
+- `ceoagent_organization_id`
 - `ceoagent_conversation_id`
 - `ceoagent_customer_external_id`
 - `ceoagent_reservation_id`

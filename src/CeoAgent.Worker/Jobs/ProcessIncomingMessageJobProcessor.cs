@@ -1,6 +1,6 @@
 using CeoAgent.Application;
 using CeoAgent.Application.Agents;
-using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -32,7 +32,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
     CompanyToolRegistry toolRegistry,
     ToolExecutionGateway toolGateway,
     HumanHandoffToolExecutor handoffExecutor,
-    ICompanyContextAccessor companyContextAccessor,
+    IOrganizationContextAccessor companyContextAccessor,
     TimeProvider timeProvider,
     ILogger<ProcessIncomingMessageJobProcessor> logger)
 {
@@ -49,7 +49,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         ArgumentNullException.ThrowIfNull(job);
 
         using var logScope = BeginJobScope(job);
-        companyContextAccessor.SetCompany(job.CompanyId);
+        companyContextAccessor.SetOrganization(job.OrganizationId);
 
         try
         {
@@ -72,7 +72,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 }
 
                 logger.ZLogInformation(
-                    $"InboundSuppressedDuringHandoff conversation_id={context.Conversation.Id} company_id={context.Company.Id} message_id={context.Inbound.Id}");
+                    $"InboundSuppressedDuringHandoff conversation_id={context.Conversation.Id} organization_id={context.Company.Id} message_id={context.Inbound.Id}");
                 return;
             }
 
@@ -118,7 +118,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
             var assistant = new Message
             {
-                CompanyId = context.Company.Id,
+                OrganizationId = context.Company.Id,
                 ConversationId = context.Conversation.Id,
                 Role = MessageRole.Assistant,
                 Type = MessageType.Text,
@@ -133,7 +133,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
             dbContext.Messages.Add(assistant);
             context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-            await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
+            await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
 
             var sent = await messaging.SendTextAsync(
                 new ChannelTextMessage(
@@ -147,7 +147,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 cancellationToken);
 
             MarkAssistantSent(assistant, sent);
-            await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
+            await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
         }
         finally
         {
@@ -170,7 +170,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
     {
         var assistant = new Message
         {
-            CompanyId = context.Company.Id,
+            OrganizationId = context.Company.Id,
             ConversationId = context.Conversation.Id,
             Role = MessageRole.Assistant,
             Type = MessageType.Text,
@@ -185,7 +185,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
         dbContext.Messages.Add(assistant);
         context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-        await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
+        await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
 
         var sent = await messaging.SendTextAsync(
             new ChannelTextMessage(
@@ -199,7 +199,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
             cancellationToken);
 
         MarkAssistantSent(assistant, sent);
-        await SaveFinalStateAsync(job.CompanyId, job.ConversationId, job.JobId, cancellationToken);
+        await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
     }
 
     private async Task SendExistingReplyAsync(
@@ -225,7 +225,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
     }
 
     private async Task SaveFinalStateAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid? jobId,
         CancellationToken cancellationToken)
@@ -236,7 +236,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         }
         catch (DbUpdateConcurrencyException)
         {
-            logger.ZLogWarning($"ConversationConcurrencyConflict company_id={companyId} conversation_id={conversationId} job_id={jobId}");
+            logger.ZLogWarning($"ConversationConcurrencyConflict organization_id={organizationId} conversation_id={conversationId} job_id={jobId}");
             throw;
         }
     }
@@ -246,7 +246,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         return logger.BeginScope(new Dictionary<string, object?>
         {
             ["correlation_id"] = job.CorrelationId,
-            ["company_id"] = job.CompanyId,
+            ["organization_id"] = job.OrganizationId,
             ["conversation_id"] = job.ConversationId,
             ["job_id"] = job.JobId,
             ["trace_id"] = Activity.Current?.TraceId.ToString(),
@@ -279,37 +279,37 @@ public sealed class ProcessIncomingMessageJobProcessor(
 
     private async Task<ProcessorContext> LoadContextAsync(ProcessIncomingMessageJob job, CancellationToken cancellationToken)
     {
-        var company = await dbContext.Companies.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == job.CompanyId, cancellationToken)
-            ?? throw new InvalidOperationException($"Company '{job.CompanyId}' was not found.");
-        var conversation = await dbContext.Conversations.ForCompany(job.CompanyId).SingleAsync(entity => entity.Id == job.ConversationId, cancellationToken);
+        var company = await dbContext.Companies.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == job.OrganizationId, cancellationToken)
+            ?? throw new InvalidOperationException($"Company '{job.OrganizationId}' was not found.");
+        var conversation = await dbContext.Conversations.ForOrganization(job.OrganizationId).SingleAsync(entity => entity.Id == job.ConversationId, cancellationToken);
 
-        var agentProfile = await dbContext.AgentProfiles.AsNoTracking().ForCompany(job.CompanyId).SingleAsync(entity => entity.Id == conversation.AgentProfileId, cancellationToken);
-        var channel = await dbContext.CompanyChannels.AsNoTracking().ForCompany(job.CompanyId).SingleOrDefaultAsync(entity => entity.Id == conversation.CompanyChannelId, cancellationToken)
+        var agentProfile = await dbContext.AgentProfiles.AsNoTracking().ForOrganization(job.OrganizationId).SingleAsync(entity => entity.Id == conversation.AgentProfileId, cancellationToken);
+        var channel = await dbContext.CompanyChannels.AsNoTracking().ForOrganization(job.OrganizationId).SingleOrDefaultAsync(entity => entity.Id == conversation.CompanyChannelId, cancellationToken)
             ?? throw new InvalidOperationException($"Company channel '{conversation.CompanyChannelId}' was not found.");
 
         var customer = await dbContext.Customers
             .AsNoTracking()
-            .ForCompany(job.CompanyId)
+            .ForOrganization(job.OrganizationId)
             .SingleOrDefaultAsync(
                 entity => entity.Id == conversation.CustomerId,
                 cancellationToken)
             ?? throw new InvalidOperationException($"Customer '{conversation.CustomerId}' was not found.");
 
         var inbound = await dbContext.Messages
-            .ForConversation(job.CompanyId, job.ConversationId)
+            .ForConversation(job.OrganizationId, job.ConversationId)
             .SingleOrDefaultAsync(
                 entity => entity.Id == job.MessageId,
                 cancellationToken)
             ?? throw new InvalidOperationException($"Message '{job.MessageId}' was not found.");
 
         var messageHistory = await dbContext.Messages
-            .AgentEligibleHistory(dbContext.ToolExecutions, job.CompanyId, job.ConversationId, 8)
+            .AgentEligibleHistory(dbContext.ToolExecutions, job.OrganizationId, job.ConversationId, 8)
             .Select(entity => new MessageHistoryItem(entity.Role, entity.MessageText))
             .ToArrayAsync(cancellationToken);
 
         Array.Reverse(messageHistory);
 
-        var tools = await toolRegistry.GetEnabledToolsAsync(job.CompanyId, cancellationToken);
+        var tools = await toolRegistry.GetEnabledToolsAsync(job.OrganizationId, cancellationToken);
 
         return new ProcessorContext(
             company,
@@ -334,7 +334,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         {
             AgentRunResult agentResult;
             using var activity = CeoAgentTelemetry.ActivitySource.StartActivity("agent.run");
-            activity?.SetTag("company.id", context.Company.Id);
+            activity?.SetTag("organization.id", context.Company.Id);
             activity?.SetTag("conversation.id", context.Conversation.Id);
             activity?.SetTag("channel", context.Channel.Provider.ToString());
             activity?.SetTag("llm.provider", context.AgentProfile.LlmProvider.ToString());
@@ -367,7 +367,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
                 logger.ZLogError(
                     exception,
-                    $"AgentRuntimeFailed conversation_id={context.Conversation.Id} company_id={context.Company.Id} iteration={iteration}");
+                    $"AgentRuntimeFailed conversation_id={context.Conversation.Id} organization_id={context.Company.Id} iteration={iteration}");
                 return LoopCapFallbackText;
             }
 
@@ -380,7 +380,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
             {
                 var triggerMessage = new Message
                 {
-                    CompanyId = context.Company.Id,
+                    OrganizationId = context.Company.Id,
                     ConversationId = context.Conversation.Id,
                     Role = MessageRole.ToolCall,
                     Type = MessageType.Text,
@@ -389,7 +389,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 };
                 dbContext.Messages.Add(triggerMessage);
                 logger.ZLogInformation(
-                    $"ToolCallRequested tool={toolCall.Name} iteration={iteration} conversation_id={context.Conversation.Id} company_id={context.Company.Id} side_effects_enabled={sideEffectsEnabled}");
+                    $"ToolCallRequested tool={toolCall.Name} iteration={iteration} conversation_id={context.Conversation.Id} organization_id={context.Company.Id} side_effects_enabled={sideEffectsEnabled}");
 
                 messages.Add(new AgentConversationMessage(
                     "assistant",
@@ -418,7 +418,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         }
 
         logger.ZLogWarning(
-            $"AgentLoopCapReached conversation_id={context.Conversation.Id} company_id={context.Company.Id} max_iterations={MaxToolLoopIterations}");
+            $"AgentLoopCapReached conversation_id={context.Conversation.Id} organization_id={context.Company.Id} max_iterations={MaxToolLoopIterations}");
         await EscalateToHumanAsync(context, cancellationToken);
         return LoopCapFallbackText;
     }
@@ -442,7 +442,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
         {
             logger.ZLogError(
                 exception,
-                $"AutoHandoffEscalationFailed conversation_id={context.Conversation.Id} company_id={context.Company.Id}");
+                $"AutoHandoffEscalationFailed conversation_id={context.Conversation.Id} organization_id={context.Company.Id}");
         }
     }
 

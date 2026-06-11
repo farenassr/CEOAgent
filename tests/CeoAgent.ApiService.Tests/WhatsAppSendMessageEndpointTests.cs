@@ -24,13 +24,13 @@ public sealed class WhatsAppSendMessageEndpointTests
         });
 
         using var bootstrapClient = factory.CreateAuthenticatedClient();
-        var companyId = await CreateCompanyAsync(bootstrapClient, "Company A");
-        using var tenantClient = factory.CreateAuthenticatedClient(companyId);
-        var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient, companyId);
-        var channelId = await RegisterWhatsAppChannelAsync(tenantClient, companyId, credentialId);
+        var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
+        using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
+        var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient, organizationId);
+        var channelId = await RegisterWhatsAppChannelAsync(tenantClient, organizationId, credentialId);
 
         using var response = await tenantClient.PostAsJsonAsync(
-            $"/v1/admin/companies/{companyId}/channels/{channelId}/whatsapp/messages",
+            $"/v1/admin/companies/{organizationId}/channels/{channelId}/whatsapp/messages",
             new
             {
                 recipientExternalId = "573001112233",
@@ -44,7 +44,7 @@ public sealed class WhatsAppSendMessageEndpointTests
         body.ProviderMessageId.ShouldBe("wamid.sent-1");
 
         var sent = messaging.TextMessages.Single();
-        sent.CompanyId.ShouldBe(companyId);
+        sent.OrganizationId.ShouldBe(organizationId);
         sent.CompanyChannelId.ShouldBe(channelId);
         sent.RecipientExternalId.ShouldBe("573001112233");
         sent.Text.ShouldBe("Hola desde CeoAgent");
@@ -66,10 +66,10 @@ public sealed class WhatsAppSendMessageEndpointTests
         return body.Id;
     }
 
-    private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client, Guid companyId)
+    private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client, Guid organizationId)
     {
         using var response = await client.PostAsJsonAsync(
-            $"/v1/admin/companies/{companyId}/integration-credentials",
+            $"/v1/admin/companies/{organizationId}/integration-credentials",
             new
             {
                 provider = "whatsapp_cloud",
@@ -82,10 +82,10 @@ public sealed class WhatsAppSendMessageEndpointTests
         return body.Id;
     }
 
-    private static async Task<Guid> RegisterWhatsAppChannelAsync(HttpClient client, Guid companyId, Guid credentialId)
+    private static async Task<Guid> RegisterWhatsAppChannelAsync(HttpClient client, Guid organizationId, Guid credentialId)
     {
         using var response = await client.PostAsJsonAsync(
-            $"/v1/admin/companies/{companyId}/channels",
+            $"/v1/admin/companies/{organizationId}/channels",
             new
             {
                 provider = "whatsapp_cloud",

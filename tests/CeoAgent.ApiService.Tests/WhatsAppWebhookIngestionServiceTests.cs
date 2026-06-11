@@ -17,7 +17,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     [Test]
     public async Task IngestAsync_WhenInitialQueueEnqueueFails_PersistsOutboxAndDispatchesLater()
     {
-        var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue { FailNextEnqueue = true };
@@ -25,7 +25,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var dispatcherLogger = new RecordingLogger<IncomingMessageOutboxDispatcher>();
         var dispatcher = new IncomingMessageOutboxDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
         var service = new WhatsAppWebhookIngestionService(dbContext, dispatcher, TimeProvider.System, logger);
-        SeedCompany(dbContext, companyId);
+        SeedCompany(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -83,13 +83,13 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     [Test]
     public async Task IngestAsync_WhenDuplicateMessageHasNoReplyAndOutboxAlreadyDispatched_DoesNotReenqueueExistingMessage()
     {
-        var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, companyId);
+        SeedCompany(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -144,13 +144,13 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     [Test]
     public async Task IngestAsync_WhenDuplicateMessageAlreadyHasReply_DoesNotReenqueue()
     {
-        var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, companyId);
+        SeedCompany(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -189,7 +189,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         first.MessageId.ShouldNotBeNull();
         dbContext.Messages.Add(new Message
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ConversationId = first.ConversationId!.Value,
             Role = MessageRole.Assistant,
             Type = MessageType.Text,
@@ -209,13 +209,13 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     [Test]
     public async Task IngestAsync_WhenWebhookContainsMultipleMessages_PersistsAndEnqueuesEachMessage()
     {
-        var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, companyId);
+        SeedCompany(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -272,13 +272,13 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     [Test]
     public async Task IngestAsync_WhenPhoneNumberIdIsUnknown_ReturnsNotEnqueued()
     {
-        var companyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, companyId);
+        SeedCompany(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -311,24 +311,24 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         queue.Jobs.ShouldBeEmpty();
     }
 
-    private static void SeedCompany(CeoAgentDbContext dbContext, Guid companyId)
+    private static void SeedCompany(CeoAgentDbContext dbContext, Guid organizationId)
     {
         var company = new Company
         {
-            Id = companyId,
+            Id = organizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         };
         var profile = new AgentProfile
         {
             Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32"),
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ModelName = "gpt-4.1-mini",
             DisplayName = "Contoso Assistant",
             Language = "es",
         };
         var channel = CompanyChannel.ForWhatsAppCloud(
-            companyId,
+            organizationId,
             "1152556904604978",
             new WhatsAppCloudMetadata
             {

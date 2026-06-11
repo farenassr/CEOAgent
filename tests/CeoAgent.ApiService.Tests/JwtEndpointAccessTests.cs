@@ -18,7 +18,7 @@ public sealed class JwtEndpointAccessTests
             "/v1/admin/companies",
             new
             {
-                name = "Company A",
+                name = "Organization A",
                 timeZoneId = "America/Bogota",
             });
 
@@ -26,15 +26,18 @@ public sealed class JwtEndpointAccessTests
     }
 
     [Test]
-    public async Task CompanyScopedEndpoint_UsesCompanyIdClaimAsTenantBoundary()
+    public async Task CompanyScopedEndpoint_UsesOrganizationIdClaimAsTenantBoundary()
     {
         await using var factory = new ApiFactory();
-        using var bootstrapClient = factory.CreateAuthenticatedClient();
-        var companyId = await CreateCompanyAsync(bootstrapClient, "Company A");
-        var otherCompanyId = await CreateCompanyAsync(bootstrapClient, "Company B");
+        var organizationId = Guid.CreateVersion7();
+        var otherOrganizationId = Guid.CreateVersion7();
+        using var organizationClient = factory.CreateAuthenticatedClient(organizationId);
+        using var otherOrganizationClient = factory.CreateAuthenticatedClient(otherOrganizationId);
+        organizationId = await CreateCompanyAsync(organizationClient, "Organization A");
+        otherOrganizationId = await CreateCompanyAsync(otherOrganizationClient, "Organization B");
 
-        using var tenantAClient = factory.CreateAuthenticatedClient(companyId);
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{otherCompanyId}/channels")
+        using var tenantAClient = factory.CreateAuthenticatedClient(organizationId);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{otherOrganizationId}/channels")
         {
             Content = JsonContent.Create(new
             {

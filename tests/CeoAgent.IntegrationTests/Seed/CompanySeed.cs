@@ -18,7 +18,7 @@ internal static class CompanySeed
 
     public static async Task<CompanySeedIds> SeedCompanyGraphAsync(
         CeoAgentDbContext dbContext,
-        Guid companyId,
+        Guid organizationId,
         string providerChannelId)
     {
         var channelId = Guid.CreateVersion7();
@@ -28,19 +28,19 @@ internal static class CompanySeed
 
         dbContext.Companies.Add(new CompanyEntity
         {
-            Id = companyId,
+            Id = organizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         });
         dbContext.CompanyChannels.Add(CompanyChannel.ForWhatsAppCloud(
-            companyId,
+            organizationId,
             providerChannelId,
             CreateWhatsAppMetadata(providerChannelId),
             id: channelId));
         dbContext.AgentProfiles.Add(new AgentProfile
         {
             Id = agentProfileId,
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ModelName = "gpt-4.1-mini",
             DisplayName = "Contoso Assistant",
             Language = "es",
@@ -48,14 +48,14 @@ internal static class CompanySeed
         dbContext.Customers.Add(new Customer
         {
             Id = customerId,
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             CompanyChannelId = channelId,
             ExternalCustomerId = "573001112233",
         });
         dbContext.CompanyTools.Add(new CompanyTool
         {
             Id = toolId,
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ToolKey = "request_human_handoff",
         });
 

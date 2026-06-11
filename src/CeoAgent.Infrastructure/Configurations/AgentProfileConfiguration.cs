@@ -13,11 +13,11 @@ public sealed class AgentProfileConfiguration : IEntityTypeConfiguration<AgentPr
         builder.Property(entity => entity.ModelName).HasMaxLength(120).IsRequired();
         builder.Property(entity => entity.DisplayName).HasMaxLength(160).IsRequired();
         builder.Property(entity => entity.Language).HasMaxLength(16).IsRequired();
-        builder.HasIndex(entity => entity.CompanyId).IsUnique();
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => entity.OrganizationId).IsUnique();
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Company)
             .WithOne(entity => entity.AgentProfile)
-            .HasForeignKey<AgentProfile>(entity => entity.CompanyId)
+            .HasForeignKey<AgentProfile>(entity => entity.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property<uint>("xmin").IsRowVersion();

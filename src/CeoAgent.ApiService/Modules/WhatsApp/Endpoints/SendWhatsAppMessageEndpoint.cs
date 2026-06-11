@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Application.Abstractions.Messaging;
@@ -18,22 +18,22 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 /// </summary>
 public sealed class SendWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext,
+    IOrganizationContextProvider companyContext,
     IMessageChannelIntegration messaging) : Endpoint<SendWhatsAppMessageRequest, SendWhatsAppMessageResponse>
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/channels/{companyChannelId}/whatsapp/messages");
+        Post("/v1/admin/companies/{organizationId}/channels/{companyChannelId}/whatsapp/messages");
     }
 
     public override async Task HandleAsync(SendWhatsAppMessageRequest request, CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
+        var organizationId = Route<Guid>("organizationId");
         var companyChannelId = Route<Guid>("companyChannelId");
 
-        if (companyContext.CompanyId != companyId)
+        if (companyContext.OrganizationId != organizationId)
         {
-            throw new NotFoundException("company", companyId);
+            throw new NotFoundException("company", organizationId);
         }
 
         var channel = await dbContext.CompanyChannels
@@ -41,11 +41,11 @@ public sealed class SendWhatsAppMessageEndpoint(
             .Select(entity => new
             {
                 entity.Id,
-                entity.CompanyId,
+                entity.OrganizationId,
                 entity.Provider,
             })
             .FirstOrDefaultAsync(
-                entity => entity.CompanyId == companyId && entity.Id == companyChannelId,
+                entity => entity.OrganizationId == organizationId && entity.Id == companyChannelId,
                 cancellationToken) ?? throw new NotFoundException("company_channel", companyChannelId);
 
         if (channel.Provider != CompanyChannelProvider.WhatsAppCloud)
@@ -57,7 +57,7 @@ public sealed class SendWhatsAppMessageEndpoint(
 
         var sent = await messaging.SendTextAsync(
             new ChannelTextMessage(
-                companyId,
+                organizationId,
                 companyChannelId,
                 Guid.Empty,
                 Guid.CreateVersion7(),

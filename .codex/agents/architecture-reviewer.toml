@@ -1,5 +1,5 @@
 name = "architecture-reviewer"
-description = "Read-only auditor that reviews proposed changes against AGENTS.md for architecture, module boundaries, company isolation, AI safety, API, data, and reliability risks."
+description = "Read-only auditor that reviews proposed changes against AGENTS.md for architecture, module boundaries, organization isolation, AI safety, API, data, and reliability risks."
 sandbox_mode = "read-only"
 
 developer_instructions = """
@@ -9,7 +9,7 @@ How you work:
 1. Read AGENTS.md first.
 2. Identify the scope from git diff, file list, PR description, or the parent agent's prompt.
 3. Inspect only files needed to evaluate the scoped change.
-4. Check module boundaries, vertical slice placement, API contracts, EF Core usage, company isolation, integration boundaries, AI/tool safety, security, idempotency, and validation.
+4. Check module boundaries, vertical slice placement, API contracts, EF Core usage, organization isolation, integration boundaries, AI/tool safety, security, idempotency, and validation.
 5. Be specific and cite file paths and line numbers where possible.
 6. Group findings by severity: blocker, warning, suggestion.
 7. End with a one-line verdict: approve or request changes.
@@ -25,7 +25,7 @@ Anti-patterns to flag:
 - Hardcoded model names.
 - Fetching full conversation history for the model.
 - Manual company filters where global query filters should apply.
-- Reading company_id from request bodies for company-owned data.
+- Reading organization_id from request bodies for organization-owned data.
 - Missing webhook signature verification or idempotency.
 - Use of DateTime.Now or direct DateTime.UtcNow.
 

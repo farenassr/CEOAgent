@@ -15,10 +15,10 @@ Rules:
 - Keep queries composable by returning `IQueryable<TEntity>` unless the helper
   explicitly needs tracked entities from `CeoAgentDbContext.ChangeTracker`
   before querying PostgreSQL.
-- Keep explicit `CompanyId` predicates for company-owned reads even when global
+- Keep explicit `OrganizationId` predicates for organization-owned reads even when global
   EF Core filters also apply.
 - Use `IgnoreQueryFilters()` only in narrowly named helpers that immediately
-  re-apply company and aggregate predicates.
+  re-apply organization and aggregate predicates.
 - Keep `AsNoTracking()` at the call site when the caller needs read-only entity
   context. Do not hide tracking decisions inside broad query helpers.
 - Do not add repositories, generic repositories, or custom unit-of-work

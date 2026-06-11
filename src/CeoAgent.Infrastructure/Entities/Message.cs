@@ -3,7 +3,7 @@ using CeoAgent.Infrastructure.Entities.JsonDocuments;
 
 namespace CeoAgent.Infrastructure.Entities;
 
-public sealed class Message : AuditableCompanyOwnedEntity
+public sealed class Message : AuditableOrganizationOwnedEntity
 {
     /// <summary>
     /// Unique message identifier. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36.

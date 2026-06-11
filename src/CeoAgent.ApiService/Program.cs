@@ -1,5 +1,5 @@
 using CeoAgent.ApiService.Dependencies;
-using CeoAgent.ApiService.Infrastructure.Company;
+using CeoAgent.ApiService.Infrastructure.Organization;
 using CeoAgent.ApiService.Infrastructure.Correlation;
 using CeoAgent.ApiService.Infrastructure.ErrorHandling;
 using CeoAgent.ApiService.Infrastructure.Queues;
@@ -102,6 +102,7 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<AuthenticatedOrganizationContextProvider>();
 builder.Services.AddSingleton<CorrelationIdAccessor>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApi();
@@ -135,7 +136,7 @@ app.UseExceptionHandler();
 app.UseRateLimiter();
 app.UseConfiguredCors();
 app.UseAuthentication();
-app.UseMiddleware<CompanyContextMiddleware>();
+app.UseMiddleware<OrganizationContextMiddleware>();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

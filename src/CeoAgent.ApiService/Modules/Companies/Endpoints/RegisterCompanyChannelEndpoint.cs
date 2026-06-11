@@ -15,14 +15,14 @@ public sealed class RegisterCompanyChannelEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/channels");
+        Post("/v1/admin/companies/{organizationId}/channels");
     }
 
     public override async Task HandleAsync(CompanyChannelRequest request, CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
+        var organizationId = Route<Guid>("organizationId");
         var channel = await sender.Send(
-            CompanyMapper.ToCommand(request, companyId),
+            CompanyMapper.ToCommand(request, organizationId),
             cancellationToken);
 
         await Send.OkAsync(CompanyMapper.ToResponse(channel), cancellationToken);

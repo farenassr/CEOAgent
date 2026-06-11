@@ -23,7 +23,7 @@ MVP capabilities:
 - Company-configurable AI profile, prompt, and model.
 - Dynamic catalog of company-enabled tools.
 - Safe tool execution: the LLM never executes side effects directly.
-- PostgreSQL persistence with global filters by `company_id`.
+- PostgreSQL persistence with global filters by `organization_id`.
 - Azure Storage Queues for background jobs.
 - Azure Blob Storage for media and attachments.
 - OpenTelemetry, ZLogger, and Langfuse observability.
@@ -168,13 +168,6 @@ Configure the local PostgreSQL password for Aspire:
 dotnet user-secrets set "Parameters:postgres-password" "postgres" --project src/CeoAgent.AppHost
 ```
 
-Configure local admin authentication for Aspire:
-
-```powershell
-dotnet user-secrets set "Parameters:admin-api-key" "dev-admin-key-change-me" --project src/CeoAgent.AppHost
-dotnet user-secrets set "Parameters:admin-company-id" "018f5c7a-1234-7890-abcd-000000000001" --project src/CeoAgent.AppHost
-```
-
 Configure the local EF Core design-time connection string:
 
 ```powershell
@@ -226,10 +219,10 @@ default to reduce PII exposure.
 
 ## Security And Multi-Tenancy
 
-- Company-owned tables contain `company_id`.
+- Organization-owned tables contain `organization_id`.
+- Authenticated admin paths resolve `organization_id` from the Keycloak `organization` claim.
 - Customer phone numbers do not identify companies.
 - Companies are resolved by channel, such as WhatsApp `phone_number_id`.
-- Admin endpoints use a static API key in the MVP.
 - Webhooks are authorized by provider HMAC signatures.
 - Provider credentials are stored as references such as `kv://...`, never raw secrets.
 

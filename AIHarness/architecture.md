@@ -28,8 +28,8 @@ execution lives in `CeoAgent.Infrastructure/Implementation/AITools`.
 | --- | --- |
 | `CeoAgent.ApiService` | FastEndpoints, webhook receiver, admin endpoints, global errors, correlation, HTTP contracts. |
 | `CeoAgent.Worker` | Queue-driven jobs, agent loop orchestration, outbound processing. |
-| `CeoAgent.Application` | Application-owned abstractions, prompt behavior, and company context contracts. |
-| `CeoAgent.Infrastructure` | EF Core entities/configurations, DbContext, storage and queue infrastructure, provider implementations, company context implementation, and native tool execution. |
+| `CeoAgent.Application` | Application-owned abstractions, prompt behavior, and organization context contracts. |
+| `CeoAgent.Infrastructure` | EF Core entities/configurations, DbContext, storage and queue infrastructure, provider implementations, organization context implementation, and native tool execution. |
 | `CeoAgent.Shared` | Public request/response DTOs, shared enums, provider-neutral runtime/tool/calendar/messaging/job models. |
 
 ## Dependency Direction
@@ -64,7 +64,7 @@ folders and namespaces that include the same segments.
 - No MediatR.
 - No generic repositories or custom Unit of Work.
 - No business logic calling external providers directly.
-- Company isolation through global EF query filters.
+- Organization isolation through global EF query filters.
 - No migration application from agents.
 - No live LLM calls in CI.
 - No raw secrets in repo files or database rows.
@@ -72,7 +72,7 @@ folders and namespaces that include the same segments.
 ## Review Questions
 
 - Does this change keep long work out of the API request path?
-- Does this change preserve company isolation?
+- Does this change preserve organization isolation?
 - Does this change keep provider details behind integration ports and implementations?
 - Does this change add tests proportionate to risk?
 - Does this change update docs/evals when behavior changes?

@@ -79,7 +79,7 @@ public sealed class AgentToolCatalogTests
         {
             return Task.FromResult(new ToolExecution
             {
-                CompanyId = context.CompanyId,
+                OrganizationId = context.OrganizationId,
                 ConversationId = context.ConversationId,
                 CompanyToolId = context.CompanyToolId,
                 TriggerMessageId = context.TriggerMessageId,

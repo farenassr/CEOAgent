@@ -9,7 +9,7 @@ public sealed record CalendarReservationRequest(
     string IdempotencyKey,
     string? Description,
     string? CustomerEmail = null,
-    string? CompanyId = null,
+    string? OrganizationId = null,
     string? ConversationId = null,
     string? CustomerExternalId = null,
     string? ReservationId = null);

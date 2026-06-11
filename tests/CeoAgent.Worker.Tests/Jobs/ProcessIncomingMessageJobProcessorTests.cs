@@ -1,8 +1,8 @@
 using System.Text.Json;
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Shared.AI;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -35,7 +35,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -61,7 +61,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         var job = new ProcessIncomingMessageJob(
-            fixture.CompanyId,
+            fixture.OrganizationId,
             fixture.Conversation.Id,
             fixture.InboundMessage.Id,
             "correlation-123");
@@ -73,7 +73,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.TextMessages.Count.ShouldBe(1);
         fixture.Agent.Requests.Count.ShouldBe(0);
 
-        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         var assistantCount = await fixture.DbContext.Messages
             .CountAsync(message => message.Role == MessageRole.Assistant);
         assistantCount.ShouldBe(1);
@@ -94,7 +94,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -104,7 +104,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         var request = fixture.Agent.Requests.Single();
         request.Messages[^1].Text.ShouldBe("Hola desde WhatsApp admin");
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
-        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         var assistant = await fixture.DbContext.Messages
             .SingleAsync(message => message.Role == MessageRole.Assistant);
         assistant.MessageText.ShouldBe("Claro, reviso disponibilidad.");
@@ -130,7 +130,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -165,7 +165,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -211,7 +211,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -262,7 +262,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -270,7 +270,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         saveChangesCount.ShouldBe(2);
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
-        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
         (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.ToolResult)).ShouldBe(1);
         (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(1);
@@ -287,7 +287,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.DbContext.Messages.AddRange(
             new Message
             {
-                CompanyId = fixture.CompanyId,
+                OrganizationId = fixture.OrganizationId,
                 ConversationId = fixture.Conversation.Id,
                 Role = MessageRole.ToolCall,
                 Type = MessageType.Text,
@@ -296,7 +296,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             },
             new Message
             {
-                CompanyId = fixture.CompanyId,
+                OrganizationId = fixture.OrganizationId,
                 ConversationId = fixture.Conversation.Id,
                 Role = MessageRole.ToolResult,
                 Type = MessageType.Text,
@@ -307,7 +307,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -331,7 +331,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -367,7 +367,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -421,7 +421,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -464,13 +464,13 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
             CancellationToken.None);
 
-        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
         conversation.Status.ShouldBe(ConversationStatus.HandedOff);
 
@@ -519,7 +519,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -528,7 +528,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.TextMessages.ShouldContain(message =>
             message.Text == "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
 
-        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
         conversation.Status.ShouldBe(ConversationStatus.HandedOff);
         (await fixture.DbContext.ToolExecutions.CountAsync(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff)).ShouldBe(1);
@@ -551,7 +551,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         await fixture.Processor.ProcessAsync(
             new ProcessIncomingMessageJob(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.InboundMessage.Id,
                 "correlation-123"),
@@ -561,7 +561,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.TextMessages.ShouldBeEmpty();
         fixture.Messaging.ReadMessages.Count.ShouldBe(1);
 
-        fixture.CompanyContext.SetCompany(fixture.CompanyId);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(0);
     }
 
@@ -572,8 +572,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         private ProcessorFixture(PostgresWorkerDatabase database)
         {
             this.database = database;
-            CompanyContext = database.CompanyContext;
-            CompanyContext.SetCompany(CompanyId);
+            OrganizationContext = database.OrganizationContext;
+            OrganizationContext.SetOrganization(OrganizationId);
             DbContext = database.Context;
             Messaging = new FakeMessageChannelIntegration();
             Agent = new FakeAgentRuntime();
@@ -607,13 +607,13 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 toolRegistry,
                 toolGateway,
                 handoffExecutor,
-                CompanyContext,
+                OrganizationContext,
                 TimeProvider.System,
                 NullLogger<ProcessIncomingMessageJobProcessor>.Instance);
 
             var company = new Company
             {
-                Id = CompanyId,
+                Id = OrganizationId,
                 Name = "Contoso Bistro",
                 TimeZoneId = "America/Bogota",
                 WorkingHours = new WorkingHours
@@ -635,7 +635,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var profile = new AgentProfile
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ModelName = "gpt-4.1-mini",
                 DisplayName = "Contoso Assistant",
                 Language = "es",
@@ -643,7 +643,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             };
 
             Channel = CompanyChannel.ForWhatsAppCloud(
-                CompanyId,
+                OrganizationId,
                 "1152556904604978",
                 new WhatsAppCloudMetadata
                 {
@@ -656,7 +656,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             Customer = new Customer
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b33"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 CompanyChannelId = Channel.Id,
                 ExternalCustomerId = "15551234567",
             };
@@ -664,7 +664,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             Conversation = new Conversation
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 CustomerId = Customer.Id,
                 CompanyChannelId = Channel.Id,
                 AgentProfileId = profile.Id,
@@ -674,7 +674,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             InboundMessage = new Message
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ConversationId = Conversation.Id,
                 Role = MessageRole.User,
                 Type = MessageType.Audio,
@@ -690,7 +690,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var credential = new IntegrationCredentialReference
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 Provider = IntegrationProvider.GoogleCalendar,
                 Purpose = "google_calendar",
                 Reference = "config://GoogleCalendar:ServiceAccountJson",
@@ -699,7 +699,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var checkTool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ToolKey = MvpToolKeys.CheckGoogleCalendarAvailability,
                 Description = "Check Google Calendar availability before offering or confirming reservation times.",
                 ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":"string"},"partySize":{"type":"integer"},"preferredTime":{"type":["string","null"]}},"required":["date","partySize","preferredTime"],"additionalProperties":false}"""),
@@ -715,7 +715,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var createTool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b41"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
                 Description = "Create a Google Calendar reservation after explicit customer confirmation.",
                 ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"},"customerName":{"type":"string"}},"required":["start","end","summary","customerName"],"additionalProperties":false}"""),
@@ -731,7 +731,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var findTool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b43"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ToolKey = MvpToolKeys.FindGoogleCalendarReservations,
                 Description = "Find reservations for the current WhatsApp customer.",
                 ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":["string","null"]},"includePast":{"type":"boolean"},"status":{"type":["string","null"]}},"required":["date","includePast","status"],"additionalProperties":false}"""),
@@ -747,7 +747,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var handoffTool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b44"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ToolKey = MvpToolKeys.RequestHumanHandoff,
                 Description = "Escalate the conversation to a human agent when the customer asks for a person.",
                 ParametersSchema = ParseSchema("""{"type":"object","properties":{"reason":{"type":"string"},"notes":{"type":["string","null"]}},"required":["reason","notes"],"additionalProperties":false}"""),
@@ -768,9 +768,9 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             return new ProcessorFixture(await PostgresWorkerDatabase.CreateAsync());
         }
 
-        public Guid CompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
 
-        public CompanyContextAccessor CompanyContext { get; }
+        public OrganizationContextAccessor OrganizationContext { get; }
 
         public CeoAgentDbContext DbContext { get; }
 

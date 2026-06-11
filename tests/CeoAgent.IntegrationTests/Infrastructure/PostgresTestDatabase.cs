@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.IntegrationTests.Seed;
 using Microsoft.EntityFrameworkCore;
@@ -13,14 +13,14 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
 {
     private readonly PostgreSqlContainer postgres;
 
-    private PostgresTestDatabase(PostgreSqlContainer postgres, CompanyContextAccessor companyContext, CeoAgentDbContext context)
+    private PostgresTestDatabase(PostgreSqlContainer postgres, OrganizationContextAccessor companyContext, CeoAgentDbContext context)
     {
         this.postgres = postgres;
-        CompanyContext = companyContext;
+        OrganizationContext = companyContext;
         Context = context;
     }
 
-    public CompanyContextAccessor CompanyContext { get; }
+    public OrganizationContextAccessor OrganizationContext { get; }
 
     public CeoAgentDbContext Context { get; }
 
@@ -34,7 +34,7 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         await postgres.StartAsync();
         await WaitForPostgresAsync(postgres.GetConnectionString());
 
-        var companyContext = new CompanyContextAccessor();
+        var companyContext = new OrganizationContextAccessor();
         var context = CeoAgentDbContextTestFactory.CreatePostgres(postgres.GetConnectionString(), companyContext);
         if (context.Database.GetMigrations().Any())
         {
@@ -73,10 +73,10 @@ internal sealed class PostgresTestDatabase : IAsyncDisposable
         throw new TimeoutException("PostgreSQL test container did not accept connections before the timeout.", lastError);
     }
 
-    public async Task<CompanySeedIds> SeedCompanyGraphAsync(Guid companyId)
+    public async Task<CompanySeedIds> SeedCompanyGraphAsync(Guid organizationId)
     {
-        var seed = await CompanySeed.SeedCompanyGraphAsync(Context, companyId, $"channel-{Guid.CreateVersion7()}");
-        CompanyContext.SetCompany(companyId);
+        var seed = await CompanySeed.SeedCompanyGraphAsync(Context, organizationId, $"channel-{Guid.CreateVersion7()}");
+        OrganizationContext.SetOrganization(organizationId);
         return seed;
     }
 

@@ -19,15 +19,15 @@ public sealed class RegisterIntegrationCredentialEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/integration-credentials");
+        Post("/v1/admin/companies/{organizationId}/integration-credentials");
     }
 
     public override async Task HandleAsync(IntegrationCredentialRequest request, CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
-        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
+        var organizationId = Route<Guid>("organizationId");
+        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
 
-        var credential = CompanyMapper.ToEntity(request, companyId);
+        var credential = CompanyMapper.ToEntity(request, organizationId);
 
         dbContext.IntegrationCredentialReferences.Add(credential);
         await dbContext.SaveChangesAsync(cancellationToken);

@@ -13,7 +13,7 @@ public sealed class IntegrationCredentialResponse
     /// <summary>
     /// Company that owns this credential reference. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30.
     /// </summary>
-    public Guid CompanyId { get; set; }
+    public Guid OrganizationId { get; set; }
 
     /// <summary>
     /// Integration provider key. Example: google_calendar.

@@ -3,7 +3,7 @@ using CeoAgent.Shared.AI;
 namespace CeoAgent.Shared.AITools;
 
 public sealed record ToolExecutionGatewayRequest(
-    Guid CompanyId,
+    Guid OrganizationId,
     Guid ConversationId,
     Guid TriggerMessageId,
     Guid InboundMessageId,

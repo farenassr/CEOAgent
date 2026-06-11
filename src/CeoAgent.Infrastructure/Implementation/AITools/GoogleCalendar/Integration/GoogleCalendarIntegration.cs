@@ -19,7 +19,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
 {
     private const int MaxEventListPages = 20;
     private const string IdempotencyPropertyName = "ceoagent_idempotency_key";
-    private const string CompanyPropertyName = "ceoagent_company_id";
+    private const string CompanyPropertyName = "ceoagent_organization_id";
     private const string ConversationPropertyName = "ceoagent_conversation_id";
     private const string CustomerExternalIdPropertyName = "ceoagent_customer_external_id";
     private const string ReservationIdPropertyName = "ceoagent_reservation_id";
@@ -152,7 +152,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
 
             var events = await ListEventsAsync(eventsRequest, cancellationToken);
             var reservations = events
-                .Where(item => IsOwnedBy(item, request.CompanyId, request.CustomerExternalId))
+                .Where(item => IsOwnedBy(item, request.OrganizationId, request.CustomerExternalId))
                 .Select(ToReservationInfo)
                 .Where(item => item is not null)
                 .Cast<CalendarReservationInfo>()
@@ -179,7 +179,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
                 service,
                 request.CalendarId,
                 request.ReservationId,
-                request.CompanyId,
+                request.OrganizationId,
                 request.CustomerExternalId,
                 cancellationToken);
             if (existing is null)
@@ -249,7 +249,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
                 service,
                 request.CalendarId,
                 request.ReservationId,
-                request.CompanyId,
+                request.OrganizationId,
                 request.CustomerExternalId,
                 cancellationToken);
             if (existing is null)
@@ -329,7 +329,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
                 Private__ = new Dictionary<string, string>
                 {
                     [IdempotencyPropertyName] = request.IdempotencyKey,
-                    [CompanyPropertyName] = request.CompanyId ?? string.Empty,
+                    [CompanyPropertyName] = request.OrganizationId ?? string.Empty,
                     [ConversationPropertyName] = request.ConversationId ?? string.Empty,
                     [CustomerExternalIdPropertyName] = request.CustomerExternalId ?? string.Empty,
                     [ReservationIdPropertyName] = request.ReservationId ?? request.IdempotencyKey,
@@ -342,12 +342,12 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         CalendarService service,
         string calendarId,
         string reservationId,
-        string companyId,
+        string organizationId,
         string customerExternalId,
         CancellationToken cancellationToken)
     {
         var byEventId = await TryGetEventAsync(service, calendarId, reservationId, cancellationToken);
-        if (byEventId is not null && IsOwnedBy(byEventId, companyId, customerExternalId))
+        if (byEventId is not null && IsOwnedBy(byEventId, organizationId, customerExternalId))
         {
             return byEventId;
         }
@@ -359,7 +359,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         byReservationId.MaxResults = 10;
 
         var events = await ListEventsAsync(byReservationId, cancellationToken);
-        return events.FirstOrDefault(item => IsOwnedBy(item, companyId, customerExternalId));
+        return events.FirstOrDefault(item => IsOwnedBy(item, organizationId, customerExternalId));
     }
 
     private static async Task<bool> IsUpdateSlotAvailableAsync(
@@ -450,12 +450,12 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         };
     }
 
-    private static bool IsOwnedBy(Event calendarEvent, string companyId, string customerExternalId)
+    private static bool IsOwnedBy(Event calendarEvent, string organizationId, string customerExternalId)
     {
         var privateProperties = calendarEvent.ExtendedProperties?.Private__;
         return privateProperties is not null
-            && privateProperties.TryGetValue(CompanyPropertyName, out var eventCompanyId)
-            && string.Equals(eventCompanyId, companyId, StringComparison.Ordinal)
+            && privateProperties.TryGetValue(CompanyPropertyName, out var eventOrganizationId)
+            && string.Equals(eventOrganizationId, organizationId, StringComparison.Ordinal)
             && privateProperties.TryGetValue(CustomerExternalIdPropertyName, out var eventCustomerExternalId)
             && string.Equals(eventCustomerExternalId, customerExternalId, StringComparison.Ordinal);
     }

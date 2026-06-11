@@ -1,6 +1,6 @@
 namespace CeoAgent.Infrastructure.Entities;
 
-public sealed class IncomingMessageOutbox : AuditableCompanyOwnedEntity
+public sealed class IncomingMessageOutbox : AuditableOrganizationOwnedEntity
 {
     /// <summary>
     /// Unique outbox identifier. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42.

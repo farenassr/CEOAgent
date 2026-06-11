@@ -1,7 +1,7 @@
 namespace CeoAgent.Shared.Messaging;
 
 public sealed record ChannelMessageReference(
-    Guid CompanyId,
+    Guid OrganizationId,
     Guid CompanyChannelId,
     string Provider,
     string ProviderMessageId);

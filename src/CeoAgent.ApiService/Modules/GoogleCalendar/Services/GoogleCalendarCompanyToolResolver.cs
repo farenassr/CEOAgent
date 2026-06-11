@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
@@ -13,27 +13,27 @@ namespace CeoAgent.ApiService.Modules.GoogleCalendar;
 
 public sealed class GoogleCalendarCompanyToolResolver(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext)
+    IOrganizationContextProvider companyContext)
 {
     public async Task<GoogleCalendarCompanyToolContext> ResolveAsync(
-        Guid companyId,
+        Guid organizationId,
         string toolKey,
         CancellationToken cancellationToken)
     {
         var company = await dbContext.Companies
             .WithDefaultTracking()
-            .FirstOrDefaultAsync(entity => entity.Id == companyId, cancellationToken);
+            .FirstOrDefaultAsync(entity => entity.Id == organizationId, cancellationToken);
 
-        if (companyContext.CompanyId != companyId || company is null)
+        if (companyContext.OrganizationId != organizationId || company is null)
         {
-            throw new NotFoundException("company", companyId);
+            throw new NotFoundException("company", organizationId);
         }
 
         var tool = await dbContext.CompanyTools
             .Include(entity => entity.CredentialReference)
             .WithDefaultTracking()
             .FirstOrDefaultAsync(
-                entity => entity.CompanyId == companyId
+                entity => entity.OrganizationId == organizationId
                     && entity.ToolKey == toolKey
                     && entity.IsEnabled,
                 cancellationToken);

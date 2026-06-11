@@ -5,7 +5,7 @@ public sealed class ReceiveWhatsAppMessageResponse
     /// <summary>
     /// Company that owns the inbound WhatsApp message.
     /// </summary>
-    public Guid CompanyId { get; set; }
+    public Guid OrganizationId { get; set; }
 
     /// <summary>
     /// Conversation selected or created for the WhatsApp customer.

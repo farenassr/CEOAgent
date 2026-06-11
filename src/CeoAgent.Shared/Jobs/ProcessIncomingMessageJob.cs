@@ -1,7 +1,7 @@
 namespace CeoAgent.Shared.Jobs;
 
 public sealed record ProcessIncomingMessageJob(
-    Guid CompanyId,
+    Guid OrganizationId,
     Guid ConversationId,
     Guid MessageId,
     string? CorrelationId)

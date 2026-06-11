@@ -1,6 +1,6 @@
 using CeoAgent.Application.Abstractions.AITools;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -21,7 +21,7 @@ public sealed class CompanyToolRegistryTests
     {
         await using var fixture = await RegistryFixture.CreateAsync();
 
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
 
         tools.Select(tool => tool.Name).ShouldBe([MvpToolKeys.CheckGoogleCalendarAvailability]);
         var descriptor = tools.Single();
@@ -37,7 +37,7 @@ public sealed class CompanyToolRegistryTests
     {
         await using var fixture = await RegistryFixture.CreateAsync(includeReservationTools: true);
 
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
 
         tools.Single(tool => tool.Name == MvpToolKeys.FindGoogleCalendarReservations).IsMutating.ShouldBeFalse();
         tools.Single(tool => tool.Name == MvpToolKeys.UpdateGoogleCalendarReservation).IsMutating.ShouldBeTrue();
@@ -49,7 +49,7 @@ public sealed class CompanyToolRegistryTests
     {
         await using var fixture = await RegistryFixture.CreateAsync(includeUnsupportedTool: true);
 
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
 
         tools.Select(tool => tool.Name).ShouldNotContain("unsupported_tool");
     }
@@ -64,8 +64,8 @@ public sealed class CompanyToolRegistryTests
             bool includeUnsupportedTool)
         {
             this.database = database;
-            CompanyContext = database.CompanyContext;
-            CompanyContext.SetCompany(CompanyId);
+            OrganizationContext = database.OrganizationContext;
+            OrganizationContext.SetOrganization(OrganizationId);
             DbContext = database.Context;
             Registry = new CompanyToolRegistry(
                 DbContext,
@@ -92,13 +92,13 @@ public sealed class CompanyToolRegistryTests
 
             var company = new Company
             {
-                Id = CompanyId,
+                Id = OrganizationId,
                 Name = "Contoso Bistro",
                 TimeZoneId = "America/Bogota",
             };
             var otherCompany = new Company
             {
-                Id = OtherCompanyId,
+                Id = OtherOrganizationId,
                 Name = "Other Bistro",
                 TimeZoneId = "America/Bogota",
             };
@@ -108,14 +108,14 @@ public sealed class CompanyToolRegistryTests
                 otherCompany,
                 new AgentProfile
                 {
-                    CompanyId = CompanyId,
+                    OrganizationId = OrganizationId,
                     ModelName = "gpt-4.1-mini",
                     DisplayName = "Contoso Assistant",
                     Language = "es",
                 },
                 new AgentProfile
                 {
-                    CompanyId = OtherCompanyId,
+                    OrganizationId = OtherOrganizationId,
                     ModelName = "gpt-4.1-mini",
                     DisplayName = "Other Assistant",
                     Language = "es",
@@ -123,7 +123,7 @@ public sealed class CompanyToolRegistryTests
                 new CompanyTool
                 {
                     Id = EnabledToolId,
-                    CompanyId = CompanyId,
+                    OrganizationId = OrganizationId,
                     ToolKey = MvpToolKeys.CheckGoogleCalendarAvailability,
                     Description = "Check calendar safely.",
                     ParametersSchema = ParseSchema("""{"type":"object","properties":{"fromCompanyTool":{"type":"string"}},"required":["fromCompanyTool"],"additionalProperties":false}"""),
@@ -136,7 +136,7 @@ public sealed class CompanyToolRegistryTests
                 },
                 new CompanyTool
                 {
-                    CompanyId = CompanyId,
+                    OrganizationId = OrganizationId,
                     ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
                     Description = "Create calendar reservations.",
                     ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"}},"required":["start"],"additionalProperties":false}"""),
@@ -149,7 +149,7 @@ public sealed class CompanyToolRegistryTests
                 },
                 new CompanyTool
                 {
-                    CompanyId = OtherCompanyId,
+                    OrganizationId = OtherOrganizationId,
                     ToolKey = MvpToolKeys.RequestHumanHandoff,
                     Description = "Other company tool.",
                     ParametersSchema = ParseSchema("""{"type":"object","properties":{},"required":[],"additionalProperties":false}"""),
@@ -165,7 +165,7 @@ public sealed class CompanyToolRegistryTests
                 DbContext.CompanyTools.AddRange(
                     new CompanyTool
                     {
-                        CompanyId = CompanyId,
+                        OrganizationId = OrganizationId,
                         ToolKey = MvpToolKeys.FindGoogleCalendarReservations,
                         Description = "Find reservations.",
                         ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":["string","null"]},"includePast":{"type":"boolean"},"status":{"type":["string","null"]}},"required":["date","includePast","status"],"additionalProperties":false}"""),
@@ -173,7 +173,7 @@ public sealed class CompanyToolRegistryTests
                     },
                     new CompanyTool
                     {
-                        CompanyId = CompanyId,
+                        OrganizationId = OrganizationId,
                         ToolKey = MvpToolKeys.UpdateGoogleCalendarReservation,
                         Description = "Update reservations.",
                         ParametersSchema = ParseSchema("""{"type":"object","properties":{"reservationId":{"type":"string"},"newStart":{"type":"string"},"newEnd":{"type":"string"},"summary":{"type":["string","null"]},"customerName":{"type":["string","null"]}},"required":["reservationId","newStart","newEnd","summary","customerName"],"additionalProperties":false}"""),
@@ -181,7 +181,7 @@ public sealed class CompanyToolRegistryTests
                     },
                     new CompanyTool
                     {
-                        CompanyId = CompanyId,
+                        OrganizationId = OrganizationId,
                         ToolKey = MvpToolKeys.CancelGoogleCalendarReservation,
                         Description = "Cancel reservations.",
                         ParametersSchema = ParseSchema("""{"type":"object","properties":{"reservationId":{"type":"string"},"reason":{"type":["string","null"]}},"required":["reservationId","reason"],"additionalProperties":false}"""),
@@ -193,7 +193,7 @@ public sealed class CompanyToolRegistryTests
             {
                 DbContext.CompanyTools.Add(new CompanyTool
                 {
-                    CompanyId = CompanyId,
+                    OrganizationId = OrganizationId,
                     ToolKey = "unsupported_tool",
                     Description = "Tenant supplied unsupported tool.",
                     ParametersSchema = ParseSchema("""{"type":"object","properties":{},"required":[],"additionalProperties":false}"""),
@@ -214,13 +214,13 @@ public sealed class CompanyToolRegistryTests
                 includeUnsupportedTool);
         }
 
-        public Guid CompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
 
-        public Guid OtherCompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b50");
+        public Guid OtherOrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b50");
 
         public Guid EnabledToolId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40");
 
-        public CompanyContextAccessor CompanyContext { get; }
+        public OrganizationContextAccessor OrganizationContext { get; }
 
         public CeoAgentDbContext DbContext { get; }
 

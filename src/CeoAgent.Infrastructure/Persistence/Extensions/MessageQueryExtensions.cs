@@ -8,23 +8,23 @@ public static class MessageQueryExtensions
 {
     public static IQueryable<Message> ForConversation(
         this IQueryable<Message> query,
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId)
     {
         return query
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .Where(entity => entity.ConversationId == conversationId);
     }
 
     public static IQueryable<Message> AssistantReplyForClientMessageId(
         this IQueryable<Message> query,
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         string replyClientMessageId)
     {
         return query
             .IgnoreQueryFilters()
-            .ForConversation(companyId, conversationId)
+            .ForConversation(organizationId, conversationId)
             .Where(entity => entity.Role == MessageRole.Assistant
                 && entity.ProviderMessageId == replyClientMessageId);
     }
@@ -32,17 +32,17 @@ public static class MessageQueryExtensions
     public static IQueryable<Message> AgentEligibleHistory(
         this IQueryable<Message> query,
         IQueryable<ToolExecution> toolExecutions,
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         int take)
     {
         return query
-            .ForConversation(companyId, conversationId)
+            .ForConversation(organizationId, conversationId)
             .Where(entity =>
                 entity.Role == MessageRole.User
                 || (entity.Role == MessageRole.Assistant
                     && !toolExecutions
-                        .Any(execution => execution.CompanyId == companyId
+                        .Any(execution => execution.OrganizationId == organizationId
                             && execution.TriggerMessageId == entity.Id)))
             .OrderByDescending(entity => entity.OccurredAt)
             .ThenByDescending(entity => entity.Id)
@@ -51,7 +51,7 @@ public static class MessageQueryExtensions
 
     public static async Task<Message?> FindTrackedOrPersistedMessageAsync(
         this CeoAgentDbContext dbContext,
-        Guid companyId,
+        Guid organizationId,
         Guid messageId,
         CancellationToken cancellationToken)
     {
@@ -59,7 +59,7 @@ public static class MessageQueryExtensions
             .Entries<Message>()
             .Where(entry => entry.State != EntityState.Deleted)
             .Select(entry => entry.Entity)
-            .SingleOrDefault(entity => entity.CompanyId == companyId && entity.Id == messageId);
+            .SingleOrDefault(entity => entity.OrganizationId == organizationId && entity.Id == messageId);
 
         if (tracked is not null)
         {
@@ -67,7 +67,7 @@ public static class MessageQueryExtensions
         }
 
         return await dbContext.Messages
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .Where(entity => entity.Id == messageId)
             .FirstOrDefaultAsync(cancellationToken);
     }

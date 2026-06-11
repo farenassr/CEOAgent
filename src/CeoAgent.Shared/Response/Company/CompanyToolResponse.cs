@@ -12,7 +12,7 @@ public sealed class CompanyToolResponse
     /// <summary>
     /// Company that owns this tool registration. Example: 018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30.
     /// </summary>
-    public Guid CompanyId { get; set; }
+    public Guid OrganizationId { get; set; }
 
     /// <summary>
     /// Tool key exposed to the company's agent. Example: check_availability.

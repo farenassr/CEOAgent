@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.IntegrationTests.Infrastructure;
@@ -24,7 +24,7 @@ public sealed class JsonEntityMappingTests
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
             "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
-            new CompanyContextAccessor());
+            new OrganizationContextAccessor());
         var model = dbContext.Model;
 
         AssertJsonComplexProperty<CompanyEntity, WorkingHoursEntity>(model, nameof(CompanyEntity.WorkingHours), "working_hours_json");
@@ -64,7 +64,7 @@ public sealed class JsonEntityMappingTests
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
             "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
-            new CompanyContextAccessor());
+            new OrganizationContextAccessor());
         var entityType = dbContext.Model.FindEntityType(typeof(Message));
         entityType.ShouldNotBeNull();
 
@@ -77,7 +77,7 @@ public sealed class JsonEntityMappingTests
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
             "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
-            new CompanyContextAccessor());
+            new OrganizationContextAccessor());
         var entityType = dbContext.Model.FindEntityType(typeof(CompanyTool));
         entityType.ShouldNotBeNull();
 
@@ -96,7 +96,7 @@ public sealed class JsonEntityMappingTests
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
             "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
-            new CompanyContextAccessor());
+            new OrganizationContextAccessor());
 
         dbContext.Model.GetEntityTypes()
             .Any(entityType => entityType.ClrType.Name == "AudioAsset")
@@ -109,49 +109,49 @@ public sealed class JsonEntityMappingTests
     }
 
     [Test]
-    public void Model_AddsCompanyCreatedAtDescendingIndexToAuditableCompanyOwnedTables()
+    public void Model_AddsCompanyCreatedAtDescendingIndexToAuditableOrganizationOwnedTables()
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
             "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
-            new CompanyContextAccessor());
+            new OrganizationContextAccessor());
         var model = dbContext.GetService<IDesignTimeModel>().Model;
 
-        var auditableCompanyOwnedTypes = typeof(AuditableCompanyOwnedEntity).Assembly
+        var auditableOrganizationOwnedTypes = typeof(AuditableOrganizationOwnedEntity).Assembly
             .GetTypes()
-            .Where(type => !type.IsAbstract && typeof(AuditableCompanyOwnedEntity).IsAssignableFrom(type))
+            .Where(type => !type.IsAbstract && typeof(AuditableOrganizationOwnedEntity).IsAssignableFrom(type))
             .ToArray();
 
-        foreach (var clrType in auditableCompanyOwnedTypes)
+        foreach (var clrType in auditableOrganizationOwnedTypes)
         {
             var entityType = model.FindEntityType(clrType);
             entityType.ShouldNotBeNull();
 
             var index = entityType.GetIndexes()
                 .SingleOrDefault(index => index.Properties.Select(property => property.Name).SequenceEqual([
-                    nameof(AuditableCompanyOwnedEntity.CompanyId),
-                    nameof(AuditableCompanyOwnedEntity.CreatedAt),
+                    nameof(AuditableOrganizationOwnedEntity.OrganizationId),
+                    nameof(AuditableOrganizationOwnedEntity.CreatedAt),
                 ]));
 
-            index.ShouldNotBeNull($"{clrType.Name} should have an index on CompanyId + CreatedAt.");
+            index.ShouldNotBeNull($"{clrType.Name} should have an index on OrganizationId + CreatedAt.");
             index.IsDescending.ShouldNotBeNull($"{clrType.Name} should configure index sort order.");
             index.IsDescending.ShouldBe([false, true]);
         }
     }
 
     [Test]
-    public void Model_AddsQueryFilterToEveryAuditableCompanyOwnedEntity()
+    public void Model_AddsQueryFilterToEveryAuditableOrganizationOwnedEntity()
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
             "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
-            new CompanyContextAccessor());
+            new OrganizationContextAccessor());
         var model = dbContext.Model;
 
-        var auditableCompanyOwnedTypes = typeof(AuditableCompanyOwnedEntity).Assembly
+        var auditableOrganizationOwnedTypes = typeof(AuditableOrganizationOwnedEntity).Assembly
             .GetTypes()
-            .Where(type => !type.IsAbstract && typeof(AuditableCompanyOwnedEntity).IsAssignableFrom(type))
+            .Where(type => !type.IsAbstract && typeof(AuditableOrganizationOwnedEntity).IsAssignableFrom(type))
             .ToArray();
 
-        foreach (var clrType in auditableCompanyOwnedTypes)
+        foreach (var clrType in auditableOrganizationOwnedTypes)
         {
             var entityType = model.FindEntityType(clrType);
             entityType.ShouldNotBeNull();
@@ -163,18 +163,18 @@ public sealed class JsonEntityMappingTests
     public async Task JsonbComplexWrappers_RoundTripPreviouslyPolymorphicDocuments()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var companyId = Guid.CreateVersion7();
-        database.CompanyContext.SetCompany(companyId);
+        var organizationId = Guid.CreateVersion7();
+        database.OrganizationContext.SetOrganization(organizationId);
 
         var company = new CompanyEntity
         {
-            Id = companyId,
+            Id = organizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         };
         var tool = new CompanyTool
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ToolKey = "check_availability",
             Configuration = ToolConfiguration.ForCheckAvailability(new CheckAvailabilityConfig
             {
@@ -202,8 +202,8 @@ public sealed class JsonEntityMappingTests
     public async Task CompanyWorkingHours_ReadsLowercaseTimeSlotJson()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var companyId = Guid.CreateVersion7();
-        database.CompanyContext.SetCompany(companyId);
+        var organizationId = Guid.CreateVersion7();
+        database.OrganizationContext.SetOrganization(organizationId);
         const string workingHoursJson = """
             {
               "holidays": [],
@@ -222,11 +222,11 @@ public sealed class JsonEntityMappingTests
         await database.Context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO company (id, name, time_zone_id, status, created_at, updated_at, working_hours_json)
-            VALUES ({companyId}, 'Contoso Bistro', 'America/Bogota', 'Active', now(), now(), {workingHoursJson}::jsonb)
+            VALUES ({organizationId}, 'Contoso Bistro', 'America/Bogota', 'Active', now(), now(), {workingHoursJson}::jsonb)
             """);
         database.Context.ChangeTracker.Clear();
 
-        var loaded = await database.Context.Companies.SingleAsync(entity => entity.Id == companyId);
+        var loaded = await database.Context.Companies.SingleAsync(entity => entity.Id == organizationId);
 
         loaded.WorkingHours.ShouldNotBeNull();
         loaded.WorkingHours.Schedule.ShouldNotBeNull();
@@ -247,18 +247,18 @@ public sealed class JsonEntityMappingTests
     public async Task IntegrationCredentialReference_StoresProviderUsingSnakeCaseEnumMemberName()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var companyId = Guid.CreateVersion7();
-        database.CompanyContext.SetCompany(companyId);
+        var organizationId = Guid.CreateVersion7();
+        database.OrganizationContext.SetOrganization(organizationId);
 
         database.Context.Companies.Add(new CompanyEntity
         {
-            Id = companyId,
+            Id = organizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         });
         database.Context.IntegrationCredentialReferences.Add(new IntegrationCredentialReference
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             Provider = IntegrationProvider.WhatsAppCloud,
             Purpose = "message_send",
             Reference = "kv://whatsapp/contoso/access-token",
@@ -277,18 +277,18 @@ public sealed class JsonEntityMappingTests
     public async Task IntegrationCredentialReference_RoundTripsGoogleCalendarReferenceOnlyMetadata()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var companyId = Guid.CreateVersion7();
-        database.CompanyContext.SetCompany(companyId);
+        var organizationId = Guid.CreateVersion7();
+        database.OrganizationContext.SetOrganization(organizationId);
 
         database.Context.Companies.Add(new CompanyEntity
         {
-            Id = companyId,
+            Id = organizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         });
         var credential = new IntegrationCredentialReference
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             Provider = IntegrationProvider.GoogleCalendar,
             Purpose = "google_calendar",
             Reference = "kv://google-calendar/contoso/service-account",

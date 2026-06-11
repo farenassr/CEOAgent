@@ -25,25 +25,25 @@ public sealed class EnableCompanyToolEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/tools");
+        Post("/v1/admin/companies/{organizationId}/tools");
     }
 
     public override async Task HandleAsync(CompanyToolRequest request, CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
-        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
-        await tenantGuard.EnsureCredentialReferenceAccessibleAsync(companyId, request.CredentialReferenceId, cancellationToken);
-        var catalogTool = await ResolveCatalogToolAsync(agentToolCatalog, companyId, request.ToolKey, cancellationToken);
+        var organizationId = Route<Guid>("organizationId");
+        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
+        await tenantGuard.EnsureCredentialReferenceAccessibleAsync(organizationId, request.CredentialReferenceId, cancellationToken);
+        var catalogTool = await ResolveCatalogToolAsync(agentToolCatalog, organizationId, request.ToolKey, cancellationToken);
 
         var tool = await dbContext.CompanyTools
             .WithDefaultTracking(trackChanges: true)
             .FirstOrDefaultAsync(
-            entity => entity.CompanyId == companyId && entity.ToolKey == request.ToolKey,
+            entity => entity.OrganizationId == organizationId && entity.ToolKey == request.ToolKey,
             cancellationToken);
 
         if (tool is null)
         {
-            tool = CompanyMapper.ToEntity(request, companyId);
+            tool = CompanyMapper.ToEntity(request, organizationId);
             dbContext.CompanyTools.Add(tool);
         }
 
@@ -67,11 +67,11 @@ public sealed class EnableCompanyToolEndpoint(
 
     private static async Task<IAgentTool> ResolveCatalogToolAsync(
         IAgentToolCatalog catalog,
-        Guid companyId,
+        Guid organizationId,
         string toolKey,
         CancellationToken cancellationToken)
     {
-        var tools = await catalog.GetToolsAsync(new AgentToolCatalogContext(companyId), cancellationToken);
+        var tools = await catalog.GetToolsAsync(new AgentToolCatalogContext(organizationId), cancellationToken);
         return tools.SingleOrDefault(tool => string.Equals(tool.ToolKey, toolKey, StringComparison.Ordinal))
             ?? throw new NotFoundException("agent_tool", toolKey);
     }
