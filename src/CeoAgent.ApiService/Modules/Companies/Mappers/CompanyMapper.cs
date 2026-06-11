@@ -15,30 +15,31 @@ public static partial class CompanyMapper
 {
     private static readonly JsonSerializerOptions SerializerOptions = CreateOptions();
 
-    public static Company ToEntity(CreateCompanyRequest request)
+    public static Company ToEntity(CreateCompanyRequest request, Guid organizationId)
     {
         return new Company
         {
+            Id = organizationId,
             Name = request.Name,
             TimeZoneId = request.TimeZoneId,
         };
     }
 
-    public static RegisterCompanyChannelCommand ToCommand(CompanyChannelRequest request, Guid companyId)
+    public static RegisterCompanyChannelCommand ToCommand(CompanyChannelRequest request, Guid organizationId)
     {
         return new RegisterCompanyChannelCommand(
-            companyId,
+            organizationId,
             request.Provider,
             request.ProviderChannelId,
             request.Metadata,
             request.CredentialReferenceId);
     }
 
-    public static AgentProfile ToEntity(AgentProfileRequest request, Guid companyId)
+    public static AgentProfile ToEntity(AgentProfileRequest request, Guid organizationId)
     {
         return new AgentProfile
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ModelName = request.ModelName,
             LlmProvider = request.LlmProvider,
             DisplayName = request.DisplayName,
@@ -58,11 +59,11 @@ public static partial class CompanyMapper
         company.WorkingHours = request.WorkingHours.DeserializeOptional<WorkingHours>();
     }
 
-    public static CompanyTool ToEntity(CompanyToolRequest request, Guid companyId)
+    public static CompanyTool ToEntity(CompanyToolRequest request, Guid organizationId)
     {
         return new CompanyTool
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ToolKey = request.ToolKey,
             Description = request.Description,
             ParametersSchema = request.ParametersSchema,
@@ -78,11 +79,11 @@ public static partial class CompanyMapper
         tool.Configuration = request.Configuration.DeserializeOptional<ToolConfiguration>();
     }
 
-    public static IntegrationCredentialReference ToEntity(IntegrationCredentialRequest request, Guid companyId)
+    public static IntegrationCredentialReference ToEntity(IntegrationCredentialRequest request, Guid organizationId)
     {
         return new IntegrationCredentialReference
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             Provider = request.Provider,
             Purpose = request.Purpose,
             Reference = request.Reference,

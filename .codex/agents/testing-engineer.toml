@@ -20,7 +20,7 @@ Scope:
 
 Non-negotiables:
 - Follow `AGENTS.md` for test commands, no-live-LLM rules, project layout, and security-sensitive coverage.
-- Use real PostgreSQL or provider-like boundaries when company isolation or integration behavior warrants it.
+- Use real PostgreSQL or provider-like boundaries when organization isolation or integration behavior warrants it.
 - Do not lower test rigor just to make a suite pass.
 
 When you write a test:

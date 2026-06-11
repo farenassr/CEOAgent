@@ -11,14 +11,14 @@ internal static class TestAuthentication
 {
     public const string Scheme = "TestBearer";
 
-    public static AuthenticationHeaderValue BootstrapBearer()
+    public static AuthenticationHeaderValue MissingOrganizationBearer()
     {
-        return new AuthenticationHeaderValue("Bearer", "bootstrap");
+        return new AuthenticationHeaderValue("Bearer", "missing-organization");
     }
 
-    public static AuthenticationHeaderValue CompanyBearer(Guid companyId)
+    public static AuthenticationHeaderValue OrganizationBearer(Guid organizationId)
     {
-        return new AuthenticationHeaderValue("Bearer", $"company:{companyId:N}");
+        return new AuthenticationHeaderValue("Bearer", $"organization:{organizationId:N}");
     }
 }
 
@@ -42,10 +42,12 @@ internal sealed class TestAuthenticationHandler(
             new(ClaimTypes.NameIdentifier, "test-user"),
         };
 
-        if (header.Parameter.StartsWith("company:", StringComparison.OrdinalIgnoreCase)
-            && Guid.TryParse(header.Parameter["company:".Length..], out var companyId))
+        if (header.Parameter.StartsWith("organization:", StringComparison.OrdinalIgnoreCase)
+            && Guid.TryParse(header.Parameter["organization:".Length..], out var organizationId))
         {
-            claims.Add(new Claim("company_id", companyId.ToString()));
+            claims.Add(new Claim(
+                "organization",
+                $"{{\"la-terraza-org\":{{\"id\":\"{organizationId:D}\"}}}}"));
         }
 
         var identity = new ClaimsIdentity(claims, TestAuthentication.Scheme);

@@ -11,7 +11,7 @@ public sealed class ConversationStateConfiguration : IEntityTypeConfiguration<Co
         builder.ToTable("conversation_state");
         builder.HasKey(entity => entity.Id);
         builder.HasIndex(entity => entity.ConversationId).IsUnique();
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.ComplexProperty(entity => entity.Snapshot, snapshot =>
         {
             snapshot.IsRequired();

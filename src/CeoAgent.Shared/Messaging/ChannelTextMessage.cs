@@ -1,7 +1,7 @@
 namespace CeoAgent.Shared.Messaging;
 
 public sealed record ChannelTextMessage(
-    Guid CompanyId,
+    Guid OrganizationId,
     Guid CompanyChannelId,
     Guid ConversationId,
     Guid MessageId,

@@ -92,8 +92,8 @@ public sealed class ToolExecutionConfiguration : IEntityTypeConfiguration<ToolEx
             cancelGoogleCalendarReservationResult.Property(entity => entity.ReservationId).HasJsonPropertyName("reservationId");
             cancelGoogleCalendarReservationResult.Property(entity => entity.EventId).HasJsonPropertyName("eventId");
         });
-        builder.HasIndex(entity => new { entity.CompanyId, entity.IdempotencyKey }).IsUnique();
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.IdempotencyKey }).IsUnique();
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Conversation)
             .WithMany()
             .HasForeignKey(entity => entity.ConversationId)

@@ -28,29 +28,29 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
 
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/whatsapp");
+        Post("/v1/admin/companies/{organizationId}/whatsapp");
     }
 
     public override async Task HandleAsync(ReceiveWhatsAppMessageRequest request, CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
-        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
+        var organizationId = Route<Guid>("organizationId");
+        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
 
         var channel = await dbContext.CompanyChannels
             .WithDefaultTracking(trackChanges: true)
             .OrderBy(entity => entity.CreatedAt)
             .FirstOrDefaultAsync(
-                entity => entity.CompanyId == companyId
+                entity => entity.OrganizationId == organizationId
                     && entity.Provider == CompanyChannelProvider.WhatsAppCloud,
                 cancellationToken)
             ?? throw new BusinessRuleException("company_channel_required", "Company requires a WhatsApp channel before receiving WhatsApp messages.");
 
-        var customer = await ResolveCustomerAsync(companyId, channel.Id, request.ExternalCustomerId, cancellationToken);
-        var conversation = await ResolveConversationAsync(companyId, channel.Id, customer.Id, cancellationToken);
+        var customer = await ResolveCustomerAsync(organizationId, channel.Id, request.ExternalCustomerId, cancellationToken);
+        var conversation = await ResolveConversationAsync(organizationId, channel.Id, customer.Id, cancellationToken);
         var occurredAt = timeProvider.GetUtcNow().UtcDateTime;
         var inbound = new Message
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ConversationId = conversation.Id,
             Role = MessageRole.User,
             Type = MessageType.Text,
@@ -67,13 +67,13 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
         dbContext.Messages.Add(inbound);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var job = new ProcessIncomingMessageJob(companyId, conversation.Id, inbound.Id, HttpContext.TraceIdentifier);
+        var job = new ProcessIncomingMessageJob(organizationId, conversation.Id, inbound.Id, HttpContext.TraceIdentifier);
         await incomingMessageJobEnqueuer.EnqueueAsync(job, cancellationToken);
 
         await Send.OkAsync(
             new ReceiveWhatsAppMessageResponse
             {
-                CompanyId = companyId,
+                OrganizationId = organizationId,
                 ConversationId = conversation.Id,
                 MessageId = inbound.Id,
                 Enqueued = true,
@@ -82,7 +82,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     }
 
     private async Task<Customer> ResolveCustomerAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid channelId,
         string externalCustomerId,
         CancellationToken cancellationToken)
@@ -91,7 +91,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
         var customer = await dbContext.Customers
             .WithDefaultTracking(trackChanges: true)
             .SingleOrDefaultAsync(
-                entity => entity.CompanyId == companyId
+                entity => entity.OrganizationId == organizationId
                     && entity.CompanyChannelId == channelId
                     && entity.ExternalCustomerId == normalizedExternalCustomerId,
                 cancellationToken);
@@ -103,7 +103,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
 
         customer = new Customer
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             CompanyChannelId = channelId,
             ExternalCustomerId = normalizedExternalCustomerId,
             DisplayName = normalizedExternalCustomerId,
@@ -113,7 +113,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     }
 
     private async Task<Conversation> ResolveConversationAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid channelId,
         Guid customerId,
         CancellationToken cancellationToken)
@@ -121,7 +121,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
         var conversation = await dbContext.Conversations
             .WithDefaultTracking(trackChanges: true)
             .SingleOrDefaultAsync(
-                entity => entity.CompanyId == companyId
+                entity => entity.OrganizationId == organizationId
                     && entity.CustomerId == customerId
                     && entity.CompanyChannelId == channelId
                     && entity.Status == ConversationStatus.Open,
@@ -134,7 +134,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
 
         var agentProfileId = await dbContext.AgentProfiles
             .WithDefaultTracking()
-            .Where(entity => entity.CompanyId == companyId)
+            .Where(entity => entity.OrganizationId == organizationId)
             .Select(entity => entity.Id)
             .SingleOrDefaultAsync(cancellationToken);
         if (agentProfileId == Guid.Empty)
@@ -144,7 +144,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
 
         conversation = new Conversation
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             CustomerId = customerId,
             CompanyChannelId = channelId,
             AgentProfileId = agentProfileId,

@@ -19,17 +19,17 @@ public sealed class ListHandedOffConversationsEndpoint(
 {
     public override void Configure()
     {
-        Get("/v1/admin/companies/{companyId}/conversations/handed-off");
+        Get("/v1/admin/companies/{organizationId}/conversations/handed-off");
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
-        await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: false, cancellationToken);
+        var organizationId = Route<Guid>("organizationId");
+        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
 
         var items = await dbContext.Conversations
             .AsNoTracking()
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .Where(entity => entity.Status == ConversationStatus.HandedOff)
             .OrderByDescending(entity => entity.LastMessageAt)
             .Select(entity => new
@@ -37,7 +37,7 @@ public sealed class ListHandedOffConversationsEndpoint(
                 Conversation = entity,
                 LatestHandoff = dbContext.ToolExecutions
                     .AsNoTracking()
-                    .ForCompany(companyId)
+                    .ForOrganization(organizationId)
                     .Where(execution => execution.ToolKey == MvpToolKeys.RequestHumanHandoff
                         && execution.ConversationId == entity.Id)
                     .OrderByDescending(execution => execution.CreatedAt)

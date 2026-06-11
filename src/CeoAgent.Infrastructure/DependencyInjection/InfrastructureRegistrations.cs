@@ -1,10 +1,10 @@
-using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Application.Abstractions.OpenAI;
 using CeoAgent.Infrastructure.ApiClient.WhatsApp;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
@@ -37,8 +37,8 @@ public static class InfrastructureRegistrations
             .ValidateOnStart();
         services.AddSingleton(provider => provider.GetRequiredService<IOptions<PersistenceOptions>>().Value);
 
-        services.AddScoped<ICompanyContextAccessor, CompanyContextAccessor>();
-        services.AddScoped<ICompanyContext>(provider => provider.GetRequiredService<ICompanyContextAccessor>());
+        services.AddScoped<IOrganizationContextAccessor, OrganizationContextAccessor>();
+        services.AddScoped<IOrganizationContextProvider>(provider => provider.GetRequiredService<IOrganizationContextAccessor>());
         services.AddScoped<IWhatsAppChannelCredentialResolver, WhatsAppChannelCredentialResolver>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ConversationAgentProfileImmutabilityInterceptor>();

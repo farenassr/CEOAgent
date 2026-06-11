@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.Filters;
 using Microsoft.EntityFrameworkCore;
@@ -8,10 +8,10 @@ namespace CeoAgent.Infrastructure;
 
 public sealed class CeoAgentDbContext(
     DbContextOptions<CeoAgentDbContext> options,
-    ICompanyContext companyContext,
+    IOrganizationContextProvider organizationContext,
     TimeProvider timeProvider) : DbContext(options)
 {
-    internal Guid? CurrentCompanyId => companyContext.CompanyId;
+    internal Guid? CurrentOrganizationId => organizationContext.OrganizationId;
 
     public DbSet<Company> Companies => Set<Company>();
 
@@ -40,7 +40,7 @@ public sealed class CeoAgentDbContext(
         modelBuilder.HasDefaultSchema("public");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CeoAgentDbContext).Assembly);
 
-        CompanyQueryFilterApplier.ApplyCompanyFilters(modelBuilder, this);
+        OrganizationQueryFilterApplier.ApplyOrganizationFilters(modelBuilder, this);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -68,8 +68,8 @@ public sealed class CeoAgentDbContext(
         {
             if (tool.CredentialReferenceId is { } credentialReferenceId)
             {
-                await EnsureSameCompanyAsync<IntegrationCredentialReference>(
-                    tool.CompanyId,
+                await EnsureSameOrganizationAsync<IntegrationCredentialReference>(
+                    tool.OrganizationId,
                     credentialReferenceId,
                     "CompanyTool.CredentialReferenceId",
                     cancellationToken);
@@ -80,8 +80,8 @@ public sealed class CeoAgentDbContext(
         {
             if (channel.CredentialReferenceId is { } credentialReferenceId)
             {
-                await EnsureSameCompanyAsync<IntegrationCredentialReference>(
-                    channel.CompanyId,
+                await EnsureSameOrganizationAsync<IntegrationCredentialReference>(
+                    channel.OrganizationId,
                     credentialReferenceId,
                     "CompanyChannel.CredentialReferenceId",
                     cancellationToken);
@@ -90,8 +90,8 @@ public sealed class CeoAgentDbContext(
 
         foreach (var customer in Changed<Customer>())
         {
-            await EnsureSameCompanyAsync<CompanyChannel>(
-                customer.CompanyId,
+            await EnsureSameOrganizationAsync<CompanyChannel>(
+                customer.OrganizationId,
                 customer.CompanyChannelId,
                 "Customer.CompanyChannelId",
                 cancellationToken);
@@ -99,18 +99,18 @@ public sealed class CeoAgentDbContext(
 
         foreach (var conversation in Changed<Conversation>())
         {
-            await EnsureSameCompanyAsync<Customer>(
-                conversation.CompanyId,
+            await EnsureSameOrganizationAsync<Customer>(
+                conversation.OrganizationId,
                 conversation.CustomerId,
                 "Conversation.CustomerId",
                 cancellationToken);
-            await EnsureSameCompanyAsync<CompanyChannel>(
-                conversation.CompanyId,
+            await EnsureSameOrganizationAsync<CompanyChannel>(
+                conversation.OrganizationId,
                 conversation.CompanyChannelId,
                 "Conversation.CompanyChannelId",
                 cancellationToken);
-            await EnsureSameCompanyAsync<AgentProfile>(
-                conversation.CompanyId,
+            await EnsureSameOrganizationAsync<AgentProfile>(
+                conversation.OrganizationId,
                 conversation.AgentProfileId,
                 "Conversation.AgentProfileId",
                 cancellationToken);
@@ -118,8 +118,8 @@ public sealed class CeoAgentDbContext(
 
         foreach (var state in Changed<ConversationState>())
         {
-            await EnsureSameCompanyAsync<Conversation>(
-                state.CompanyId,
+            await EnsureSameOrganizationAsync<Conversation>(
+                state.OrganizationId,
                 state.ConversationId,
                 "ConversationState.ConversationId",
                 cancellationToken);
@@ -127,8 +127,8 @@ public sealed class CeoAgentDbContext(
 
         foreach (var message in Changed<Message>())
         {
-            await EnsureSameCompanyAsync<Conversation>(
-                message.CompanyId,
+            await EnsureSameOrganizationAsync<Conversation>(
+                message.OrganizationId,
                 message.ConversationId,
                 "Message.ConversationId",
                 cancellationToken);
@@ -136,13 +136,13 @@ public sealed class CeoAgentDbContext(
 
         foreach (var outbox in Changed<IncomingMessageOutbox>())
         {
-            await EnsureSameCompanyAsync<Conversation>(
-                outbox.CompanyId,
+            await EnsureSameOrganizationAsync<Conversation>(
+                outbox.OrganizationId,
                 outbox.ConversationId,
                 "IncomingMessageOutbox.ConversationId",
                 cancellationToken);
-            await EnsureSameCompanyAsync<Message>(
-                outbox.CompanyId,
+            await EnsureSameOrganizationAsync<Message>(
+                outbox.OrganizationId,
                 outbox.MessageId,
                 "IncomingMessageOutbox.MessageId",
                 cancellationToken);
@@ -150,25 +150,25 @@ public sealed class CeoAgentDbContext(
 
         foreach (var execution in Changed<ToolExecution>())
         {
-            await EnsureSameCompanyAsync<Conversation>(
-                execution.CompanyId,
+            await EnsureSameOrganizationAsync<Conversation>(
+                execution.OrganizationId,
                 execution.ConversationId,
                 "ToolExecution.ConversationId",
                 cancellationToken);
-            await EnsureSameCompanyAsync<CompanyTool>(
-                execution.CompanyId,
+            await EnsureSameOrganizationAsync<CompanyTool>(
+                execution.OrganizationId,
                 execution.CompanyToolId,
                 "ToolExecution.CompanyToolId",
                 cancellationToken);
-            await EnsureSameCompanyAsync<Message>(
-                execution.CompanyId,
+            await EnsureSameOrganizationAsync<Message>(
+                execution.OrganizationId,
                 execution.TriggerMessageId,
                 "ToolExecution.TriggerMessageId",
                 cancellationToken);
             if (execution.ResultMessageId is { } resultMessageId)
             {
-                await EnsureSameCompanyAsync<Message>(
-                    execution.CompanyId,
+                await EnsureSameOrganizationAsync<Message>(
+                    execution.OrganizationId,
                     resultMessageId,
                     "ToolExecution.ResultMessageId",
                     cancellationToken);
@@ -177,45 +177,45 @@ public sealed class CeoAgentDbContext(
     }
 
     private IEnumerable<TEntity> Changed<TEntity>()
-        where TEntity : CompanyOwnedEntity
+        where TEntity : OrganizationOwnedEntity
     {
         return ChangeTracker.Entries<TEntity>()
             .Where(entry => entry.State is EntityState.Added or EntityState.Modified)
             .Select(entry => entry.Entity);
     }
 
-    private async Task EnsureSameCompanyAsync<TEntity>(
-        Guid dependentCompanyId,
+    private async Task EnsureSameOrganizationAsync<TEntity>(
+        Guid dependentOrganizationId,
         Guid principalId,
         string relationshipName,
         CancellationToken cancellationToken)
-        where TEntity : CompanyOwnedEntity
+        where TEntity : OrganizationOwnedEntity
     {
-        var principalCompanyId = TrackedCompanyId<TEntity>(principalId);
-        if (principalCompanyId is null)
+        var principalOrganizationId = TrackedOrganizationId<TEntity>(principalId);
+        if (principalOrganizationId is null)
         {
-            principalCompanyId = await Set<TEntity>()
+            principalOrganizationId = await Set<TEntity>()
                 .IgnoreQueryFilters()
                 .Where(entity => EF.Property<Guid>(entity, "Id") == principalId)
-                .Select(entity => (Guid?)entity.CompanyId)
+                .Select(entity => (Guid?)entity.OrganizationId)
                 .SingleOrDefaultAsync(cancellationToken);
         }
 
-        if (principalCompanyId is not null && principalCompanyId != dependentCompanyId)
+        if (principalOrganizationId is not null && principalOrganizationId != dependentOrganizationId)
         {
             throw new InvalidOperationException(
-                $"{relationshipName} creates a cross-company relationship.");
+                $"{relationshipName} creates a cross-organization relationship.");
         }
     }
 
-    private Guid? TrackedCompanyId<TEntity>(Guid id)
-        where TEntity : CompanyOwnedEntity
+    private Guid? TrackedOrganizationId<TEntity>(Guid id)
+        where TEntity : OrganizationOwnedEntity
     {
         return ChangeTracker.Entries<TEntity>()
             .Where(entry => entry.State != EntityState.Deleted
                 && entry.Property("Id").CurrentValue is Guid entityId
                 && entityId == id)
-            .Select(entry => (Guid?)entry.Entity.CompanyId)
+            .Select(entry => (Guid?)entry.Entity.OrganizationId)
             .FirstOrDefault();
     }
 
@@ -225,19 +225,19 @@ public sealed class CeoAgentDbContext(
 
         foreach (var entry in ChangeTracker.Entries())
         {
-            if (entry.Entity is AuditableCompanyOwnedEntity companyOwned
+            if (entry.Entity is AuditableOrganizationOwnedEntity organizationOwned
                 && entry.State is EntityState.Added or EntityState.Modified)
             {
-                if (companyOwned.CompanyId == Guid.Empty)
+                if (organizationOwned.OrganizationId == Guid.Empty)
                 {
-                    throw new InvalidOperationException("Company-owned entity requires a non-empty CompanyId.");
+                    throw new InvalidOperationException("Organization-owned entity requires a non-empty OrganizationId.");
                 }
 
-                companyOwned.UpdatedAt = now;
+                organizationOwned.UpdatedAt = now;
 
                 if (entry.State == EntityState.Added)
                 {
-                    companyOwned.CreatedAt = now;
+                    organizationOwned.CreatedAt = now;
                 }
             }
 

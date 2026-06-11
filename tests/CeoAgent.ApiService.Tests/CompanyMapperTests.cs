@@ -35,10 +35,10 @@ public sealed class CompanyMapperTests
     [Test]
     public void ToResponse_MapsCompanyChannelEntityToResponse()
     {
-        var companyId = Guid.CreateVersion7();
+        var organizationId = Guid.CreateVersion7();
         var credentialReferenceId = Guid.CreateVersion7();
         var channel = CompanyChannel.ForWhatsAppCloud(
-            companyId,
+            organizationId,
             "123456",
             new WhatsAppCloudMetadata
             {
@@ -50,7 +50,7 @@ public sealed class CompanyMapperTests
         var response = CompanyMapper.ToResponse(channel);
 
         response.Id.ShouldBe(channel.Id);
-        response.CompanyId.ShouldBe(companyId);
+        response.OrganizationId.ShouldBe(organizationId);
         response.Provider.ShouldBe(channel.Provider);
         response.ProviderChannelId.ShouldBe("123456");
         response.CredentialReferenceId.ShouldBe(credentialReferenceId);
@@ -64,7 +64,7 @@ public sealed class CompanyMapperTests
         var profile = new AgentProfile
         {
             Id = Guid.CreateVersion7(),
-            CompanyId = Guid.CreateVersion7(),
+            OrganizationId = Guid.CreateVersion7(),
             ModelName = "gpt-4.1-mini",
             LlmProvider = LlmProvider.OpenAI,
             DisplayName = "Contoso Assistant",
@@ -75,7 +75,7 @@ public sealed class CompanyMapperTests
         var response = CompanyMapper.ToResponse(profile);
 
         response.Id.ShouldBe(profile.Id);
-        response.CompanyId.ShouldBe(profile.CompanyId);
+        response.OrganizationId.ShouldBe(profile.OrganizationId);
         response.ModelName.ShouldBe(profile.ModelName);
         response.LlmProvider.ShouldBe(profile.LlmProvider);
         response.DisplayName.ShouldBe(profile.DisplayName);
@@ -94,7 +94,7 @@ public sealed class CompanyMapperTests
         };
         var profile = new AgentProfile
         {
-            CompanyId = company.Id,
+            OrganizationId = company.Id,
             ModelName = "gpt-4.1-mini",
             DisplayName = "Contoso Assistant",
             Language = "es",
@@ -121,7 +121,7 @@ public sealed class CompanyMapperTests
         var tool = new CompanyTool
         {
             Id = Guid.CreateVersion7(),
-            CompanyId = Guid.CreateVersion7(),
+            OrganizationId = Guid.CreateVersion7(),
             ToolKey = "check_availability",
             Description = "Checks available reservation slots.",
             ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":"string"}},"required":["date"],"additionalProperties":false}"""),
@@ -139,7 +139,7 @@ public sealed class CompanyMapperTests
         var response = CompanyMapper.ToResponse(tool);
 
         response.Id.ShouldBe(tool.Id);
-        response.CompanyId.ShouldBe(tool.CompanyId);
+        response.OrganizationId.ShouldBe(tool.OrganizationId);
         response.ToolKey.ShouldBe(tool.ToolKey);
         response.Description.ShouldBe(tool.Description);
         response.ParametersSchema.ShouldNotBeNull();
@@ -157,7 +157,7 @@ public sealed class CompanyMapperTests
         var credentialReferenceId = Guid.CreateVersion7();
         var tool = new CompanyTool
         {
-            CompanyId = Guid.CreateVersion7(),
+            OrganizationId = Guid.CreateVersion7(),
             ToolKey = "check_availability",
         };
         var request = new CompanyToolRequest
@@ -183,7 +183,7 @@ public sealed class CompanyMapperTests
         var credential = new IntegrationCredentialReference
         {
             Id = Guid.CreateVersion7(),
-            CompanyId = Guid.CreateVersion7(),
+            OrganizationId = Guid.CreateVersion7(),
             Provider = IntegrationProvider.GoogleCalendar,
             Purpose = "calendar",
             Reference = "kv://company/google-calendar",
@@ -198,7 +198,7 @@ public sealed class CompanyMapperTests
         var response = CompanyMapper.ToResponse(credential);
 
         response.Id.ShouldBe(credential.Id);
-        response.CompanyId.ShouldBe(credential.CompanyId);
+        response.OrganizationId.ShouldBe(credential.OrganizationId);
         response.Provider.ShouldBe(credential.Provider);
         response.Purpose.ShouldBe(credential.Purpose);
         response.Reference.ShouldBe(credential.Reference);

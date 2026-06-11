@@ -46,7 +46,7 @@ public sealed class HumanHandoffToolExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.IdempotencyKey,
             cancellationToken);
         if (existing is not null)
@@ -55,7 +55,7 @@ public sealed class HumanHandoffToolExecutor(
         }
 
         var tool = await dbContext.CompanyTools
-            .EnabledForCompanyTool(executionContext.CompanyId, executionContext.CompanyToolId)
+            .EnabledForOrganizationTool(executionContext.OrganizationId, executionContext.CompanyToolId)
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException($"Company tool '{executionContext.CompanyToolId}' was not found or is not enabled.");
 
@@ -63,7 +63,7 @@ public sealed class HumanHandoffToolExecutor(
             ?? throw new InvalidOperationException("request_human_handoff tool configuration is required.");
 
         return await ApplyHandoffAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.ConversationId,
             tool.Id,
             executionContext.TriggerMessageId,
@@ -78,27 +78,27 @@ public sealed class HumanHandoffToolExecutor(
     /// Persists a <see cref="ToolExecution"/> only when the company has an enabled request_human_handoff tool.
     /// </summary>
     public async Task<bool> AutoEscalateAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid triggerMessageId,
         CancellationToken cancellationToken)
     {
         var idempotencyKey = $"{conversationId:N}:{triggerMessageId:N}:auto_human_handoff";
-        var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(companyId, idempotencyKey, cancellationToken);
+        var existing = await dbContext.FindTrackedOrPersistedToolExecutionAsync(organizationId, idempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return true;
         }
 
         var tool = await dbContext.CompanyTools
-            .EnabledForCompany(companyId)
+            .EnabledForOrganization(organizationId)
             .Where(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff)
             .SingleOrDefaultAsync(cancellationToken);
 
         if (tool?.Configuration?.RequestHumanHandoff is { } config)
         {
             await ApplyHandoffAsync(
-                companyId,
+                organizationId,
                 conversationId,
                 tool.Id,
                 triggerMessageId,
@@ -114,19 +114,19 @@ public sealed class HumanHandoffToolExecutor(
         // requires an enabled company tool. Documented in docs/human-handoff.md.
         logger.LogWarning(
             HandoffToolMissingEvent,
-            "HumanHandoffToolNotConfigured CompanyId={CompanyId} ConversationId={ConversationId} Reason={Reason}",
-            companyId,
+            "HumanHandoffToolNotConfigured OrganizationId={OrganizationId} ConversationId={ConversationId} Reason={Reason}",
+            organizationId,
             conversationId,
             AutoEscalationReason);
 
-        var conversation = await LoadConversationAsync(companyId, conversationId, cancellationToken);
+        var conversation = await LoadConversationAsync(organizationId, conversationId, cancellationToken);
         conversation.Status = ConversationStatus.HandedOff;
-        await UpsertHandoffStateAsync(companyId, conversationId, cancellationToken);
+        await UpsertHandoffStateAsync(organizationId, conversationId, cancellationToken);
         return true;
     }
 
     private async Task<ToolExecution> ApplyHandoffAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid companyToolId,
         Guid triggerMessageId,
@@ -135,10 +135,10 @@ public sealed class HumanHandoffToolExecutor(
         string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        var conversation = await LoadConversationAsync(companyId, conversationId, cancellationToken);
+        var conversation = await LoadConversationAsync(organizationId, conversationId, cancellationToken);
         conversation.Status = ConversationStatus.HandedOff;
 
-        await UpsertHandoffStateAsync(companyId, conversationId, cancellationToken);
+        await UpsertHandoffStateAsync(organizationId, conversationId, cancellationToken);
 
         var now = timeProvider.GetUtcNow();
         var handoffTicketId = Guid.CreateVersion7().ToString("N");
@@ -155,7 +155,7 @@ public sealed class HumanHandoffToolExecutor(
 
         var resultMessage = new Message
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ConversationId = conversationId,
             Role = MessageRole.ToolResult,
             Type = MessageType.Text,
@@ -166,7 +166,7 @@ public sealed class HumanHandoffToolExecutor(
 
         var execution = new ToolExecution
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ConversationId = conversationId,
             CompanyToolId = companyToolId,
             TriggerMessageId = triggerMessageId,
@@ -179,7 +179,7 @@ public sealed class HumanHandoffToolExecutor(
         };
 
         var notified = await PushStaffNotificationAsync(
-            companyId,
+            organizationId,
             conversationId,
             conversation.CompanyChannelId,
             triggerMessageId,
@@ -201,30 +201,30 @@ public sealed class HumanHandoffToolExecutor(
     }
 
     private async Task<Conversation> LoadConversationAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         CancellationToken cancellationToken)
     {
         return await dbContext.Conversations
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .SingleOrDefaultAsync(entity => entity.Id == conversationId, cancellationToken)
             ?? throw new InvalidOperationException($"Conversation '{conversationId}' was not found.");
     }
 
     private async Task UpsertHandoffStateAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         CancellationToken cancellationToken)
     {
         var state = await dbContext.ConversationStates
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .SingleOrDefaultAsync(entity => entity.ConversationId == conversationId, cancellationToken);
 
         if (state is null)
         {
             dbContext.ConversationStates.Add(new ConversationState
             {
-                CompanyId = companyId,
+                OrganizationId = organizationId,
                 ConversationId = conversationId,
                 Snapshot = new ConversationStateSnapshot
                 {
@@ -253,7 +253,7 @@ public sealed class HumanHandoffToolExecutor(
     }
 
     private async Task<bool> PushStaffNotificationAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid companyChannelId,
         Guid triggerMessageId,
@@ -271,8 +271,8 @@ public sealed class HumanHandoffToolExecutor(
         // Observable, sanitized push (no PII): always emitted as the MVP staff signal.
         logger.LogInformation(
             HandoffEscalatedEvent,
-            "HumanHandoffEscalated CompanyId={CompanyId} ConversationId={ConversationId} CompanyChannelId={CompanyChannelId} Provider={Provider} HandoffTicketId={HandoffTicketId} Reason={Reason} EstimatedPickupAt={EstimatedPickupAt} EscalationChannel={EscalationChannel} NotifyUserCount={NotifyUserCount}",
-            companyId,
+            "HumanHandoffEscalated OrganizationId={OrganizationId} ConversationId={ConversationId} CompanyChannelId={CompanyChannelId} Provider={Provider} HandoffTicketId={HandoffTicketId} Reason={Reason} EstimatedPickupAt={EstimatedPickupAt} EscalationChannel={EscalationChannel} NotifyUserCount={NotifyUserCount}",
+            organizationId,
             conversationId,
             companyChannelId,
             WhatsAppProvider,
@@ -306,7 +306,7 @@ public sealed class HumanHandoffToolExecutor(
             {
                 await messaging.SendTextAsync(
                     new ChannelTextMessage(
-                        companyId,
+                        organizationId,
                         companyChannelId,
                         conversationId,
                         triggerMessageId,
@@ -321,8 +321,8 @@ public sealed class HumanHandoffToolExecutor(
                 logger.LogWarning(
                     HandoffNotificationFailedEvent,
                     exception,
-                    "HumanHandoffNotificationUnavailable CompanyId={CompanyId} ConversationId={ConversationId} HandoffTicketId={HandoffTicketId}",
-                    companyId,
+                    "HumanHandoffNotificationUnavailable OrganizationId={OrganizationId} ConversationId={ConversationId} HandoffTicketId={HandoffTicketId}",
+                    organizationId,
                     conversationId,
                     handoffTicketId);
             }

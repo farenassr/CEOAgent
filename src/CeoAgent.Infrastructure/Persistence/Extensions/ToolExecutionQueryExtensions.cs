@@ -7,17 +7,17 @@ public static class ToolExecutionQueryExtensions
 {
     public static IQueryable<ToolExecution> WithIdempotencyKey(
         this IQueryable<ToolExecution> query,
-        Guid companyId,
+        Guid organizationId,
         string idempotencyKey)
     {
         return query
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .Where(entity => entity.IdempotencyKey == idempotencyKey);
     }
 
     public static async Task<ToolExecution?> FindTrackedOrPersistedToolExecutionAsync(
         this CeoAgentDbContext dbContext,
-        Guid companyId,
+        Guid organizationId,
         string idempotencyKey,
         CancellationToken cancellationToken)
     {
@@ -26,7 +26,7 @@ public static class ToolExecutionQueryExtensions
             .Where(entry => entry.State != EntityState.Deleted)
             .Select(entry => entry.Entity)
             .SingleOrDefault(entity =>
-                entity.CompanyId == companyId
+                entity.OrganizationId == organizationId
                 && entity.IdempotencyKey == idempotencyKey);
 
         if (tracked is not null)
@@ -35,7 +35,7 @@ public static class ToolExecutionQueryExtensions
         }
 
         return await dbContext.ToolExecutions
-            .WithIdempotencyKey(companyId, idempotencyKey)
+            .WithIdempotencyKey(organizationId, idempotencyKey)
             .SingleOrDefaultAsync(cancellationToken);
     }
 }

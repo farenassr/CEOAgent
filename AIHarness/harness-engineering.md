@@ -13,7 +13,7 @@ backlog for improving repeatability.
 | `AIHarness/integration-model.md` | Changing integration ports, provider implementations, provider selection, credentials, or external SDK usage. |
 | `AIHarness/whatsapp-flow.md` | Changing WhatsApp webhook ingestion, idempotency, message parsing, media, or outbound replies. |
 | `AIHarness/google-calendar-integration.md` | Changing availability, booking, calendar tool execution, or Google Calendar implementation behavior. |
-| `AIHarness/security-rules.md` | Changing secrets, authentication, authorization, webhook signatures, company isolation, logging, AI safety, or PII handling. |
+| `AIHarness/security-rules.md` | Changing secrets, authentication, authorization, webhook signatures, organization isolation, logging, AI safety, or PII handling. |
 
 ## Executable Harness Checks
 

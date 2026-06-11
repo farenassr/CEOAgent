@@ -1,6 +1,6 @@
 namespace CeoAgent.Infrastructure.Entities;
 
-public abstract class AuditableCompanyOwnedEntity : CompanyOwnedEntity
+public abstract class AuditableOrganizationOwnedEntity : OrganizationOwnedEntity
 {
     /// <summary>
     /// UTC timestamp when the row was created. Example: 2026-05-22T10:15:30Z.

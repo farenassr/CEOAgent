@@ -37,10 +37,10 @@ provider credential material in metadata at the API edge.
 
 ## Multi-Tenancy
 
-- Every company-owned table includes `company_id`.
-- Company-owned queries must rely on EF Core global query filters.
-- Never read `company_id` from a public request body.
-- Resolve inbound WhatsApp company context from provider channel ID.
+- Every organization-owned table includes `organization_id`.
+- Organization-owned queries must rely on EF Core global query filters.
+- Never read `organization_id` from a public request body.
+- Resolve inbound WhatsApp organization context from provider channel ID.
 
 ## AI Safety
 
@@ -63,7 +63,7 @@ provider credential material in metadata at the API edge.
 Allowed by default:
 
 - correlation IDs
-- company IDs
+- organization IDs
 - conversation IDs
 - provider names
 - tool keys

@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -13,14 +13,14 @@ internal sealed class PostgresWorkerDatabase : IAsyncDisposable
 {
     private readonly PostgreSqlContainer postgres;
 
-    private PostgresWorkerDatabase(PostgreSqlContainer postgres, CompanyContextAccessor companyContext, CeoAgentDbContext context)
+    private PostgresWorkerDatabase(PostgreSqlContainer postgres, OrganizationContextAccessor companyContext, CeoAgentDbContext context)
     {
         this.postgres = postgres;
-        CompanyContext = companyContext;
+        OrganizationContext = companyContext;
         Context = context;
     }
 
-    public CompanyContextAccessor CompanyContext { get; }
+    public OrganizationContextAccessor OrganizationContext { get; }
 
     public CeoAgentDbContext Context { get; }
 
@@ -33,7 +33,7 @@ internal sealed class PostgresWorkerDatabase : IAsyncDisposable
         await postgres.StartAsync();
         await WaitForPostgresAsync(postgres.GetConnectionString());
 
-        var companyContext = new CompanyContextAccessor();
+        var companyContext = new OrganizationContextAccessor();
         var options = new DbContextOptionsBuilder<CeoAgentDbContext>()
             .UseNpgsql(postgres.GetConnectionString())
             .UseSnakeCaseNamingConvention()

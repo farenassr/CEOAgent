@@ -186,9 +186,9 @@ public sealed partial class ArchitectureRulesTests
         var repoRoot = FindRepositoryRoot();
         var monitoredTypeNames = new[]
         {
-            "ICompanyContext",
-            "ICompanyContextAccessor",
-            "ICompanyOwned",
+            "IOrganizationContextProvider",
+            "IOrganizationContextAccessor",
+            "IOrganizationOwned",
         };
         var declarations = FindPublicTypeDeclarations(repoRoot)
             .Where(declaration => monitoredTypeNames.Contains(declaration.TypeName, StringComparer.Ordinal))
@@ -221,6 +221,7 @@ public sealed partial class ArchitectureRulesTests
             "AI",
             "AITools",
             "Company",
+            "Organization",
             "GoogleCalendar",
             "Messaging",
             "OpenAI",
@@ -253,7 +254,7 @@ public sealed partial class ArchitectureRulesTests
         var repoRoot = FindRepositoryRoot();
         var namespaceRoots = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [Path.Combine("src", "CeoAgent.Application", "Abstractions", "Company")] = "CeoAgent.Application.Abstractions.Company",
+            [Path.Combine("src", "CeoAgent.Application", "Abstractions", "Organization")] = "CeoAgent.Application.Abstractions.Organization",
             [Path.Combine("src", "CeoAgent.Application", "Abstractions")] = "CeoAgent.Application.Abstractions",
             [Path.Combine("src", "CeoAgent.Shared", "AI")] = "CeoAgent.Shared.AI",
             [Path.Combine("src", "CeoAgent.Shared", "AITools")] = "CeoAgent.Shared.AITools",

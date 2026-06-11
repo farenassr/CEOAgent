@@ -26,7 +26,7 @@ public sealed class ToolExecutionGateway
         ArgumentNullException.ThrowIfNull(request);
 
         using var activity = CeoAgentTelemetry.ActivitySource.StartActivity("tool.execution");
-        activity?.SetTag("company.id", request.CompanyId);
+        activity?.SetTag("organization.id", request.OrganizationId);
         activity?.SetTag("conversation.id", request.ConversationId);
         activity?.SetTag("tool.key", request.ToolCall.Name);
         activity?.SetTag("tool.side_effects_enabled", request.SideEffectsEnabled);

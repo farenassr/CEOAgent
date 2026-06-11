@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "scenario": "whatsapp-ingestion",
   "correlationId": "trace-example",
-  "companyId": "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30",
+  "organizationId": "b36cfb51-83bd-4376-b7d7-0502141ff6ae",
   "events": [
     {
       "name": "WhatsAppWebhookReceived",

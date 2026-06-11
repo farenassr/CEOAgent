@@ -32,10 +32,10 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
             SeedCompany(dbContext);
         }
 
-        using var client = factory.CreateAuthenticatedClient(CompanyId);
+        using var client = factory.CreateAuthenticatedClient(OrganizationId);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{CompanyId}/whatsapp")
+            $"/v1/admin/companies/{OrganizationId}/whatsapp")
         {
             Content = JsonContent.Create(new
             {
@@ -49,9 +49,9 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<SimulationResponse>();
         body.ShouldNotBeNull();
-        body.CompanyId.ShouldBe(CompanyId);
+        body.OrganizationId.ShouldBe(OrganizationId);
         body.Enqueued.ShouldBeTrue();
-        queue.Jobs.Single().CompanyId.ShouldBe(CompanyId);
+        queue.Jobs.Single().OrganizationId.ShouldBe(OrganizationId);
         queue.Jobs.Single().ConversationId.ShouldBe(body.ConversationId);
         queue.Jobs.Single().MessageId.ShouldBe(body.MessageId);
 
@@ -72,20 +72,20 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
     {
         var company = new Company
         {
-            Id = CompanyId,
+            Id = OrganizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         };
         var profile = new AgentProfile
         {
             Id = AgentProfileId,
-            CompanyId = CompanyId,
+            OrganizationId = OrganizationId,
             ModelName = "gpt-4.1-mini",
             DisplayName = "Contoso Assistant",
             Language = "es",
         };
         var channel = CompanyChannel.ForWhatsAppCloud(
-            CompanyId,
+            OrganizationId,
             "1152556904604978",
             new WhatsAppCloudMetadata
             {
@@ -99,7 +99,7 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         dbContext.SaveChanges();
     }
 
-    private static readonly Guid CompanyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+    private static readonly Guid OrganizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
 
     private static readonly Guid AgentProfileId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b31");
 
@@ -107,7 +107,7 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
 
     private sealed class SimulationResponse
     {
-        public Guid CompanyId { get; set; }
+        public Guid OrganizationId { get; set; }
 
         public Guid ConversationId { get; set; }
 

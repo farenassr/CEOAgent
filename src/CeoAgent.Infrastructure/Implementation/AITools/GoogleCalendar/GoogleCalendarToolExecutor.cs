@@ -34,11 +34,11 @@ public sealed class GoogleCalendarToolExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var context = await LoadContextAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.ConversationId,
             executionContext.CompanyToolId,
             cancellationToken);
-        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
+        var existing = await FindExistingAsync(executionContext.OrganizationId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -180,11 +180,11 @@ public sealed class GoogleCalendarToolExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var context = await LoadContextAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.ConversationId,
             executionContext.CompanyToolId,
             cancellationToken);
-        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
+        var existing = await FindExistingAsync(executionContext.OrganizationId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -268,7 +268,7 @@ public sealed class GoogleCalendarToolExecutor(
                     IdempotencyKey: executionContext.IdempotencyKey,
                     Description: $"Customer: {request.CustomerName.Trim()}",
                     CustomerEmail: null,
-                    CompanyId: context.Company.Id.ToString("D"),
+                    OrganizationId: context.Company.Id.ToString("D"),
                     ConversationId: context.Conversation.Id.ToString("D"),
                     CustomerExternalId: context.Customer.ExternalCustomerId,
                     ReservationId: executionContext.IdempotencyKey),
@@ -312,11 +312,11 @@ public sealed class GoogleCalendarToolExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var context = await LoadContextAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.ConversationId,
             executionContext.CompanyToolId,
             cancellationToken);
-        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
+        var existing = await FindExistingAsync(executionContext.OrganizationId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -375,11 +375,11 @@ public sealed class GoogleCalendarToolExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var context = await LoadContextAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.ConversationId,
             executionContext.CompanyToolId,
             cancellationToken);
-        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
+        var existing = await FindExistingAsync(executionContext.OrganizationId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -473,11 +473,11 @@ public sealed class GoogleCalendarToolExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var context = await LoadContextAsync(
-            executionContext.CompanyId,
+            executionContext.OrganizationId,
             executionContext.ConversationId,
             executionContext.CompanyToolId,
             cancellationToken);
-        var existing = await FindExistingAsync(executionContext.CompanyId, executionContext.IdempotencyKey, cancellationToken);
+        var existing = await FindExistingAsync(executionContext.OrganizationId, executionContext.IdempotencyKey, cancellationToken);
         if (existing is not null)
         {
             return existing;
@@ -526,44 +526,44 @@ public sealed class GoogleCalendarToolExecutor(
     }
 
     private async Task<ToolExecution?> FindExistingAsync(
-        Guid companyId,
+        Guid organizationId,
         string idempotencyKey,
         CancellationToken cancellationToken)
     {
         return await dbContext.FindTrackedOrPersistedToolExecutionAsync(
-            companyId,
+            organizationId,
             idempotencyKey,
             cancellationToken);
     }
 
     private async Task<CalendarToolContext> LoadContextAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid companyToolId,
         CancellationToken cancellationToken)
     {
         var conversation = await dbContext.Conversations
             .AsNoTracking()
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .SingleOrDefaultAsync(
                 entity => entity.Id == conversationId,
                 cancellationToken)
             ?? throw new InvalidOperationException($"Conversation '{conversationId}' was not found.");
         var customer = await dbContext.Customers
             .AsNoTracking()
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .SingleOrDefaultAsync(
                 entity => entity.Id == conversation.CustomerId,
                 cancellationToken)
             ?? throw new InvalidOperationException($"Customer '{conversation.CustomerId}' was not found.");
         var company = await dbContext.Companies
             .AsNoTracking()
-            .SingleOrDefaultAsync(entity => entity.Id == companyId, cancellationToken)
-            ?? throw new InvalidOperationException($"Company '{companyId}' was not found.");
+            .SingleOrDefaultAsync(entity => entity.Id == organizationId, cancellationToken)
+            ?? throw new InvalidOperationException($"Company '{organizationId}' was not found.");
         var tool = await dbContext.CompanyTools
             .AsNoTracking()
             .WithCredentialReference()
-            .EnabledForCompanyTool(companyId, companyToolId)
+            .EnabledForOrganizationTool(organizationId, companyToolId)
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException($"Company tool '{companyToolId}' was not found.");
 
@@ -633,7 +633,7 @@ public sealed class GoogleCalendarToolExecutor(
     {
         var execution = new ToolExecution
         {
-            CompanyId = context.Company.Id,
+            OrganizationId = context.Company.Id,
             ConversationId = context.Conversation.Id,
             CompanyToolId = context.Tool.Id,
             TriggerMessageId = triggerMessageId,
@@ -649,7 +649,7 @@ public sealed class GoogleCalendarToolExecutor(
         {
             var resultMessage = new Message
             {
-                CompanyId = context.Company.Id,
+                OrganizationId = context.Company.Id,
                 ConversationId = context.Conversation.Id,
                 Role = MessageRole.ToolResult,
                 Type = MessageType.Text,

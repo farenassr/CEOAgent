@@ -51,7 +51,7 @@ public sealed class WhatsAppCloudIntegrationTests
     [Test]
     public async Task SendTextAsync_UsesCompanyChannelCredentialReferenceAsBearerToken()
     {
-        var companyId = Guid.CreateVersion7();
+        var organizationId = Guid.CreateVersion7();
         var channelId = Guid.CreateVersion7();
         var credentialReference = "https://kv-ceo-agent-dev.vault.azure.net/secrets/WhatsappAccessToken";
         var client = new RecordingWhatsAppCloudRefitClient();
@@ -82,7 +82,7 @@ public sealed class WhatsAppCloudIntegrationTests
 
         await integration.SendTextAsync(
             new ChannelTextMessage(
-                companyId,
+                organizationId,
                 channelId,
                 Guid.CreateVersion7(),
                 Guid.CreateVersion7(),
@@ -100,7 +100,7 @@ public sealed class WhatsAppCloudIntegrationTests
         client.Request.BizOpaqueCallbackData.ShouldBe("reply:1");
 
         var log = logger.Entries.Single(entry => entry.EventId.Name == "WhatsAppCloudMessageSendStarting");
-        log.Message.ShouldContain(companyId.ToString());
+        log.Message.ShouldContain(organizationId.ToString());
         log.Message.ShouldContain(channelId.ToString());
         log.Message.ShouldContain("Provider=whatsapp_cloud");
         log.Message.ShouldContain("HasIdempotencyKey=True");

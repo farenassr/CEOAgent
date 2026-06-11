@@ -19,23 +19,23 @@ public sealed class ConfigureAgentProfileEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/agent-profile");
+        Post("/v1/admin/companies/{organizationId}/agent-profile");
     }
 
     public override async Task HandleAsync(AgentProfileRequest request, CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
-        var company = await tenantGuard.GetAccessibleCompanyAsync(companyId, trackChanges: true, cancellationToken);
+        var organizationId = Route<Guid>("organizationId");
+        var company = await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: true, cancellationToken);
 
         var profile = await dbContext.AgentProfiles
             .WithDefaultTracking(trackChanges: true)
             .FirstOrDefaultAsync(
-            entity => entity.CompanyId == companyId,
+            entity => entity.OrganizationId == organizationId,
             cancellationToken);
 
         if (profile is null)
         {
-            profile = CompanyMapper.ToEntity(request, companyId);
+            profile = CompanyMapper.ToEntity(request, organizationId);
             dbContext.AgentProfiles.Add(profile);
         }
 

@@ -1,4 +1,4 @@
-using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -17,25 +17,25 @@ namespace CeoAgent.ApiService.Modules.Handoff.Endpoints;
 /// </summary>
 public sealed class ResumeConversationEndpoint(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : EndpointWithoutRequest<ResumeConversationResponse>
+    IOrganizationContextProvider companyContext) : EndpointWithoutRequest<ResumeConversationResponse>
 {
     private const string HumanRequestedFlag = "human_requested";
     private const string HandoffIntent = "human_handoff_request";
 
     public override void Configure()
     {
-        Post("/v1/admin/companies/{companyId}/conversations/{conversationId}/resume");
+        Post("/v1/admin/companies/{organizationId}/conversations/{conversationId}/resume");
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)
     {
-        var companyId = Route<Guid>("companyId");
+        var organizationId = Route<Guid>("organizationId");
         var conversationId = Route<Guid>("conversationId");
-        EnsureCompanyAccess(companyId);
+        EnsureCompanyAccess(organizationId);
 
         var conversation = await dbContext.Conversations
             .WithDefaultTracking(trackChanges: true)
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .FirstOrDefaultAsync(entity => entity.Id == conversationId, cancellationToken)
             ?? throw new NotFoundException("conversation", conversationId);
 
@@ -43,7 +43,7 @@ public sealed class ResumeConversationEndpoint(
         if (resumed)
         {
             conversation.Status = ConversationStatus.Open;
-            await ClearHandoffStateAsync(companyId, conversationId, cancellationToken);
+            await ClearHandoffStateAsync(organizationId, conversationId, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
@@ -58,13 +58,13 @@ public sealed class ResumeConversationEndpoint(
     }
 
     private async Task ClearHandoffStateAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         CancellationToken cancellationToken)
     {
         var state = await dbContext.ConversationStates
             .WithDefaultTracking(trackChanges: true)
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .FirstOrDefaultAsync(entity => entity.ConversationId == conversationId, cancellationToken);
 
         if (state is null)
@@ -89,11 +89,11 @@ public sealed class ResumeConversationEndpoint(
         };
     }
 
-    private void EnsureCompanyAccess(Guid companyId)
+    private void EnsureCompanyAccess(Guid organizationId)
     {
-        if (companyContext.CompanyId != companyId)
+        if (companyContext.OrganizationId != organizationId)
         {
-            throw new NotFoundException("company", companyId);
+            throw new NotFoundException("company", organizationId);
         }
     }
 }

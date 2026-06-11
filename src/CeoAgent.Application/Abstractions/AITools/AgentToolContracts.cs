@@ -39,7 +39,7 @@ public interface IAgentTool<TRequest> : IAgentTool
 }
 
 public sealed record ToolExecutionContext(
-    Guid CompanyId,
+    Guid OrganizationId,
     Guid ConversationId,
     Guid CompanyToolId,
     Guid TriggerMessageId,
@@ -48,7 +48,7 @@ public sealed record ToolExecutionContext(
     object? Configuration = null);
 
 public sealed record AgentToolCatalogContext(
-    Guid CompanyId,
+    Guid OrganizationId,
     IReadOnlyDictionary<string, object?>? TenantMetadata = null);
 
 public interface IAgentToolCatalog

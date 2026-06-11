@@ -237,7 +237,7 @@ public sealed class GoogleCalendarSdkTests
                 IdempotencyKey: "reservation-key",
                 Description: "Customer: Ada Lovelace",
                 CustomerEmail: null,
-                CompanyId: "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30",
+                OrganizationId: "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30",
                 ConversationId: "018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34",
                 CustomerExternalId: "15551234567",
                 ReservationId: "reservation-key"),
@@ -247,7 +247,7 @@ public sealed class GoogleCalendarSdkTests
             .RootElement
             .GetProperty("extendedProperties")
             .GetProperty("private");
-        privateProperties.GetProperty("ceoagent_company_id").GetString().ShouldBe("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        privateProperties.GetProperty("ceoagent_organization_id").GetString().ShouldBe("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         privateProperties.GetProperty("ceoagent_conversation_id").GetString().ShouldBe("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34");
         privateProperties.GetProperty("ceoagent_customer_external_id").GetString().ShouldBe("15551234567");
         privateProperties.GetProperty("ceoagent_reservation_id").GetString().ShouldBe("reservation-key");
@@ -270,7 +270,7 @@ public sealed class GoogleCalendarSdkTests
                       "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
                       "extendedProperties": {
                         "private": {
-                          "ceoagent_company_id": "company-1",
+                          "ceoagent_organization_id": "company-1",
                           "ceoagent_customer_external_id": "15551234567",
                           "ceoagent_reservation_id": "reservation-key"
                         }
@@ -317,7 +317,7 @@ public sealed class GoogleCalendarSdkTests
                       "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
                       "extendedProperties": {
                         "private": {
-                          "ceoagent_company_id": "company-1",
+                          "ceoagent_organization_id": "company-1",
                           "ceoagent_customer_external_id": "15551234567",
                           "ceoagent_reservation_id": "reservation-1"
                         }
@@ -336,7 +336,7 @@ public sealed class GoogleCalendarSdkTests
                       "end": { "dateTime": "2026-05-28T19:00:00-05:00" },
                       "extendedProperties": {
                         "private": {
-                          "ceoagent_company_id": "company-1",
+                          "ceoagent_organization_id": "company-1",
                           "ceoagent_customer_external_id": "15551234567",
                           "ceoagent_reservation_id": "reservation-2"
                         }
@@ -349,7 +349,7 @@ public sealed class GoogleCalendarSdkTests
                       "end": { "dateTime": "2026-05-28T20:00:00-05:00" },
                       "extendedProperties": {
                         "private": {
-                          "ceoagent_company_id": "company-1",
+                          "ceoagent_organization_id": "company-1",
                           "ceoagent_customer_external_id": "other-customer",
                           "ceoagent_reservation_id": "reservation-other"
                         }
@@ -394,7 +394,7 @@ public sealed class GoogleCalendarSdkTests
                   "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
                   "extendedProperties": {
                     "private": {
-                      "ceoagent_company_id": "company-1",
+                      "ceoagent_organization_id": "company-1",
                       "ceoagent_customer_external_id": "other-customer"
                     }
                   }
@@ -491,7 +491,7 @@ public sealed class GoogleCalendarSdkTests
                   "end": { "dateTime": "2026-05-28T21:00:00-05:00" },
                   "extendedProperties": {
                     "private": {
-                      "ceoagent_company_id": "company-1",
+                      "ceoagent_organization_id": "company-1",
                       "ceoagent_customer_external_id": "15551234567",
                       "ceoagent_reservation_id": "reservation-key"
                     }
@@ -510,7 +510,7 @@ public sealed class GoogleCalendarSdkTests
                       "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
                       "extendedProperties": {
                         "private": {
-                          "ceoagent_company_id": "company-1",
+                          "ceoagent_organization_id": "company-1",
                           "ceoagent_customer_external_id": "other-customer",
                           "ceoagent_reservation_id": "reservation-key"
                         }
@@ -530,7 +530,7 @@ public sealed class GoogleCalendarSdkTests
                       "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
                       "extendedProperties": {
                         "private": {
-                          "ceoagent_company_id": "company-1",
+                          "ceoagent_organization_id": "company-1",
                           "ceoagent_customer_external_id": "15551234567",
                           "ceoagent_reservation_id": "reservation-key"
                         }
@@ -652,7 +652,7 @@ public sealed class GoogleCalendarSdkTests
               "end": { "dateTime": "2026-05-28T17:00:00-05:00" },
               "extendedProperties": {
                 "private": {
-                  "ceoagent_company_id": "company-1",
+                  "ceoagent_organization_id": "company-1",
                   "ceoagent_customer_external_id": "15551234567",
                   "ceoagent_reservation_id": "reservation-key"
                 }

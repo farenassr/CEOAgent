@@ -4,7 +4,7 @@ using CeoAgent.Shared.Enums;
 namespace CeoAgent.ApiService.Modules.Companies.Models;
 
 public sealed record RegisterCompanyChannelCommand(
-    Guid CompanyId,
+    Guid OrganizationId,
     CompanyChannelProvider Provider,
     string ProviderChannelId,
     JsonElement? Metadata,

@@ -13,7 +13,7 @@ namespace CeoAgent.ApiService.Tests.Support;
 
 internal sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    public static readonly Guid DefaultCompanyId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+    public static readonly Guid DefaultOrganizationId = Guid.Parse("b36cfb51-83bd-4376-b7d7-0502141ff6ae");
 
     private readonly PostgreSqlContainer _postgres;
     private readonly string _environmentName;
@@ -57,12 +57,10 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         });
     }
 
-    public HttpClient CreateAuthenticatedClient(Guid? companyId = null)
+    public HttpClient CreateAuthenticatedClient(Guid? organizationId = null)
     {
         var client = CreateClient();
-        client.DefaultRequestHeaders.Authorization = companyId is { } id
-            ? TestAuthentication.CompanyBearer(id)
-            : TestAuthentication.BootstrapBearer();
+        client.DefaultRequestHeaders.Authorization = TestAuthentication.OrganizationBearer(organizationId ?? DefaultOrganizationId);
         return client;
     }
 

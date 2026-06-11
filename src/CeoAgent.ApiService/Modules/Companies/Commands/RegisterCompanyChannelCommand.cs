@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace CeoAgent.ApiService.Modules.Companies.Commands;
 
 public sealed record RegisterCompanyChannelCommand(
-    Guid CompanyId,
+    Guid OrganizationId,
     CompanyChannelProvider Provider,
     string ProviderChannelId,
     JsonElement? Metadata,
@@ -25,8 +25,8 @@ public sealed class RegisterCompanyChannelCommandHandler(
 {
     public async ValueTask<CompanyChannel> Handle(RegisterCompanyChannelCommand command, CancellationToken cancellationToken)
     {
-        await tenantGuard.GetAccessibleCompanyAsync(command.CompanyId, trackChanges: false, cancellationToken);
-        await tenantGuard.EnsureCredentialReferenceAccessibleAsync(command.CompanyId, command.CredentialReferenceId, cancellationToken);
+        await tenantGuard.GetAccessibleCompanyAsync(command.OrganizationId, trackChanges: false, cancellationToken);
+        await tenantGuard.EnsureCredentialReferenceAccessibleAsync(command.OrganizationId, command.CredentialReferenceId, cancellationToken);
 
         var channel = CreateCompanyChannel(command);
 
@@ -43,7 +43,7 @@ public sealed class RegisterCompanyChannelCommandHandler(
         {
             CompanyChannelProvider.WhatsAppCloud when metadata.WhatsAppCloud is { } whatsAppCloud =>
                 CompanyChannel.ForWhatsAppCloud(
-                    command.CompanyId,
+                    command.OrganizationId,
                     command.ProviderChannelId,
                     whatsAppCloud,
                     command.CredentialReferenceId),

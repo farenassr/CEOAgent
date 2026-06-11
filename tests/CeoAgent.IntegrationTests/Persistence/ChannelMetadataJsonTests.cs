@@ -14,10 +14,10 @@ public sealed class ChannelMetadataJsonTests
     [Test]
     public void Factory_CreatesChannelMetadataWrapperForWhatsAppCloud()
     {
-        var companyId = Guid.CreateVersion7();
+        var organizationId = Guid.CreateVersion7();
 
         var whatsApp = CompanyChannel.ForWhatsAppCloud(
-            companyId,
+            organizationId,
             "123456789012345",
             new WhatsAppCloudMetadata
             {
@@ -35,10 +35,10 @@ public sealed class ChannelMetadataJsonTests
     [Test]
     public void FutureProviderFactories_ThrowNotSupportedException()
     {
-        var companyId = Guid.CreateVersion7();
+        var organizationId = Guid.CreateVersion7();
 
         Should.Throw<NotSupportedException>(() => CompanyChannel.ForInstagram(
-            companyId,
+            organizationId,
             "17841400000000000",
             new InstagramMetadata
             {
@@ -46,7 +46,7 @@ public sealed class ChannelMetadataJsonTests
                 PageId = "1010101010",
             }));
         Should.Throw<NotSupportedException>(() => CompanyChannel.ForTelegram(
-            companyId,
+            organizationId,
             "contoso_bot",
             new TelegramMetadata
             {
@@ -59,12 +59,12 @@ public sealed class ChannelMetadataJsonTests
     public async Task Match_ReadsLoadedChannelPayloadFromDatabase()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var companyId = Guid.CreateVersion7();
-        database.CompanyContext.SetCompany(companyId);
-        await SeedCompanyAsync(database.Context, companyId);
+        var organizationId = Guid.CreateVersion7();
+        database.OrganizationContext.SetOrganization(organizationId);
+        await SeedCompanyAsync(database.Context, organizationId);
 
         var channel = CompanyChannel.ForWhatsAppCloud(
-            companyId,
+            organizationId,
             "123456789012345",
             new WhatsAppCloudMetadata
             {
@@ -87,12 +87,12 @@ public sealed class ChannelMetadataJsonTests
     public async Task JsonbWrapper_SupportsServerSideWhereAndExecuteUpdateOnNestedPayload()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
-        var companyId = Guid.CreateVersion7();
-        database.CompanyContext.SetCompany(companyId);
-        await SeedCompanyAsync(database.Context, companyId);
+        var organizationId = Guid.CreateVersion7();
+        database.OrganizationContext.SetOrganization(organizationId);
+        await SeedCompanyAsync(database.Context, organizationId);
 
         var channel = CompanyChannel.ForWhatsAppCloud(
-            companyId,
+            organizationId,
             "123456789012345",
             new WhatsAppCloudMetadata
             {
@@ -128,11 +128,11 @@ public sealed class ChannelMetadataJsonTests
         updatedVerifiedName.ShouldBe("Contoso Bistro Verified");
     }
 
-    private static async Task SeedCompanyAsync(CeoAgentDbContext dbContext, Guid companyId)
+    private static async Task SeedCompanyAsync(CeoAgentDbContext dbContext, Guid organizationId)
     {
         dbContext.Companies.Add(new CompanyEntity
         {
-            Id = companyId,
+            Id = organizationId,
             Name = "Contoso Bistro",
             TimeZoneId = "America/Bogota",
         });

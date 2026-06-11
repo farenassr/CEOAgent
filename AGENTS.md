@@ -40,7 +40,7 @@ docs for the current task:
 - `AIHarness/google-calendar-integration.md`: calendar availability, booking,
   cancellation, or Google Calendar implementation behavior.
 - `AIHarness/security-rules.md`: secrets, authentication, authorization,
-  webhook verification, logging, company isolation, or PII handling.
+  webhook verification, logging, organization isolation, or PII handling.
 - Architecture docs: module boundaries, project references, background jobs,
   or AI/tool orchestration.
 
@@ -115,7 +115,7 @@ Run the narrowest meaningful check first, then broaden when risk warrants it.
 - Use Mapperly only when shapes diverge; direct construction is fine for same-shape mapping.
 - Use EF Core directly. No generic repository and no custom Unit of Work.
 - Use one `CeoAgentDbContext`.
-- Company-owned data must use `company_id` and EF Core global query filters.
+- Organization-owned data must use `organization_id` and EF Core global query filters.
 - All identifiers use `Guid.CreateVersion7()`.
 - Use `TimeProvider`; do not use `DateTime.Now` or direct `DateTime.UtcNow`.
 - All API routes are under `/v1/` except `/health`.
@@ -187,7 +187,7 @@ Use available project subagents when their domain matches the task:
 - `codebase-scout`: inspects relevant code, tests, docs, and harness assets before planning or coding.
 - `architecture-reviewer`: reviews architecture, module boundaries, vertical slices, project references, and design risks.
 - `backend-engineer`: implements .NET API, FastEndpoints, Mediator workflows, Worker jobs, and service boundaries.
-- `db-specialist`: handles EF Core, PostgreSQL, migrations review, indexes, JSONB, query filters, company isolation, and data modeling.
+- `db-specialist`: handles EF Core, PostgreSQL, migrations review, indexes, JSONB, query filters, organization isolation, and data modeling.
 - `integrations-engineer`: handles integration ports and implementations, WhatsApp Cloud, Google Calendar, external APIs, provider boundaries, and tool execution.
 - `ai-engineer`: handles Microsoft Agent Framework, agent loop, prompts, structured output, tool calling, model behavior, evals, and LLM safety.
 - `testing-engineer`: handles unit tests, integration tests, Aspire Testing, Testcontainers, fixtures, evals, and regression coverage.

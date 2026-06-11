@@ -32,10 +32,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -58,6 +54,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("model_name");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
                     b.Property<string>("PromptOverride")
                         .HasColumnType("text")
                         .HasColumnName("prompt_override");
@@ -75,13 +75,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_agent_profile");
 
-                    b.HasIndex("CompanyId")
+                    b.HasIndex("OrganizationId")
                         .IsUnique()
-                        .HasDatabaseName("ix_agent_profile_company_id");
+                        .HasDatabaseName("ix_agent_profile_organization_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_agent_profile_company_id_created_at");
+                        .HasDatabaseName("ix_agent_profile_organization_id_created_at");
 
                     b.ToTable("agent_profile", "public");
                 });
@@ -266,10 +266,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -277,6 +273,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CredentialReferenceId")
                         .HasColumnType("uuid")
                         .HasColumnName("credential_reference_id");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -355,9 +355,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("Provider")
                         .HasDatabaseName("ix_company_channel_provider");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_company_channel_company_id_created_at");
+                        .HasDatabaseName("ix_company_channel_organization_id_created_at");
 
                     b.HasIndex("Provider", "ProviderChannelId")
                         .IsUnique()
@@ -372,10 +372,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -393,6 +389,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean")
                         .HasColumnName("is_enabled");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<JsonElement?>("ParametersSchema")
                         .HasColumnType("jsonb")
@@ -488,13 +488,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("CredentialReferenceId")
                         .HasDatabaseName("ix_company_tool_credential_reference_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_company_tool_company_id_created_at");
+                        .HasDatabaseName("ix_company_tool_organization_id_created_at");
 
-                    b.HasIndex("CompanyId", "ToolKey")
+                    b.HasIndex("OrganizationId", "ToolKey")
                         .IsUnique()
-                        .HasDatabaseName("ix_company_tool_company_id_tool_key");
+                        .HasDatabaseName("ix_company_tool_organization_id_tool_key");
 
                     b.ToTable("company_tool", "public");
                 });
@@ -514,10 +514,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("company_channel_id");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -529,6 +525,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("LastMessageAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_message_at");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -558,13 +558,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId")
                         .HasDatabaseName("ix_conversation_customer_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_conversation_company_id_created_at");
+                        .HasDatabaseName("ix_conversation_organization_id_created_at");
 
-                    b.HasIndex("CompanyId", "CustomerId", "CompanyChannelId")
+                    b.HasIndex("OrganizationId", "CustomerId", "CompanyChannelId")
                         .IsUnique()
-                        .HasDatabaseName("ix_conversation_company_id_customer_id_company_channel_id")
+                        .HasDatabaseName("ix_conversation_organization_id_customer_id_company_channel_id")
                         .HasFilter("status = 'Open'");
 
                     b.ToTable("conversation", "public");
@@ -577,10 +577,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
-
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("uuid")
                         .HasColumnName("conversation_id");
@@ -588,6 +584,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -654,9 +654,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_conversation_state_conversation_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_conversation_state_company_id_created_at");
+                        .HasDatabaseName("ix_conversation_state_organization_id_created_at");
 
                     b.ToTable("conversation_state", "public");
                 });
@@ -672,10 +672,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("company_channel_id");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -690,6 +686,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)")
                         .HasColumnName("external_customer_id");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -708,9 +708,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_customer_company_channel_id_external_customer_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_customer_company_id_created_at");
+                        .HasDatabaseName("ix_customer_organization_id_created_at");
 
                     b.ToTable("customer", "public");
                 });
@@ -725,10 +725,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer")
                         .HasColumnName("attempt_count");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
 
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("uuid")
@@ -760,6 +756,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("message_id");
 
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -779,13 +779,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("MessageId")
                         .HasDatabaseName("ix_incoming_message_outbox_message_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_incoming_message_outbox_company_id_created_at");
+                        .HasDatabaseName("ix_incoming_message_outbox_organization_id_created_at");
 
-                    b.HasIndex("CompanyId", "MessageId")
+                    b.HasIndex("OrganizationId", "MessageId")
                         .IsUnique()
-                        .HasDatabaseName("ix_incoming_message_outbox_company_id_message_id");
+                        .HasDatabaseName("ix_incoming_message_outbox_organization_id_message_id");
 
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("ix_incoming_message_outbox_status_created_at");
@@ -800,13 +800,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -871,13 +871,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_integration_credential_reference");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_integration_credential_reference_company_id_created_at");
+                        .HasDatabaseName("ix_integration_credential_reference_organization_id_created_at");
 
-                    b.HasIndex("CompanyId", "Provider", "Purpose")
+                    b.HasIndex("OrganizationId", "Provider", "Purpose")
                         .IsUnique()
-                        .HasDatabaseName("ix_integration_credential_reference_company_id_provider_purpose");
+                        .HasDatabaseName("ix_integration_credential_reference_organization_id_provider_p");
 
                     b.ToTable("integration_credential_reference", "public");
                 });
@@ -888,10 +888,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
 
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("uuid")
@@ -908,6 +904,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("occurred_at");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<string>("ProviderMessageId")
                         .HasMaxLength(200)
@@ -949,18 +949,18 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("ConversationId")
                         .HasDatabaseName("ix_message_conversation_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_message_company_id_created_at");
+                        .HasDatabaseName("ix_message_organization_id_created_at");
 
-                    b.HasIndex("CompanyId", "ProviderMessageId")
+                    b.HasIndex("OrganizationId", "ProviderMessageId")
                         .IsUnique()
-                        .HasDatabaseName("ix_message_company_id_provider_message_id")
+                        .HasDatabaseName("ix_message_organization_id_provider_message_id")
                         .HasFilter("provider_message_id IS NOT NULL");
 
-                    b.HasIndex("CompanyId", "ConversationId", "OccurredAt", "Id")
+                    b.HasIndex("OrganizationId", "ConversationId", "OccurredAt", "Id")
                         .IsDescending(false, false, true, true)
-                        .HasDatabaseName("ix_message_company_id_conversation_id_occurred_at_id");
+                        .HasDatabaseName("ix_message_organization_id_conversation_id_occurred_at_id");
 
                     b.ToTable("message", "public");
                 });
@@ -971,10 +971,6 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("company_id");
 
                     b.Property<Guid>("CompanyToolId")
                         .HasColumnType("uuid")
@@ -998,6 +994,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasMaxLength(240)
                         .HasColumnType("character varying(240)")
                         .HasColumnName("idempotency_key");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
 
                     b.Property<Guid?>("ResultMessageId")
                         .HasColumnType("uuid")
@@ -1265,13 +1265,13 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.HasIndex("TriggerMessageId")
                         .HasDatabaseName("ix_tool_execution_trigger_message_id");
 
-                    b.HasIndex("CompanyId", "CreatedAt")
+                    b.HasIndex("OrganizationId", "CreatedAt")
                         .IsDescending(false, true)
-                        .HasDatabaseName("ix_tool_execution_company_id_created_at");
+                        .HasDatabaseName("ix_tool_execution_organization_id_created_at");
 
-                    b.HasIndex("CompanyId", "IdempotencyKey")
+                    b.HasIndex("OrganizationId", "IdempotencyKey")
                         .IsUnique()
-                        .HasDatabaseName("ix_tool_execution_company_id_idempotency_key");
+                        .HasDatabaseName("ix_tool_execution_organization_id_idempotency_key");
 
                     b.ToTable("tool_execution", "public");
                 });
@@ -1280,28 +1280,28 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
                         .WithOne("AgentProfile")
-                        .HasForeignKey("CeoAgent.Infrastructure.Entities.AgentProfile", "CompanyId")
+                        .HasForeignKey("CeoAgent.Infrastructure.Entities.AgentProfile", "OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_agent_profile_companies_company_id");
+                        .HasConstraintName("fk_agent_profile_companies_organization_id");
 
                     b.Navigation("Company");
                 });
 
             modelBuilder.Entity("CeoAgent.Infrastructure.Entities.CompanyChannel", b =>
                 {
-                    b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
-                        .WithMany("Channels")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_company_channel_companies_company_id");
-
                     b.HasOne("CeoAgent.Infrastructure.Entities.IntegrationCredentialReference", "CredentialReference")
                         .WithMany("CompanyChannels")
                         .HasForeignKey("CredentialReferenceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_company_channel_integration_credential_references_credentia");
+
+                    b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
+                        .WithMany("Channels")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_company_channel_companies_organization_id");
 
                     b.Navigation("Company");
 
@@ -1310,18 +1310,18 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("CeoAgent.Infrastructure.Entities.CompanyTool", b =>
                 {
-                    b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
-                        .WithMany("Tools")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_company_tool_company_company_id");
-
                     b.HasOne("CeoAgent.Infrastructure.Entities.IntegrationCredentialReference", "CredentialReference")
                         .WithMany("CompanyTools")
                         .HasForeignKey("CredentialReferenceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_company_tool_integration_credential_references_credential_r");
+
+                    b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
+                        .WithMany("Tools")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_company_tool_company_organization_id");
 
                     b.Navigation("Company");
 
@@ -1407,10 +1407,10 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
                         .WithMany("IntegrationCredentials")
-                        .HasForeignKey("CompanyId")
+                        .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_integration_credential_reference_company_company_id");
+                        .HasConstraintName("fk_integration_credential_reference_company_organization_id");
 
                     b.Navigation("Company");
                 });

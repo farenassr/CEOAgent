@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
@@ -61,10 +61,10 @@ public sealed class InfrastructureRegistrationTests
     }
 
     /// <summary>
-    /// Verifies that company context state is isolated between dependency injection scopes.
+    /// Verifies that organization context state is isolated between dependency injection scopes.
     /// </summary>
     [Test]
-    public void AddInfrastructure_RegistersCompanyContextStatePerScope()
+    public void AddInfrastructure_RegistersOrganizationContextStatePerScope()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -74,19 +74,19 @@ public sealed class InfrastructureRegistrationTests
             })
             .Build();
         var services = new ServiceCollection();
-        var companyId = Guid.CreateVersion7();
+        var organizationId = Guid.CreateVersion7();
 
         services.AddInfrastructure(configuration);
 
         using var provider = services.BuildServiceProvider();
         using var firstScope = provider.CreateScope();
         using var secondScope = provider.CreateScope();
-        var firstAccessor = firstScope.ServiceProvider.GetRequiredService<ICompanyContextAccessor>();
-        var secondContext = secondScope.ServiceProvider.GetRequiredService<ICompanyContext>();
+        var firstAccessor = firstScope.ServiceProvider.GetRequiredService<IOrganizationContextAccessor>();
+        var secondContext = secondScope.ServiceProvider.GetRequiredService<IOrganizationContextProvider>();
 
-        firstAccessor.SetCompany(companyId);
+        firstAccessor.SetOrganization(organizationId);
 
-        firstAccessor.CompanyId.ShouldBe(companyId);
-        secondContext.CompanyId.ShouldBeNull();
+        firstAccessor.OrganizationId.ShouldBe(organizationId);
+        secondContext.OrganizationId.ShouldBeNull();
     }
 }

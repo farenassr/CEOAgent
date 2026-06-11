@@ -1,6 +1,6 @@
 using CeoAgent.Application.Abstractions.AITools;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -182,7 +182,7 @@ public sealed class GoogleCalendarToolExecutorTests
             CancellationToken.None);
 
         var request = fixture.Calendar.ReservationRequests.Single();
-        request.CompanyId.ShouldBe(fixture.CompanyId.ToString("D"));
+        request.OrganizationId.ShouldBe(fixture.OrganizationId.ToString("D"));
         request.ConversationId.ShouldBe(fixture.Conversation.Id.ToString("D"));
         request.CustomerExternalId.ShouldBe("15551234567");
         request.ReservationId.ShouldBe("reservation-key");
@@ -405,8 +405,8 @@ public sealed class GoogleCalendarToolExecutorTests
         private CalendarToolFixture(PostgresWorkerDatabase database)
         {
             this.database = database;
-            CompanyContext = database.CompanyContext;
-            CompanyContext.SetCompany(CompanyId);
+            OrganizationContext = database.OrganizationContext;
+            OrganizationContext.SetOrganization(OrganizationId);
             DbContext = database.Context;
             Calendar = new FakeCalendarIntegration();
             Executor = new GoogleCalendarToolExecutor(
@@ -416,7 +416,7 @@ public sealed class GoogleCalendarToolExecutorTests
 
             var company = new Company
             {
-                Id = CompanyId,
+                Id = OrganizationId,
                 Name = "Contoso Bistro",
                 TimeZoneId = "America/Bogota",
                 WorkingHours = new WorkingHours
@@ -438,14 +438,14 @@ public sealed class GoogleCalendarToolExecutorTests
             var profile = new AgentProfile
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ModelName = "gpt-4.1-mini",
                 DisplayName = "Contoso Assistant",
                 Language = "es",
             };
 
             var channel = CompanyChannel.ForWhatsAppCloud(
-                CompanyId,
+                OrganizationId,
                 "1152556904604978",
                 new WhatsAppCloudMetadata
                 {
@@ -458,7 +458,7 @@ public sealed class GoogleCalendarToolExecutorTests
             var customer = new Customer
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b33"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 CompanyChannelId = channel.Id,
                 ExternalCustomerId = "15551234567",
             };
@@ -466,7 +466,7 @@ public sealed class GoogleCalendarToolExecutorTests
             Conversation = new Conversation
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 CustomerId = customer.Id,
                 CompanyChannelId = channel.Id,
                 AgentProfileId = profile.Id,
@@ -476,7 +476,7 @@ public sealed class GoogleCalendarToolExecutorTests
             TriggerMessage = new Message
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ConversationId = Conversation.Id,
                 Role = MessageRole.Assistant,
                 Type = MessageType.Text,
@@ -487,7 +487,7 @@ public sealed class GoogleCalendarToolExecutorTests
             var credential = new IntegrationCredentialReference
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b41"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 Provider = IntegrationProvider.GoogleCalendar,
                 Purpose = "google_calendar",
                 Reference = "default",
@@ -496,7 +496,7 @@ public sealed class GoogleCalendarToolExecutorTests
             Tool = new CompanyTool
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
                 CredentialReferenceId = credential.Id,
                 Configuration = ToolConfiguration.ForGoogleCalendar(new GoogleCalendarConfig
@@ -516,9 +516,9 @@ public sealed class GoogleCalendarToolExecutorTests
             return new CalendarToolFixture(await PostgresWorkerDatabase.CreateAsync());
         }
 
-        public Guid CompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
 
-        public CompanyContextAccessor CompanyContext { get; }
+        public OrganizationContextAccessor OrganizationContext { get; }
 
         public CeoAgentDbContext DbContext { get; }
 
@@ -535,7 +535,7 @@ public sealed class GoogleCalendarToolExecutorTests
         public ToolExecutionContext CreateExecutionContext(string idempotencyKey)
         {
             return new ToolExecutionContext(
-                CompanyId,
+                OrganizationId,
                 Conversation.Id,
                 Tool.Id,
                 TriggerMessage.Id,

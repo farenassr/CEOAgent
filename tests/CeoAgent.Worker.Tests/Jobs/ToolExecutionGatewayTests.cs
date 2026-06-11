@@ -1,8 +1,8 @@
 using System.Text.Json;
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Shared.AI;
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
@@ -25,7 +25,7 @@ public sealed class ToolExecutionGatewayTests
     public async Task ExecuteAsync_ForEnabledAvailabilityTool_ExecutesCalendarAndReturnsSanitizedToolResult()
     {
         await using var fixture = await GatewayFixture.CreateAsync();
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var call = new AgentToolCall(
             "call-1",
             MvpToolKeys.CheckGoogleCalendarAvailability,
@@ -38,7 +38,7 @@ public sealed class ToolExecutionGatewayTests
 
         var result = await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -58,7 +58,7 @@ public sealed class ToolExecutionGatewayTests
     public async Task ExecuteAsync_ForEnabledAvailabilityTool_UpdatesTrackedResultMessageBeforeSave()
     {
         await using var fixture = await GatewayFixture.CreateAsync();
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var call = new AgentToolCall(
             "call-result-message",
             MvpToolKeys.CheckGoogleCalendarAvailability,
@@ -71,7 +71,7 @@ public sealed class ToolExecutionGatewayTests
 
         var result = await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -90,7 +90,7 @@ public sealed class ToolExecutionGatewayTests
     public async Task ExecuteAsync_ForDisabledTool_ReturnsDeniedResultWithoutSideEffectAndPersistsAuditRow()
     {
         await using var fixture = await GatewayFixture.CreateAsync();
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var call = new AgentToolCall(
             "call-2",
             MvpToolKeys.CreateGoogleCalendarReservation,
@@ -103,7 +103,7 @@ public sealed class ToolExecutionGatewayTests
 
         var result = await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -131,7 +131,7 @@ public sealed class ToolExecutionGatewayTests
         reservationTool.IsEnabled = true;
         await fixture.DbContext.SaveChangesAsync();
 
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var call = new AgentToolCall(
             "call-reservation",
             MvpToolKeys.CreateGoogleCalendarReservation,
@@ -144,7 +144,7 @@ public sealed class ToolExecutionGatewayTests
 
         var result = await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -167,7 +167,7 @@ public sealed class ToolExecutionGatewayTests
         reservationTool.IsEnabled = true;
         await fixture.DbContext.SaveChangesAsync();
 
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var call = new AgentToolCall(
             "call-reservation-missing-name",
             MvpToolKeys.CreateGoogleCalendarReservation,
@@ -180,7 +180,7 @@ public sealed class ToolExecutionGatewayTests
 
         var result = await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -197,7 +197,7 @@ public sealed class ToolExecutionGatewayTests
     public async Task ExecuteAsync_ForIncompleteAvailabilityArguments_ReturnsMalformedArgumentsWithoutSideEffect()
     {
         await using var fixture = await GatewayFixture.CreateAsync();
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var call = new AgentToolCall(
             "call-malformed",
             MvpToolKeys.CheckGoogleCalendarAvailability,
@@ -208,7 +208,7 @@ public sealed class ToolExecutionGatewayTests
 
         var result = await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -232,7 +232,7 @@ public sealed class ToolExecutionGatewayTests
         reservationTool.IsEnabled = true;
         await fixture.DbContext.SaveChangesAsync();
 
-        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.CompanyId, CancellationToken.None);
+        var tools = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
         var arguments = new
         {
             start = "2026-05-28T16:00:00-05:00",
@@ -243,7 +243,7 @@ public sealed class ToolExecutionGatewayTests
 
         await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -256,7 +256,7 @@ public sealed class ToolExecutionGatewayTests
 
         await fixture.Gateway.ExecuteAsync(
             new ToolExecutionGatewayRequest(
-                fixture.CompanyId,
+                fixture.OrganizationId,
                 fixture.Conversation.Id,
                 fixture.TriggerMessage.Id,
                 fixture.InboundMessage.Id,
@@ -279,8 +279,8 @@ public sealed class ToolExecutionGatewayTests
         private GatewayFixture(PostgresWorkerDatabase database)
         {
             this.database = database;
-            CompanyContext = database.CompanyContext;
-            CompanyContext.SetCompany(CompanyId);
+            OrganizationContext = database.OrganizationContext;
+            OrganizationContext.SetOrganization(OrganizationId);
             DbContext = database.Context;
             Calendar = new FakeCalendarIntegration();
             var executor = new GoogleCalendarToolExecutor(
@@ -299,7 +299,7 @@ public sealed class ToolExecutionGatewayTests
 
             var company = new Company
             {
-                Id = CompanyId,
+                Id = OrganizationId,
                 Name = "Contoso Bistro",
                 TimeZoneId = "America/Bogota",
                 WorkingHours = new WorkingHours
@@ -320,13 +320,13 @@ public sealed class ToolExecutionGatewayTests
             var profile = new AgentProfile
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ModelName = "gpt-4.1-mini",
                 DisplayName = "Contoso Assistant",
                 Language = "es",
             };
             var channel = CompanyChannel.ForWhatsAppCloud(
-                CompanyId,
+                OrganizationId,
                 "1152556904604978",
                 new WhatsAppCloudMetadata
                 {
@@ -337,14 +337,14 @@ public sealed class ToolExecutionGatewayTests
             var customer = new Customer
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b33"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 CompanyChannelId = channel.Id,
                 ExternalCustomerId = "15551234567",
             };
             Conversation = new Conversation
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 CustomerId = customer.Id,
                 CompanyChannelId = channel.Id,
                 AgentProfileId = profile.Id,
@@ -353,7 +353,7 @@ public sealed class ToolExecutionGatewayTests
             TriggerMessage = new Message
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b35"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ConversationId = Conversation.Id,
                 Role = MessageRole.Assistant,
                 Type = MessageType.Text,
@@ -363,7 +363,7 @@ public sealed class ToolExecutionGatewayTests
             InboundMessage = new Message
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 ConversationId = Conversation.Id,
                 Role = MessageRole.User,
                 Type = MessageType.Text,
@@ -373,7 +373,7 @@ public sealed class ToolExecutionGatewayTests
             var credential = new IntegrationCredentialReference
             {
                 Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b41"),
-                CompanyId = CompanyId,
+                OrganizationId = OrganizationId,
                 Provider = IntegrationProvider.GoogleCalendar,
                 Purpose = "google_calendar",
                 Reference = "config://GoogleCalendar:ServiceAccountJson",
@@ -391,7 +391,7 @@ public sealed class ToolExecutionGatewayTests
                 new CompanyTool
                 {
                     Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40"),
-                    CompanyId = CompanyId,
+                    OrganizationId = OrganizationId,
                     ToolKey = MvpToolKeys.CheckGoogleCalendarAvailability,
                     Description = "Check availability.",
                     ParametersSchema = ParseSchema("""{"type":"object","properties":{"date":{"type":"string"},"partySize":{"type":"integer"},"preferredTime":{"type":["string","null"]}},"required":["date","partySize","preferredTime"],"additionalProperties":false}"""),
@@ -405,7 +405,7 @@ public sealed class ToolExecutionGatewayTests
                 },
                 new CompanyTool
                 {
-                    CompanyId = CompanyId,
+                    OrganizationId = OrganizationId,
                     ToolKey = MvpToolKeys.CreateGoogleCalendarReservation,
                     Description = "Create reservations.",
                     ParametersSchema = ParseSchema("""{"type":"object","properties":{"start":{"type":"string"},"end":{"type":"string"},"summary":{"type":"string"},"customerName":{"type":"string"}},"required":["start","end","summary","customerName"],"additionalProperties":false}"""),
@@ -426,9 +426,9 @@ public sealed class ToolExecutionGatewayTests
             return new GatewayFixture(await PostgresWorkerDatabase.CreateAsync());
         }
 
-        public Guid CompanyId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
 
-        public CompanyContextAccessor CompanyContext { get; }
+        public OrganizationContextAccessor OrganizationContext { get; }
 
         public CeoAgentDbContext DbContext { get; }
 

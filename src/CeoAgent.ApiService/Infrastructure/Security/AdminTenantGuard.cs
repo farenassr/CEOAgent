@@ -1,4 +1,4 @@
-using CeoAgent.Application.Abstractions.Company;
+using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
@@ -10,27 +10,27 @@ namespace CeoAgent.ApiService.Infrastructure.Security;
 
 public sealed class AdminTenantGuard(
     CeoAgentDbContext dbContext,
-    ICompanyContext companyContext) : IAdminTenantGuard
+    IOrganizationContextProvider companyContext) : IAdminTenantGuard
 {
     public async Task<CompanyEntity> GetAccessibleCompanyAsync(
-        Guid companyId,
+        Guid organizationId,
         bool trackChanges,
         CancellationToken cancellationToken)
     {
         var company = await dbContext.Companies
             .WithDefaultTracking(trackChanges)
-            .FirstOrDefaultAsync(entity => entity.Id == companyId, cancellationToken);
+            .FirstOrDefaultAsync(entity => entity.Id == organizationId, cancellationToken);
 
-        if (companyContext.CompanyId != companyId || company is null)
+        if (companyContext.OrganizationId != organizationId || company is null)
         {
-            throw new NotFoundException("company", companyId);
+            throw new NotFoundException("company", organizationId);
         }
 
         return company;
     }
 
     public async Task EnsureCredentialReferenceAccessibleAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid? credentialReferenceId,
         CancellationToken cancellationToken)
     {
@@ -42,7 +42,7 @@ public sealed class AdminTenantGuard(
         var exists = await dbContext.IntegrationCredentialReferences
             .WithDefaultTracking()
             .AnyAsync(
-                entity => entity.CompanyId == companyId && entity.Id == id,
+                entity => entity.OrganizationId == organizationId && entity.Id == id,
                 cancellationToken);
 
         if (!exists)

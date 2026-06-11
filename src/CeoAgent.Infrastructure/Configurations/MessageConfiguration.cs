@@ -20,10 +20,10 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             payload.Property(entity => entity.ProviderType).HasJsonPropertyName("providerType");
             payload.Property(entity => entity.ProviderMessageId).HasJsonPropertyName("providerMessageId");
         });
-        builder.HasIndex(entity => new { entity.CompanyId, entity.ProviderMessageId }).IsUnique()
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.ProviderMessageId }).IsUnique()
             .HasFilter("provider_message_id IS NOT NULL");
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
-        builder.HasIndex(entity => new { entity.CompanyId, entity.ConversationId, entity.OccurredAt, entity.Id })
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.ConversationId, entity.OccurredAt, entity.Id })
             .IsDescending(false, false, true, true);
         builder.HasOne(entity => entity.Conversation)
             .WithMany(entity => entity.Messages)

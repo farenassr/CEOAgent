@@ -22,7 +22,7 @@ public sealed class ProcessIncomingMessageJobTests
             Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36"),
             "correlation-123");
 
-        job.CompanyId.ShouldBe(Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30"));
+        job.OrganizationId.ShouldBe(Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30"));
         job.ConversationId.ShouldBe(Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34"));
         job.MessageId.ShouldBe(Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36"));
         job.CorrelationId.ShouldBe("correlation-123");

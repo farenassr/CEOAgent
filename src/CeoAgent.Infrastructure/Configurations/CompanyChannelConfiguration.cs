@@ -21,10 +21,10 @@ public sealed class CompanyChannelConfiguration : IEntityTypeConfiguration<Compa
         });
         builder.HasIndex(entity => entity.Provider);
         builder.HasIndex(entity => new { entity.Provider, entity.ProviderChannelId }).IsUnique();
-        builder.HasIndex(entity => new { entity.CompanyId, entity.CreatedAt }).IsDescending(false, true);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Company)
             .WithMany(entity => entity.Channels)
-            .HasForeignKey(entity => entity.CompanyId)
+            .HasForeignKey(entity => entity.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.CredentialReference)
             .WithMany(entity => entity.CompanyChannels)

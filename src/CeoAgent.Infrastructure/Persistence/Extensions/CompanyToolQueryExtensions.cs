@@ -5,23 +5,23 @@ namespace CeoAgent.Infrastructure.Persistence.Extensions;
 
 public static class CompanyToolQueryExtensions
 {
-    public static IQueryable<CompanyTool> EnabledForCompany(
+    public static IQueryable<CompanyTool> EnabledForOrganization(
         this IQueryable<CompanyTool> query,
-        Guid companyId)
+        Guid organizationId)
     {
         return query
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .Where(entity => entity.IsEnabled)
             .OrderBy(entity => entity.ToolKey);
     }
 
-    public static IQueryable<CompanyTool> EnabledForCompanyTool(
+    public static IQueryable<CompanyTool> EnabledForOrganizationTool(
         this IQueryable<CompanyTool> query,
-        Guid companyId,
+        Guid organizationId,
         Guid companyToolId)
     {
         return query
-            .ForCompany(companyId)
+            .ForOrganization(organizationId)
             .Where(entity => entity.Id == companyToolId && entity.IsEnabled);
     }
 

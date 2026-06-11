@@ -108,7 +108,7 @@ public sealed class WhatsAppWebhookIngestionService(
             .Where(
                 entity => entity.Provider == CompanyChannelProvider.WhatsAppCloud
                     && entity.ProviderChannelId == message.PhoneNumberId)
-            .Select(entity => new WebhookChannelContext(entity.Id, entity.CompanyId))
+            .Select(entity => new WebhookChannelContext(entity.Id, entity.OrganizationId))
             .SingleOrDefaultAsync(
                 cancellationToken);
         if (channel is null)
@@ -124,9 +124,9 @@ public sealed class WhatsAppWebhookIngestionService(
 
         logger.LogInformation(
             WebhookChannelResolvedEvent,
-            "WhatsAppWebhookChannelResolved CorrelationId={CorrelationId} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} PhoneNumberId={PhoneNumberId} BusinessAccountId={BusinessAccountId}",
+            "WhatsAppWebhookChannelResolved CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} PhoneNumberId={PhoneNumberId} BusinessAccountId={BusinessAccountId}",
             correlationId,
-            channel.CompanyId,
+            channel.OrganizationId,
             channel.Id,
             message.PhoneNumberId,
             null);
@@ -134,7 +134,7 @@ public sealed class WhatsAppWebhookIngestionService(
         var existingMessage = await dbContext.Messages
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(
-                entity => entity.CompanyId == channel.CompanyId
+                entity => entity.OrganizationId == channel.OrganizationId
                     && entity.ProviderMessageId == message.ProviderMessageId,
                 cancellationToken);
 
@@ -142,14 +142,14 @@ public sealed class WhatsAppWebhookIngestionService(
         {
             logger.LogInformation(
                 WebhookDuplicateMessageEvent,
-                "WhatsAppWebhookDuplicateMessage CorrelationId={CorrelationId} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ProviderMessageId={ProviderMessageId}",
+                "WhatsAppWebhookDuplicateMessage CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ProviderMessageId={ProviderMessageId}",
                 correlationId,
-                channel.CompanyId,
+                channel.OrganizationId,
                 channel.Id,
                 message.ProviderMessageId);
 
             return await HandleDuplicateInboundAsync(
-                channel.CompanyId,
+                channel.OrganizationId,
                 existingMessage.ConversationId,
                 existingMessage.Id,
                 correlationId,
@@ -159,10 +159,10 @@ public sealed class WhatsAppWebhookIngestionService(
 
         var customer = await ResolveCustomerAsync(channel, message, cancellationToken);
         var conversation = await ResolveConversationAsync(channel, customer, cancellationToken);
-        var inbound = CreateInboundMessage(channel.CompanyId, conversation.Id, message);
+        var inbound = CreateInboundMessage(channel.OrganizationId, conversation.Id, message);
         var outbox = new IncomingMessageOutbox
         {
-            CompanyId = channel.CompanyId,
+            OrganizationId = channel.OrganizationId,
             ConversationId = conversation.Id,
             MessageId = inbound.Id,
             CorrelationId = correlationId,
@@ -177,7 +177,7 @@ public sealed class WhatsAppWebhookIngestionService(
         }
         catch (DbUpdateException)
         {
-            var existing = await TryLoadDuplicateAsync(channel.CompanyId, message.ProviderMessageId, cancellationToken);
+            var existing = await TryLoadDuplicateAsync(channel.OrganizationId, message.ProviderMessageId, cancellationToken);
             if (existing is null)
             {
                 throw;
@@ -185,14 +185,14 @@ public sealed class WhatsAppWebhookIngestionService(
 
             logger.LogInformation(
                 WebhookDuplicateMessageEvent,
-                "WhatsAppWebhookDuplicateMessage CorrelationId={CorrelationId} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ProviderMessageId={ProviderMessageId}",
+                "WhatsAppWebhookDuplicateMessage CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ProviderMessageId={ProviderMessageId}",
                 correlationId,
-                channel.CompanyId,
+                channel.OrganizationId,
                 channel.Id,
                 message.ProviderMessageId);
 
             return await HandleDuplicateInboundAsync(
-                channel.CompanyId,
+                channel.OrganizationId,
                 existing.ConversationId,
                 existing.Id,
                 correlationId,
@@ -206,9 +206,9 @@ public sealed class WhatsAppWebhookIngestionService(
         {
             logger.LogInformation(
                 WebhookMessageEnqueuedEvent,
-                "WhatsAppWebhookMessageEnqueued CorrelationId={CorrelationId} CompanyId={CompanyId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} ProviderMessageId={ProviderMessageId} QueueCorrelationId={QueueCorrelationId}",
+                "WhatsAppWebhookMessageEnqueued CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} ProviderMessageId={ProviderMessageId} QueueCorrelationId={QueueCorrelationId}",
                 correlationId,
-                channel.CompanyId,
+                channel.OrganizationId,
                 channel.Id,
                 conversation.Id,
                 inbound.Id,
@@ -218,13 +218,13 @@ public sealed class WhatsAppWebhookIngestionService(
 
         return new WhatsAppWebhookIngestionResult(
             Enqueued: dispatched,
-            CompanyId: channel.CompanyId,
+            OrganizationId: channel.OrganizationId,
             ConversationId: conversation.Id,
             MessageId: inbound.Id);
     }
 
     private async Task<WhatsAppWebhookIngestionResult> HandleDuplicateInboundAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid messageId,
         string? correlationId,
@@ -235,7 +235,7 @@ public sealed class WhatsAppWebhookIngestionService(
         var hasReply = await dbContext.Messages
             .IgnoreQueryFilters()
             .AnyAsync(
-                entity => entity.CompanyId == companyId
+                entity => entity.OrganizationId == organizationId
                     && entity.ConversationId == conversationId
                     && entity.Role == MessageRole.Assistant
                     && entity.ProviderMessageId == replyClientMessageId,
@@ -244,14 +244,14 @@ public sealed class WhatsAppWebhookIngestionService(
         if (!hasReply)
         {
             logger.LogInformation(
-                "Re-enqueueing unprocessed duplicate webhook message. CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId} Reason={Reason}",
-                companyId,
+                "Re-enqueueing unprocessed duplicate webhook message. OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} Reason={Reason}",
+                organizationId,
                 conversationId,
                 messageId,
                 reason);
 
             var dispatched = await EnsureOutboxAndDispatchAsync(
-                companyId,
+                organizationId,
                 conversationId,
                 messageId,
                 correlationId,
@@ -259,20 +259,20 @@ public sealed class WhatsAppWebhookIngestionService(
 
             return new WhatsAppWebhookIngestionResult(
                 Enqueued: dispatched,
-                CompanyId: companyId,
+                OrganizationId: organizationId,
                 ConversationId: conversationId,
                 MessageId: messageId);
         }
 
         return new WhatsAppWebhookIngestionResult(
             Enqueued: false,
-            CompanyId: companyId,
+            OrganizationId: organizationId,
             ConversationId: conversationId,
             MessageId: messageId);
     }
 
     private async Task<bool> EnsureOutboxAndDispatchAsync(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         Guid messageId,
         string? correlationId,
@@ -281,14 +281,14 @@ public sealed class WhatsAppWebhookIngestionService(
         var outbox = await dbContext.IncomingMessageOutbox
             .IgnoreQueryFilters()
             .SingleOrDefaultAsync(
-                entity => entity.CompanyId == companyId && entity.MessageId == messageId,
+                entity => entity.OrganizationId == organizationId && entity.MessageId == messageId,
                 cancellationToken);
 
         if (outbox is null)
         {
             outbox = new IncomingMessageOutbox
             {
-                CompanyId = companyId,
+                OrganizationId = organizationId,
                 ConversationId = conversationId,
                 MessageId = messageId,
                 CorrelationId = correlationId,
@@ -309,7 +309,7 @@ public sealed class WhatsAppWebhookIngestionService(
     {
         return new WhatsAppWebhookIngestionResult(
             Enqueued: false,
-            CompanyId: null,
+            OrganizationId: null,
             ConversationId: null,
             MessageId: null);
     }
@@ -322,7 +322,7 @@ public sealed class WhatsAppWebhookIngestionService(
         var customer = await dbContext.Customers
             .IgnoreQueryFilters()
             .SingleOrDefaultAsync(
-                entity => entity.CompanyId == channel.CompanyId
+                entity => entity.OrganizationId == channel.OrganizationId
                     && entity.CompanyChannelId == channel.Id
                     && entity.ExternalCustomerId == message.From,
                 cancellationToken);
@@ -339,7 +339,7 @@ public sealed class WhatsAppWebhookIngestionService(
 
         customer = new Customer
         {
-            CompanyId = channel.CompanyId,
+            OrganizationId = channel.OrganizationId,
             CompanyChannelId = channel.Id,
             ExternalCustomerId = message.From,
             DisplayName = message.ContactName,
@@ -359,7 +359,7 @@ public sealed class WhatsAppWebhookIngestionService(
         var conversation = await dbContext.Conversations
             .IgnoreQueryFilters()
             .Where(
-                entity => entity.CompanyId == channel.CompanyId
+                entity => entity.OrganizationId == channel.OrganizationId
                     && entity.CustomerId == customer.Id
                     && entity.CompanyChannelId == channel.Id
                     && (entity.Status == ConversationStatus.Open
@@ -374,13 +374,13 @@ public sealed class WhatsAppWebhookIngestionService(
 
         var agentProfileId = await dbContext.AgentProfiles
             .IgnoreQueryFilters()
-            .Where(entity => entity.CompanyId == channel.CompanyId)
+            .Where(entity => entity.OrganizationId == channel.OrganizationId)
             .Select(entity => entity.Id)
             .SingleAsync(cancellationToken);
 
         conversation = new Conversation
         {
-            CompanyId = channel.CompanyId,
+            OrganizationId = channel.OrganizationId,
             CustomerId = customer.Id,
             CompanyChannelId = channel.Id,
             AgentProfileId = agentProfileId,
@@ -391,7 +391,7 @@ public sealed class WhatsAppWebhookIngestionService(
     }
 
     private async Task<DuplicateMessageContext?> TryLoadDuplicateAsync(
-        Guid companyId,
+        Guid organizationId,
         string providerMessageId,
         CancellationToken cancellationToken)
     {
@@ -399,19 +399,19 @@ public sealed class WhatsAppWebhookIngestionService(
 
         return await dbContext.Messages
             .IgnoreQueryFilters()
-            .Where(entity => entity.CompanyId == companyId && entity.ProviderMessageId == providerMessageId)
+            .Where(entity => entity.OrganizationId == organizationId && entity.ProviderMessageId == providerMessageId)
             .Select(entity => new DuplicateMessageContext(entity.Id, entity.ConversationId))
             .SingleOrDefaultAsync(cancellationToken);
     }
 
     private static Message CreateInboundMessage(
-        Guid companyId,
+        Guid organizationId,
         Guid conversationId,
         ParsedWhatsAppMessage message)
     {
         var inbound = new Message
         {
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             ConversationId = conversationId,
             Role = MessageRole.User,
             Type = message.Type == "audio" ? MessageType.Audio : MessageType.Text,
@@ -522,7 +522,7 @@ public sealed class WhatsAppWebhookIngestionService(
         string? Text,
         DateTime OccurredAtUtc);
 
-    private sealed record WebhookChannelContext(Guid Id, Guid CompanyId);
+    private sealed record WebhookChannelContext(Guid Id, Guid OrganizationId);
 
     private sealed record DuplicateMessageContext(Guid Id, Guid ConversationId);
 }

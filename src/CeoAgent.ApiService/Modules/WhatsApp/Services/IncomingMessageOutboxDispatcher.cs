@@ -62,7 +62,7 @@ public sealed class IncomingMessageOutboxDispatcher(
         outbox.LastAttemptAt = now;
 
         var job = new ProcessIncomingMessageJob(
-            outbox.CompanyId,
+            outbox.OrganizationId,
             outbox.ConversationId,
             outbox.MessageId,
             outbox.CorrelationId);
@@ -80,8 +80,8 @@ public sealed class IncomingMessageOutboxDispatcher(
             logger.LogWarning(
                 DispatchFailedEvent,
                 exception,
-                "IncomingMessageOutboxDispatchFailed CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}",
-                outbox.CompanyId,
+                "IncomingMessageOutboxDispatchFailed OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}",
+                outbox.OrganizationId,
                 outbox.ConversationId,
                 outbox.MessageId,
                 outbox.Id,
@@ -97,8 +97,8 @@ public sealed class IncomingMessageOutboxDispatcher(
 
         logger.LogInformation(
             DispatchSucceededEvent,
-            "IncomingMessageOutboxDispatchSucceeded CompanyId={CompanyId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}",
-            outbox.CompanyId,
+            "IncomingMessageOutboxDispatchSucceeded OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}",
+            outbox.OrganizationId,
             outbox.ConversationId,
             outbox.MessageId,
             outbox.Id,

@@ -1,5 +1,5 @@
-using CeoAgent.Application.Abstractions.Company;
-using CeoAgent.Infrastructure.Implementation.Company;
+using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
@@ -34,6 +34,6 @@ public sealed class CeoAgentDbContextFactory : IDesignTimeDbContextFactory<CeoAg
             .AddInterceptors(new ConversationAgentProfileImmutabilityInterceptor())
             .Options;
 
-        return new CeoAgentDbContext(options, new CompanyContextAccessor(), TimeProvider.System);
+        return new CeoAgentDbContext(options, new OrganizationContextAccessor(), TimeProvider.System);
     }
 }

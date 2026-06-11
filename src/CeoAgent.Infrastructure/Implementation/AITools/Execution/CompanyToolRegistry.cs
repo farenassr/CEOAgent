@@ -13,17 +13,17 @@ public sealed class CompanyToolRegistry(
     IAgentToolCatalog catalog)
 {
     public async Task<IReadOnlyList<AgentToolDescriptor>> GetEnabledToolsAsync(
-        Guid companyId,
+        Guid organizationId,
         CancellationToken cancellationToken)
     {
         var catalogTools = await catalog.GetToolsAsync(
-            new AgentToolCatalogContext(companyId),
+            new AgentToolCatalogContext(organizationId),
             cancellationToken);
         var catalogToolsByKey = catalogTools.ToDictionary(tool => tool.ToolKey, StringComparer.Ordinal);
 
         var tools = await dbContext.CompanyTools
             .AsNoTracking()
-            .EnabledForCompany(companyId)
+            .EnabledForOrganization(organizationId)
             .Select(entity => new
             {
                 entity.Id,

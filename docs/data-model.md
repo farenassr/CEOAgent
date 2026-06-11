@@ -8,7 +8,7 @@ Guia explicativa del modelo de datos actual del backend. Este documento describe
 
 El modelo esta pensado para un backend SaaS multi-company. Cada compañia configura sus canales, su agente, sus credenciales externas y sus herramientas disponibles. A partir de ahi, el sistema registra clientes, conversaciones, mensajes y ejecuciones de herramientas.
 
-La regla central es simple: casi todo lo que pertenece a una compañia lleva `CompanyId`. Ese campo permite aislar datos por compañia y aplicar filtros globales desde Entity Framework Core.
+La regla central es simple: casi todo lo que pertenece a una compañia lleva `OrganizationId`. Ese campo es el id de organizacion de Keycloak, se persiste como `organization_id` y permite aislar datos por organizacion mediante filtros globales desde Entity Framework Core.
 
 | Area                         | Tablas                                                                                            | Proposito                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,16 +25,16 @@ Todos los identificadores son `Guid` generados como GUID v7. Esto da IDs globalm
 Ejemplo:
 
 ```text
-018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30
+b36cfb51-83bd-4376-b7d7-0502141ff6ae
 ```
 
 ### Auditoria
 
-Las tablas company-owned heredan los campos:
+Las tablas organization-owned heredan los campos:
 
 | Propiedad   | Para que sirve                                                                             | Ejemplo                                |
 | ----------- | ------------------------------------------------------------------------------------------ | -------------------------------------- |
-| `CompanyId` | Identifica la compañia propietaria del registro. Es la base del aislamiento multi-company. | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId` | Identifica la organizacion de Keycloak propietaria del registro. Es la base del aislamiento multi-tenant. | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `CreatedAt` | Fecha UTC en la que se creo el registro.                                                   | `2026-05-22T10:15:30Z`                 |
 | `UpdatedAt` | Fecha UTC de la ultima modificacion.                                                       | `2026-05-22T10:45:00Z`                 |
 
@@ -172,7 +172,7 @@ Las migraciones se guardan en `CeoAgent.Infrastructure/Persistence/Migrations/`,
 
 ## 🏢 `company`
 
-Representa una compañia que usa la plataforma. Es el tenant funcional del sistema: todo canal, cliente, conversacion, herramienta o integracion termina asociado a una `company`.
+Representa una compañia que usa la plataforma. La organizacion de Keycloak es el limite de aislamiento funcional: todo canal, cliente, conversacion, herramienta o integracion termina asociado a una `company` cuyo `Id` coincide con la organizacion.
 
 ### Para que sirve
 
@@ -182,7 +182,7 @@ Representa una compañia que usa la plataforma. Es el tenant funcional del siste
 
 | Propiedad          | Tipo                | Explicacion                                                                                                              | Ejemplo                                        |
 | ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `Id`               | `Guid`              | Identificador unico de la compañia. Se usa como FK en casi todo el modelo.                                               | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30`         |
+| `Id`               | `Guid`              | Identificador unico de la compañia. Se usa como FK en casi todo el modelo.                                               | `b36cfb51-83bd-4376-b7d7-0502141ff6ae`         |
 | `Name`             | `string`            | Nombre humano de la compañia. Sirve para administracion, logs y pantallas internas.                                      | `Contoso Bistro`                               |
 | `WorkingHours`     | `WorkingHours?` / `jsonb` | Horarios de operacion o disponibilidad. No impone reglas por si solo; es configuracion para procesos de negocio futuros. | `{"schedule":{"monday":[{"start":"09:00","end":"18:00"}]}}` |
 | `TimeZoneId`       | `string`            | Zona horaria IANA de la compañia. Es clave para interpretar fechas locales, horarios y mensajes.                         | `America/Bogota`                               |
@@ -217,7 +217,7 @@ Cuando entra un webhook, el sistema no debe identificar la compañia por el nume
 | Propiedad             | Tipo                | Explicacion                                                                                      | Ejemplo                                |
 | --------------------- | ------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | `Id`                  | `Guid`              | Identificador unico del canal registrado.                                                        | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b31` |
-| `CompanyId`           | `Guid`              | Compañia propietaria del canal.                                                                  | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`           | `Guid`              | Compañia propietaria del canal.                                                                  | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `Provider`            | `string`            | Nombre tecnico del proveedor de canal.                                                           | `whatsapp_cloud`                       |
 | `ProviderChannelId`   | `string`            | Identificador estable del canal dentro del proveedor. Para WhatsApp suele ser `phone_number_id`. | `123456789012345`                      |
 | `Metadata`            | `ChannelMetadata?` / `jsonb` | Datos adicionales del proveedor.                                                                 | `{"whatsapp_cloud":{"business_account_id":"987654321","phone_number_id":"123456789012345"}}` |
@@ -246,7 +246,7 @@ No todas las compañias hablan igual ni usan el mismo modelo. `agent_profile` gu
 | Propiedad        | Tipo       | Explicacion                                                                                    | Ejemplo                                |
 | ---------------- | ---------- | ---------------------------------------------------------------------------------------------- | -------------------------------------- |
 | `Id`             | `Guid`     | Identificador unico del perfil.                                                                | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32` |
-| `CompanyId`      | `Guid`     | Compañia a la que pertenece el perfil.                                                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`      | `Guid`     | Compañia a la que pertenece el perfil.                                                         | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `ModelName`      | `string`   | Modelo elegido para esa compañia. No se debe hardcodear en el agente.                          | `gpt-4.1-mini`                         |
 | `LlmProvider`    | `enum`     | Proveedor LLM elegido para la compañia. En el codigo actual existe con valor por defecto `openai`; la columna fisica requiere migracion manual del operador. | `openai`                               |
 | `DisplayName`    | `string`   | Nombre que se puede usar para describir al asistente.                                          | `Contoso Assistant`                    |
@@ -257,7 +257,7 @@ No todas las compañias hablan igual ni usan el mismo modelo. `agent_profile` gu
 
 ### Relacion
 
-Cada compañia tiene como maximo un `agent_profile`. Esto se refuerza con un indice unico sobre `CompanyId`.
+Cada compañia tiene como maximo un `agent_profile`. Esto se refuerza con un indice unico sobre `OrganizationId`.
 
 ### Ejemplo mental
 
@@ -283,7 +283,7 @@ El modelo nunca ejecuta efectos secundarios directamente. Cuando quiere realizar
 | Propiedad           | Tipo                | Explicacion                                                 | Ejemplo                                |
 | ------------------- | ------------------- | ----------------------------------------------------------- | -------------------------------------- |
 | `Id`                | `Guid`              | Identificador unico de la configuracion de herramienta.     | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40` |
-| `CompanyId`         | `Guid`              | Compañia propietaria.                                       | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`         | `Guid`              | Compañia propietaria.                                       | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `ToolKey`           | `string`            | Clave tecnica de la herramienta.                            | `request_human_handoff`                |
 | `IsEnabled`         | `bool`              | Indica si la herramienta esta disponible para esa compañia. | `true`                                 |
 | `CredentialReferenceId` | `Guid?`          | FK opcional a la credencial externa que usa la herramienta. Nullable para herramientas internas. | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42` |
@@ -293,7 +293,7 @@ El modelo nunca ejecuta efectos secundarios directamente. Cuando quiere realizar
 
 ### Reglas importantes
 
-- `CompanyId + ToolKey` es unico.
+- `OrganizationId + ToolKey` es unico.
 - Deshabilitar una herramienta debe impedir su ejecucion aunque el modelo la pida.
 - Herramientas con sistemas externos, como Google Calendar, enlazan su credencial mediante `CredentialReferenceId`.
 - La configuracion se deja en JSON porque cada herramienta puede necesitar parametros diferentes.
@@ -314,7 +314,7 @@ El sistema necesita integrarse con servicios externos, pero la base de datos no 
 | Propiedad      | Tipo                | Explicacion                                   | Ejemplo                                |
 | -------------- | ------------------- | --------------------------------------------- | -------------------------------------- |
 | `Id`           | `Guid`              | Identificador unico de la referencia.         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b42` |
-| `CompanyId`    | `Guid`              | Compañia propietaria.                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`    | `Guid`              | Compañia propietaria.                         | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `Provider`     | `IntegrationProvider` | Proveedor externo tipado; se persiste con nombre snake_case. | `whatsapp_cloud`                       |
 | `Purpose`      | `string`            | Uso de esa credencial dentro del sistema.     | `message_send`                         |
 | `Reference`    | `string`            | Ubicacion logica del secreto.                 | `kv://whatsapp/contoso/access-token`   |
@@ -348,7 +348,7 @@ Un cliente no es global para toda la plataforma. La identidad del cliente se def
 | Propiedad            | Tipo       | Explicacion                                                            | Ejemplo                                |
 | -------------------- | ---------- | ---------------------------------------------------------------------- | -------------------------------------- |
 | `Id`                 | `Guid`     | Identificador interno del cliente.                                     | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b33` |
-| `CompanyId`          | `Guid`     | Compañia propietaria del cliente.                                      | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`          | `Guid`     | Compañia propietaria del cliente.                                      | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `CompanyChannelId`   | `Guid`     | Canal concreto donde se observo esta identidad. Distingue, por ejemplo, dos numeros de WhatsApp de la misma compañia. | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b31` |
 | `ExternalCustomerId` | `string`   | ID del cliente segun el proveedor. En WhatsApp suele ser el `wa_id`.   | `573001112233`                         |
 | `DisplayName`        | `string?`  | Nombre opcional del cliente. Puede venir del canal o de staff interno. | `Karina Perez`                         |
@@ -376,7 +376,7 @@ Una conversacion es la unidad de continuidad. Permite saber que mensajes pertene
 | Propiedad       | Tipo                 | Explicacion                                                                                   | Ejemplo                                |
 | --------------- | -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------- |
 | `Id`            | `Guid`               | Identificador unico de la conversacion.                                                       | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34` |
-| `CompanyId`     | `Guid`               | Compañia propietaria.                                                                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`     | `Guid`               | Compañia propietaria.                                                                         | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `CustomerId`    | `Guid`               | Cliente participante.                                                                         | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b33` |
 | `CompanyChannelId` | `Guid`            | Canal concreto de la conversacion.                                                            | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b31` |
 | `AgentProfileId` | `Guid`             | Perfil de agente asignado al crear la conversacion. Se mantiene como snapshot auditable.       | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b32` |
@@ -408,7 +408,7 @@ No todo estado debe vivir como mensajes. A veces el sistema necesita recordar un
 | Propiedad        | Tipo               | Explicacion                            | Ejemplo                                                                   |
 | ---------------- | ------------------ | -------------------------------------- | ------------------------------------------------------------------------- |
 | `Id`             | `Guid`             | Identificador unico del estado.        | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b35`                                    |
-| `CompanyId`      | `Guid`             | Compañia propietaria.                  | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30`                                    |
+| `OrganizationId`      | `Guid`             | Compañia propietaria.                  | `b36cfb51-83bd-4376-b7d7-0502141ff6ae`                                    |
 | `ConversationId` | `Guid`             | Conversacion asociada.                 | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34`                                    |
 | `Snapshot`       | `ConversationStateSnapshot` / `jsonb` | Estado serializado de la conversacion. | `{"currentIntent":"human_handoff_request","slots":[{"name":"handoff_reason","textValue":"support"}],"conversationFlags":["human_requested"]}` |
 | `CreatedAt`      | `DateTime`         | Fecha UTC de creacion.                 | `2026-05-22T10:15:30Z`                                                    |
@@ -447,7 +447,7 @@ Esta tabla es el historial principal. Contiene lo que dijo el usuario, lo que re
 | Propiedad           | Tipo                | Explicacion                                      | Ejemplo                                |
 | ------------------- | ------------------- | ------------------------------------------------ | -------------------------------------- |
 | `Id`                | `Guid`              | Identificador unico del mensaje.                 | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36` |
-| `CompanyId`         | `Guid`              | Compañia propietaria.                            | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30` |
+| `OrganizationId`         | `Guid`              | Compañia propietaria.                            | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
 | `ConversationId`    | `Guid`              | Conversacion donde vive el mensaje.              | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34` |
 | `Role`              | `MessageRole`       | Rol del mensaje dentro del flujo conversacional. | `User`                                 |
 | `Type`              | `MessageType`       | Tipo principal del mensaje. Por ahora `Text` o `Audio`. | `Audio`                         |
@@ -470,9 +470,9 @@ Esta tabla es el historial principal. Contiene lo que dijo el usuario, lo que re
 
 ### Idempotencia
 
-Hay un indice unico sobre `CompanyId + ProviderMessageId`, filtrado para cuando `ProviderMessageId` no es null. El canal se deriva por `Message -> Conversation -> CompanyChannel`. Esto evita guardar dos veces el mismo webhook entrante sin duplicar el canal en `message`.
+Hay un indice unico sobre `OrganizationId + ProviderMessageId`, filtrado para cuando `ProviderMessageId` no es null. El canal se deriva por `Message -> Conversation -> CompanyChannel`. Esto evita guardar dos veces el mismo webhook entrante sin duplicar el canal en `message`.
 
-El historial usado por el Worker consulta los ultimos turnos elegibles por `ConversationId`, ordenados por `OccurredAt` y `Id` descendente para desempate estable. El modelo debe mantener un indice compuesto por `CompanyId + ConversationId + OccurredAt DESC + Id DESC` para evitar degradacion en conversaciones largas. La migracion fisica de ese indice sigue siendo una operacion manual del propietario del proyecto.
+El historial usado por el Worker consulta los ultimos turnos elegibles por `ConversationId`, ordenados por `OccurredAt` y `Id` descendente para desempate estable. El modelo debe mantener un indice compuesto por `OrganizationId + ConversationId + OccurredAt DESC + Id DESC` para evitar degradacion en conversaciones largas. La migracion fisica de ese indice sigue siendo una operacion manual del propietario del proyecto.
 
 ---
 
@@ -489,7 +489,7 @@ El agente no ejecuta acciones directamente. El sistema recibe una solicitud de h
 | Propiedad        | Tipo                  | Explicacion                                                          | Ejemplo                                    |
 | ---------------- | --------------------- | -------------------------------------------------------------------- | ------------------------------------------ |
 | `Id`             | `Guid`                | Identificador unico de la ejecucion.                                 | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b39`     |
-| `CompanyId`      | `Guid`                | Compañia propietaria.                                                | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30`     |
+| `OrganizationId`      | `Guid`                | Compañia propietaria.                                                | `b36cfb51-83bd-4376-b7d7-0502141ff6ae`     |
 | `ConversationId` | `Guid`                | Conversacion donde se solicito la herramienta.                       | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34`     |
 | `CompanyToolId`  | `Guid`                | FK a la herramienta habilitada para la compañia.                     | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b40`     |
 | `TriggerMessageId` | `Guid`              | Mensaje assistant que solicito la herramienta.                       | `018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b36`     |
@@ -520,7 +520,7 @@ URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 
 ### Regla importante
 
-`CompanyId + IdempotencyKey` es unico. Esto permite reintentar jobs sin duplicar acciones.
+`OrganizationId + IdempotencyKey` es unico. Esto permite reintentar jobs sin duplicar acciones.
 
 ---
 
@@ -543,23 +543,23 @@ URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 | Tabla                              | Restriccion                                                                                   | Por que importa                                                       |
 | ---------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `company_channel`                  | Unico por `Provider + ProviderChannelId`                                                      | Permite resolver una compañia desde el canal receptor sin ambiguedad. |
-| `agent_profile`                    | Unico por `CompanyId`                                                                         | Cada compañia tiene un solo perfil activo de agente.                  |
-| `company_tool`                     | Unico por `CompanyId + ToolKey`                                                               | Evita duplicar la misma herramienta para una compañia.                |
-| `integration_credential_reference` | Unico por `CompanyId + Provider + Purpose`                                                    | Evita multiples credenciales conflictivas para el mismo uso.          |
+| `agent_profile`                    | Unico por `OrganizationId`                                                                         | Cada compañia tiene un solo perfil activo de agente.                  |
+| `company_tool`                     | Unico por `OrganizationId + ToolKey`                                                               | Evita duplicar la misma herramienta para una compañia.                |
+| `integration_credential_reference` | Unico por `OrganizationId + Provider + Purpose`                                                    | Evita multiples credenciales conflictivas para el mismo uso.          |
 | `customer`                         | Unico por `CompanyChannelId + ExternalCustomerId`                                            | Evita duplicar clientes dentro del mismo canal concreto.              |
-| `conversation`                     | Unico por `CompanyId + CustomerId + CompanyChannelId` cuando `Status = Open`                 | Evita dos conversaciones abiertas para el mismo cliente en el mismo canal. |
+| `conversation`                     | Unico por `OrganizationId + CustomerId + CompanyChannelId` cuando `Status = Open`                 | Evita dos conversaciones abiertas para el mismo cliente en el mismo canal. |
 | `conversation_state`               | Unico por `ConversationId`                                                                    | Una conversacion tiene un unico estado temporal activo.               |
-| `message`                          | Unico por `CompanyId + ProviderMessageId` cuando `ProviderMessageId` no es null              | Hace idempotente la ingesta de webhooks.                              |
-| `message`                          | Indice por `CompanyId + ConversationId + OccurredAt DESC + Id DESC`                         | Mantiene eficiente la carga de los ultimos turnos del agente.         |
-| `tool_execution`                   | Unico por `CompanyId + IdempotencyKey`                                                        | Hace idempotente la ejecucion de herramientas.                        |
+| `message`                          | Unico por `OrganizationId + ProviderMessageId` cuando `ProviderMessageId` no es null              | Hace idempotente la ingesta de webhooks.                              |
+| `message`                          | Indice por `OrganizationId + ConversationId + OccurredAt DESC + Id DESC`                         | Mantiene eficiente la carga de los ultimos turnos del agente.         |
+| `tool_execution`                   | Unico por `OrganizationId + IdempotencyKey`                                                        | Hace idempotente la ejecucion de herramientas.                        |
 
 ---
 
 # Decisiones De Diseno Importantes ✅
 
-## Multi-company primero
+## Multi-tenant primero
 
-Cada tabla operativa usa `CompanyId`. Esto evita fugas de datos entre compañias y permite aplicar filtros globales de EF Core.
+Cada tabla operativa usa `OrganizationId`, persistido como `organization_id`. Esto evita fugas de datos entre organizaciones de Keycloak y permite aplicar filtros globales de EF Core.
 
 ## Secretos fuera de la base
 

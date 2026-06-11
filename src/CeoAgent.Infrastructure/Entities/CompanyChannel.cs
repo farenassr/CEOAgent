@@ -3,7 +3,7 @@ using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Infrastructure.Entities;
 
-public sealed class CompanyChannel : AuditableCompanyOwnedEntity
+public sealed class CompanyChannel : AuditableOrganizationOwnedEntity
 {
     private CompanyChannel()
     {
@@ -55,7 +55,7 @@ public sealed class CompanyChannel : AuditableCompanyOwnedEntity
     public ICollection<Conversation> Conversations { get; } = [];
 
     public static CompanyChannel ForWhatsAppCloud(
-        Guid companyId,
+        Guid organizationId,
         string providerChannelId,
         WhatsAppCloudMetadata metadata,
         Guid? credentialReferenceId = null,
@@ -64,7 +64,7 @@ public sealed class CompanyChannel : AuditableCompanyOwnedEntity
         return new CompanyChannel
         {
             Id = id ?? Guid.CreateVersion7(),
-            CompanyId = companyId,
+            OrganizationId = organizationId,
             Provider = CompanyChannelProvider.WhatsAppCloud,
             ProviderChannelId = providerChannelId,
             Metadata = ChannelMetadata.ForWhatsAppCloud(metadata),
@@ -73,7 +73,7 @@ public sealed class CompanyChannel : AuditableCompanyOwnedEntity
     }
 
     public static CompanyChannel ForInstagram(
-        Guid companyId,
+        Guid organizationId,
         string providerChannelId,
         InstagramMetadata metadata,
         Guid? credentialReferenceId = null,
@@ -83,7 +83,7 @@ public sealed class CompanyChannel : AuditableCompanyOwnedEntity
     }
 
     public static CompanyChannel ForTelegram(
-        Guid companyId,
+        Guid organizationId,
         string providerChannelId,
         TelegramMetadata metadata,
         Guid? credentialReferenceId = null,
