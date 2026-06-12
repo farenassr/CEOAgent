@@ -8,13 +8,31 @@ public sealed class KeycloakOptions
 
     public string Issuer { get; set; } = string.Empty;
 
-    public string RedirectUri { get; set; } = string.Empty;
+    public string[] Scopes { get; set; } = [];
 
-    public string ClientSecret { get; set; } = string.Empty;
+    public Dictionary<string, string> ScopeDescriptions { get; set; } = [];
 
-    public static bool IsValid(KeycloakOptions options)
+    public static bool HasRequiredAuthorizationSettings(KeycloakOptions keycloakOptions)
     {
-        return !string.IsNullOrWhiteSpace(options.ClientId)
-            && Uri.TryCreate(options.Issuer, UriKind.Absolute, out _);
+        return !string.IsNullOrWhiteSpace(keycloakOptions.ClientId)
+            && Uri.TryCreate(keycloakOptions.Issuer, UriKind.Absolute, out _)
+            && keycloakOptions.GetConfiguredScopes().Count > 0;
+    }
+
+    public IReadOnlyList<string> GetConfiguredScopes()
+    {
+        return Scopes
+            .Where(configuredScope => !string.IsNullOrWhiteSpace(configuredScope))
+            .Select(configuredScope => configuredScope.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public string GetConfiguredScopeDescription(string configuredScope)
+    {
+        return ScopeDescriptions.TryGetValue(configuredScope, out var configuredScopeDescription)
+            && !string.IsNullOrWhiteSpace(configuredScopeDescription)
+                ? configuredScopeDescription
+                : configuredScope;
     }
 }

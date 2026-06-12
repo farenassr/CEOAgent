@@ -73,32 +73,32 @@ if (!string.IsNullOrWhiteSpace(openAIApiKey))
         .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "config://OpenAI:ApiKey");
 }
 
-AddKeycloakEnvironment(builder, apiService, keyVault);
+AddKeycloakEnvironment(builder, apiService);
 builder.AddLangfuseEnvironment(apiService, worker, keyVault);
 
 await builder.Build().RunAsync();
 
 static void AddKeycloakEnvironment(
     IDistributedApplicationBuilder builder,
-    IResourceBuilder<ProjectResource> apiService,
-    IResourceBuilder<Aspire.Hosting.Azure.AzureKeyVaultResource>? keyVault)
+    IResourceBuilder<ProjectResource> projectResource)
 {
-    if (builder.ExecutionContext.IsPublishMode)
+    projectResource
+        .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
+        .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty);
+
+    var configuredKeycloakScopes = builder.Configuration.GetSection("Keycloak:Scopes").Get<string[]>() ?? [];
+    for (var scopeIndex = 0; scopeIndex < configuredKeycloakScopes.Length; scopeIndex++)
     {
-        ArgumentNullException.ThrowIfNull(keyVault);
-        apiService
-            .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
-            .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty)
-            .WithEnvironment("Keycloak__RedirectUri", builder.Configuration["Keycloak:RedirectUri"] ?? string.Empty)
-            .WithEnvironment("Keycloak__ClientSecret", keyVault.GetSecret("KeycloakClientSecret"));
-        return;
+        projectResource.WithEnvironment($"Keycloak__Scopes__{scopeIndex}", configuredKeycloakScopes[scopeIndex]);
     }
 
-    var keycloakClientSecret = builder.AddParameter("keycloak-client-secret", secret: true);
-
-    apiService
-        .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
-        .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty)
-        .WithEnvironment("Keycloak__RedirectUri", builder.Configuration["Keycloak:RedirectUri"] ?? string.Empty)
-        .WithEnvironment("Keycloak__ClientSecret", keycloakClientSecret);
+    var configuredScopeDescriptions = builder.Configuration
+        .GetSection("Keycloak:ScopeDescriptions")
+        .Get<Dictionary<string, string>>() ?? [];
+    foreach (var scopeDescriptionPair in configuredScopeDescriptions)
+    {
+        projectResource.WithEnvironment(
+            $"Keycloak__ScopeDescriptions__{scopeDescriptionPair.Key}",
+            scopeDescriptionPair.Value);
+    }
 }

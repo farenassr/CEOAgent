@@ -68,7 +68,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
 builder.Services.AddOptions<KeycloakOptions>()
     .BindConfiguration(KeycloakOptions.SectionName)
     .Validate(
-        KeycloakOptions.IsValid,
+        KeycloakOptions.HasRequiredAuthorizationSettings,
         "Keycloak must configure ClientId and an absolute Issuer URI.")
     .ValidateOnStart();
 
@@ -80,23 +80,22 @@ builder.Services.TryAddSingleton<IIncomingMessageJobEnqueuer, UnavailableIncomin
 builder.Services.TryAddSingleton<IQueueDiagnosticsService, UnavailableQueueDiagnosticsService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-var keycloakOptions = builder.Configuration
+var configuredKeycloakOptions = builder.Configuration
     .GetSection(KeycloakOptions.SectionName)
     .Get<KeycloakOptions>() ?? new KeycloakOptions();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddJwtBearer(jwtBearerOptions =>
     {
-        options.Authority = keycloakOptions.Issuer;
-        options.Audience = keycloakOptions.ClientId;
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = new TokenValidationParameters
+        jwtBearerOptions.Authority = configuredKeycloakOptions.Issuer;
+        jwtBearerOptions.MapInboundClaims = false;
+        jwtBearerOptions.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = keycloakOptions.Issuer,
+            ValidIssuer = configuredKeycloakOptions.Issuer,
             ValidateAudience = true,
-            ValidAudience = keycloakOptions.ClientId,
+            ValidAudience = configuredKeycloakOptions.ClientId,
             NameClaimType = "preferred_username",
         };
     });
@@ -114,7 +113,12 @@ builder.Services.AddScoped<WhatsAppWebhookIngestionService>();
 builder.Services.AddScoped<IncomingMessageOutboxDispatcher>();
 builder.Services.AddSingleton<IWhatsAppSignatureValidator, WhatsAppSignatureValidator>();
 builder.Services.AddSingleton<WhatsAppWebhookVerificationService>();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<ApiSecurityDocumentTransformer>();
+    options.AddOperationTransformer<ApiSecurityOperationTransformer>();
+});
+builder.Services.ConfigureOptions<ScalarSecurityOptionsSetup>();
 
 var app = builder.Build();
 
