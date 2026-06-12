@@ -18,13 +18,16 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly PostgreSqlContainer _postgres;
     private readonly string _environmentName;
     private readonly Action<IServiceCollection>? _configureServices;
+    private readonly IReadOnlyDictionary<string, string?> _settings;
 
     public ApiFactory(
         string environmentName = "Testing",
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string?>? settings = null)
     {
         _environmentName = environmentName;
         _configureServices = configureServices;
+        _settings = settings ?? new Dictionary<string, string?>();
         _postgres = new PostgreSqlBuilder("postgres:16-alpine")
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilCommandIsCompleted("pg_isready", options => options.WithTimeout(TimeSpan.FromMinutes(3))))
@@ -41,8 +44,12 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         // Point Npgsql at the Testcontainers instance instead of InMemory.
         builder.UseSetting("Persistence:UseInMemoryDatabase", "false");
         builder.UseSetting("ConnectionStrings:CeoAgent", _postgres.GetConnectionString());
-        builder.UseSetting("Keycloak:ClientId", "ceo-agent-web");
+        builder.UseSetting("Keycloak:ClientId", "ceo-agent-api");
         builder.UseSetting("Keycloak:Issuer", "https://keycloak.test/realms/ceo-agent");
+        foreach (var (key, value) in _settings)
+        {
+            builder.UseSetting(key, value);
+        }
         builder.ConfigureServices(services =>
         {
             services.AddAuthentication(options =>
