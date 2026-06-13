@@ -55,6 +55,11 @@ var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
         url.DisplayText = "Scalar API Reference";
         url.Url = "/scalar";
     })
+    .WithUrlForEndpoint("http", url =>
+    {
+        url.DisplayText = "Scalar API Reference";
+        url.Url = "/scalar";
+    })
     .WithHttpHealthCheck("/health");
 
 var worker = builder.AddProject<Projects.CeoAgent_Worker>("worker")

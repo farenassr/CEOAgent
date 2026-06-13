@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using FastEndpoints;
 using Microsoft.Extensions.Options;
 using System.Text;
@@ -17,6 +18,15 @@ public sealed class WhatsAppWebhookEndpoint(
     {
         Post("/v1/whatsapp");
         AllowAnonymous();
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Webhooks)
+            .WithSummary("Receive WhatsApp Webhook")
+            .WithDescription("Receives WhatsApp Cloud webhook callbacks, verifies the request signature, and ingests supported message events quickly. Use this as the public provider callback URL."));
+        Summary(summary =>
+        {
+            summary.Summary = "Receive WhatsApp Webhook";
+            summary.Description = "Receives WhatsApp Cloud webhook callbacks, verifies the request signature, and ingests supported message events quickly. Use this as the public provider callback URL.";
+        });
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)

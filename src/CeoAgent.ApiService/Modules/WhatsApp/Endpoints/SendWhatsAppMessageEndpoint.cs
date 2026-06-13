@@ -1,6 +1,7 @@
 using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Application.Errors;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure;
 using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Shared.Messaging;
@@ -24,6 +25,15 @@ public sealed class SendWhatsAppMessageEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/channels/{companyChannelId}/whatsapp/messages");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.WhatsApp)
+            .WithSummary("Send WhatsApp Message")
+            .WithDescription("Sends a manual WhatsApp text message through a company WhatsApp channel. Use it for admin-initiated replies or controlled outbound messaging."));
+        Summary(summary =>
+        {
+            summary.Summary = "Send WhatsApp Message";
+            summary.Description = "Sends a manual WhatsApp text message through a company WhatsApp channel. Use it for admin-initiated replies or controlled outbound messaging.";
+        });
     }
 
     public override async Task HandleAsync(SendWhatsAppMessageRequest request, CancellationToken cancellationToken)

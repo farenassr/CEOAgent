@@ -1,4 +1,5 @@
 using CeoAgent.ApiService.Infrastructure.Security;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Persistence.Extensions;
 using CeoAgent.Shared.Constants;
@@ -20,6 +21,15 @@ public sealed class ListHandedOffConversationsEndpoint(
     public override void Configure()
     {
         Get("/v1/admin/companies/{organizationId}/conversations/handed-off");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Conversations)
+            .WithSummary("List Handed-Off Conversations")
+            .WithDescription("Lists conversations currently paused for human attention with sanitized handoff metadata. Use it for admin review queues without exposing raw customer message content."));
+        Summary(summary =>
+        {
+            summary.Summary = "List Handed-Off Conversations";
+            summary.Description = "Lists conversations currently paused for human attention with sanitized handoff metadata. Use it for admin review queues without exposing raw customer message content.";
+        });
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)

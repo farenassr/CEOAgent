@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using FastEndpoints;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
@@ -13,6 +14,15 @@ public sealed class WhatsAppWebhookVerificationEndpoint(
     {
         Get("/v1/whatsapp/webhook");
         AllowAnonymous();
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Webhooks)
+            .WithSummary("Verify WhatsApp Webhook")
+            .WithDescription("Handles WhatsApp Cloud webhook verification challenges using the configured verify token. Use this endpoint when registering the provider callback URL."));
+        Summary(summary =>
+        {
+            summary.Summary = "Verify WhatsApp Webhook";
+            summary.Description = "Handles WhatsApp Cloud webhook verification challenges using the configured verify token. Use this endpoint when registering the provider callback URL.";
+        });
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)

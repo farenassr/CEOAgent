@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
@@ -18,6 +19,15 @@ public sealed class CreateCompanyEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Companies)
+            .WithSummary("Create Company")
+            .WithDescription("Creates a company record for manual onboarding in the authenticated organization context. Use this before configuring channels, credentials, tools, or agent profile data."));
+        Summary(summary =>
+        {
+            summary.Summary = "Create Company";
+            summary.Description = "Creates a company record for manual onboarding in the authenticated organization context. Use this before configuring channels, credentials, tools, or agent profile data.";
+        });
     }
 
     public override async Task HandleAsync(CreateCompanyRequest request, CancellationToken cancellationToken)

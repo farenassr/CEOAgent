@@ -1,6 +1,7 @@
 using CeoAgent.Application.Errors;
 using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.ApiService.Infrastructure.Security;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -26,6 +27,15 @@ public sealed class EnableCompanyToolEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/tools");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Tools)
+            .WithSummary("Configure Company Tool")
+            .WithDescription("Enables or updates an agent tool for a company with validated configuration and credential references. Use it to expose business capabilities to the agent runtime."));
+        Summary(summary =>
+        {
+            summary.Summary = "Configure Company Tool";
+            summary.Description = "Enables or updates an agent tool for a company with validated configuration and credential references. Use it to expose business capabilities to the agent runtime.";
+        });
     }
 
     public override async Task HandleAsync(CompanyToolRequest request, CancellationToken cancellationToken)

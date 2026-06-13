@@ -1,4 +1,5 @@
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Shared.Calendar;
 using CeoAgent.Shared.Constants;
@@ -21,6 +22,15 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/google-calendar/availability");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.GoogleCalendar)
+            .WithSummary("Check Google Calendar Availability")
+            .WithDescription("Checks whether a requested reservation slot is available for a company's configured Google Calendar tool. Use it before offering or confirming customer booking times."));
+        Summary(summary =>
+        {
+            summary.Summary = "Check Google Calendar Availability";
+            summary.Description = "Checks whether a requested reservation slot is available for a company's configured Google Calendar tool. Use it before offering or confirming customer booking times.";
+        });
     }
 
     public override async Task HandleAsync(

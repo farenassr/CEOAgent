@@ -314,6 +314,21 @@ public sealed partial class ArchitectureRulesTests
         appHost.ShouldContain(".WithDataVolume(\"ceoagent-postgres-database-volume\")");
     }
 
+    /// <summary>
+    /// Verifies that Aspire dashboard resource links for the API open the Scalar reference directly.
+    /// </summary>
+    [Test]
+    public void AppHost_ApiResourceLinks_DeepLinkToScalar()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
+
+        appHost.ShouldContain(".WithUrlForEndpoint(\"https\", url =>");
+        appHost.ShouldContain(".WithUrlForEndpoint(\"http\", url =>");
+        appHost.ShouldContain("url.DisplayText = \"Scalar API Reference\";");
+        appHost.ShouldContain("url.Url = \"/scalar\";");
+    }
+
     [Test]
     public void Migrations_DoNotContainSecretShapedCredentialMetadata()
     {
