@@ -1,4 +1,5 @@
 using CeoAgent.ApiService.Infrastructure.OpenApi;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Modules.Companies.Mappers;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -12,11 +13,12 @@ namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 /// Registers a provider channel for company resolution.
 /// </summary>
 public sealed class RegisterCompanyChannelEndpoint(
-    ISender sender) : Endpoint<CompanyChannelRequest, CompanyChannelResponse>
+    ISender sender,
+    IAdminTenantGuard tenantGuard) : Endpoint<CompanyChannelRequest, CompanyChannelResponse>
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/channels");
+        Post("/v1/admin/channels");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.Channels)
             .WithSummary("Register Company Channel")
@@ -30,7 +32,7 @@ public sealed class RegisterCompanyChannelEndpoint(
 
     public override async Task HandleAsync(CompanyChannelRequest request, CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
         var channel = await sender.Send(
             CompanyMapper.ToCommand(request, organizationId),
             cancellationToken);

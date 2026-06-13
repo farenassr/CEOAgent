@@ -7,7 +7,7 @@ public sealed class SendWhatsAppMessageRequest
     /// <summary>
     /// Provider-side WhatsApp customer identifier. Example: 573001112233.
     /// </summary>
-    [Description("Provider-side WhatsApp customer identifier.")]
+    [Description("Provider-side WhatsApp customer identifier without a leading plus sign.")]
     public string RecipientExternalId { get; set; } = string.Empty;
 
     /// <summary>

@@ -1,6 +1,6 @@
-using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Application.Errors;
 using CeoAgent.ApiService.Infrastructure.OpenApi;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Persistence;
@@ -18,14 +18,14 @@ namespace CeoAgent.ApiService.Modules.Handoff.Endpoints;
 /// </summary>
 public sealed class ResumeConversationEndpoint(
     CeoAgentDbContext dbContext,
-    IOrganizationContextProvider companyContext) : EndpointWithoutRequest<ResumeConversationResponse>
+    IAdminTenantGuard tenantGuard) : EndpointWithoutRequest<ResumeConversationResponse>
 {
     private const string HumanRequestedFlag = "human_requested";
     private const string HandoffIntent = "human_handoff_request";
 
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/conversations/{conversationId}/resume");
+        Post("/v1/admin/conversations/{conversationId}/resume");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.Conversations)
             .WithSummary("Resume Conversation")
@@ -39,9 +39,9 @@ public sealed class ResumeConversationEndpoint(
 
     public override async Task HandleAsync(CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
         var conversationId = Route<Guid>("conversationId");
-        EnsureCompanyAccess(organizationId);
+        await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
 
         var conversation = await dbContext.Conversations
             .WithDefaultTracking(trackChanges: true)
@@ -97,13 +97,5 @@ public sealed class ResumeConversationEndpoint(
             ConversationFlags = flags,
             TurnCount = state.Snapshot.TurnCount,
         };
-    }
-
-    private void EnsureCompanyAccess(Guid organizationId)
-    {
-        if (companyContext.OrganizationId != organizationId)
-        {
-            throw new NotFoundException("company", organizationId);
-        }
     }
 }

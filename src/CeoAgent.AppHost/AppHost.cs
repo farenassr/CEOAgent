@@ -5,6 +5,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 const int PgAdminHostPort = 5050;
 const int PostgresHostPort = 55432;
+const int ApiServiceHttpsHostPort = 7584;
+const int ApiServiceHttpHostPort = 5481;
 const int AzuriteBlobPort = 10000;
 const int AzuriteQueuePort = 10001;
 const int AzuriteTablePort = 10002;
@@ -50,6 +52,14 @@ var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
     .WithEnvironment("WhatsApp__AccessToken", whatsAppAccessToken)
     .WithEnvironment("GoogleCalendar__ServiceAccountJson", laTerrazaGoogleCalendar)
     .WithEnvironment("ServiceDefaults__Langfuse__Host", langfuseHost)
+    .WithEndpoint("https", endpoint =>
+    {
+        endpoint.Port = ApiServiceHttpsHostPort;
+    })
+    .WithEndpoint("http", endpoint =>
+    {
+        endpoint.Port = ApiServiceHttpHostPort;
+    })
     .WithUrlForEndpoint("https", url =>
     {
         url.DisplayText = "Scalar API Reference";
@@ -93,17 +103,19 @@ static void AddKeycloakEnvironment(
         ArgumentNullException.ThrowIfNull(keyVault);
         apiService
             .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
+            .WithEnvironment("Keycloak__ServiceClientId", builder.Configuration["Keycloak:ServiceClientId"] ?? string.Empty)
             .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty)
             .WithEnvironment("Keycloak__RedirectUri", builder.Configuration["Keycloak:RedirectUri"] ?? string.Empty)
-            .WithEnvironment("Keycloak__ClientSecret", keyVault.GetSecret("KeycloakClientSecret"));
+            .WithEnvironment("Keycloak__ServiceClientSecret", keyVault.GetSecret("KeycloakServiceClientSecret"));
         return;
     }
 
-    var keycloakClientSecret = builder.AddParameter("keycloak-client-secret", secret: true);
+    var keycloakServiceClientSecret = builder.AddParameter("keycloak-service-client-secret", secret: true);
 
     apiService
         .WithEnvironment("Keycloak__ClientId", builder.Configuration["Keycloak:ClientId"] ?? string.Empty)
+        .WithEnvironment("Keycloak__ServiceClientId", builder.Configuration["Keycloak:ServiceClientId"] ?? string.Empty)
         .WithEnvironment("Keycloak__Issuer", builder.Configuration["Keycloak:Issuer"] ?? string.Empty)
         .WithEnvironment("Keycloak__RedirectUri", builder.Configuration["Keycloak:RedirectUri"] ?? string.Empty)
-        .WithEnvironment("Keycloak__ClientSecret", keycloakClientSecret);
+        .WithEnvironment("Keycloak__ServiceClientSecret", keycloakServiceClientSecret);
 }

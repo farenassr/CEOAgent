@@ -1,6 +1,5 @@
-using CeoAgent.Application.Abstractions.Organization;
-using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Application.Errors;
+using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure;
 using CeoAgent.Application.Abstractions.Messaging;
@@ -19,12 +18,12 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 /// </summary>
 public sealed class SendWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
-    IOrganizationContextProvider companyContext,
+    IAdminTenantGuard tenantGuard,
     IMessageChannelIntegration messaging) : Endpoint<SendWhatsAppMessageRequest, SendWhatsAppMessageResponse>
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/channels/{companyChannelId}/whatsapp/messages");
+        Post("/v1/admin/channels/{companyChannelId}/whatsapp/messages");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.WhatsApp)
             .WithSummary("Send WhatsApp Message")
@@ -38,13 +37,9 @@ public sealed class SendWhatsAppMessageEndpoint(
 
     public override async Task HandleAsync(SendWhatsAppMessageRequest request, CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
         var companyChannelId = Route<Guid>("companyChannelId");
-
-        if (companyContext.OrganizationId != organizationId)
-        {
-            throw new NotFoundException("company", organizationId);
-        }
+        await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
 
         var channel = await dbContext.CompanyChannels
             .AsNoTracking()
@@ -93,7 +88,9 @@ public sealed class SendWhatsAppMessageValidator : Validator<SendWhatsAppMessage
     {
         RuleFor(request => request.RecipientExternalId)
             .NotEmpty()
-            .MaximumLength(160);
+            .MaximumLength(160)
+            .Matches("^[0-9]+$")
+            .WithMessage("RecipientExternalId must contain only digits.");
         RuleFor(request => request.Text)
             .NotEmpty()
             .MaximumLength(4096);

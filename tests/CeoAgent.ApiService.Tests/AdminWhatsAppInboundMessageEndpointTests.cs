@@ -35,7 +35,7 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         using var client = factory.CreateAuthenticatedClient(OrganizationId);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{OrganizationId}/whatsapp")
+            "/v1/admin/whatsapp")
         {
             Content = JsonContent.Create(new
             {

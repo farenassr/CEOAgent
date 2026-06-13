@@ -153,6 +153,13 @@ if (app.Environment.IsDevelopment())
             .WithTitle("CeoAgent API Reference")
             .WithTheme(ScalarTheme.Default)
             .ForceLightMode()
+            .AddPreferredSecuritySchemes(OpenApiConstants.KeycloakOAuthScheme)
+            .AddAuthorizationCodeFlow(OpenApiConstants.KeycloakOAuthScheme, flow =>
+            {
+                flow.ClientId = keycloakOptions.ClientId;
+                flow.Pkce = Pkce.Sha256;
+                flow.SelectedScopes = keycloakOptions.AuthorizationScopes;
+            })
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
             .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl);
     });

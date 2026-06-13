@@ -26,7 +26,7 @@ public sealed class EnableCompanyToolEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/tools");
+        Post("/v1/admin/tools");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.Tools)
             .WithSummary("Configure Company Tool")
@@ -40,8 +40,8 @@ public sealed class EnableCompanyToolEndpoint(
 
     public override async Task HandleAsync(CompanyToolRequest request, CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
-        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
+        await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
         await tenantGuard.EnsureCredentialReferenceAccessibleAsync(organizationId, request.CredentialReferenceId, cancellationToken);
         var catalogTool = await ResolveCatalogToolAsync(agentToolCatalog, organizationId, request.ToolKey, cancellationToken);
 

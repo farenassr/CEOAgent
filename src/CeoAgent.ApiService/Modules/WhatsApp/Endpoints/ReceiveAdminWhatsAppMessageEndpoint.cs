@@ -29,7 +29,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
 
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/whatsapp");
+        Post("/v1/admin/whatsapp");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.WhatsApp)
             .WithSummary("Receive Admin WhatsApp Message")
@@ -43,8 +43,8 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
 
     public override async Task HandleAsync(ReceiveWhatsAppMessageRequest request, CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
-        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
+        await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
 
         var channel = await dbContext.CompanyChannels
             .WithDefaultTracking(trackChanges: true)

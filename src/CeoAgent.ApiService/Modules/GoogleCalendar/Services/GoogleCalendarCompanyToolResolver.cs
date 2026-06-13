@@ -16,10 +16,12 @@ public sealed class GoogleCalendarCompanyToolResolver(
     IOrganizationContextProvider companyContext)
 {
     public async Task<GoogleCalendarCompanyToolContext> ResolveAsync(
-        Guid organizationId,
         string toolKey,
         CancellationToken cancellationToken)
     {
+        var organizationId = companyContext.OrganizationId
+            ?? throw new NotFoundException("company", "authenticated-organization");
+
         var company = await dbContext.Companies
             .WithDefaultTracking()
             .FirstOrDefaultAsync(entity => entity.Id == organizationId, cancellationToken);

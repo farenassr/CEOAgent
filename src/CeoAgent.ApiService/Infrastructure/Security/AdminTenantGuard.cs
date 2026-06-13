@@ -12,6 +12,20 @@ public sealed class AdminTenantGuard(
     CeoAgentDbContext dbContext,
     IOrganizationContextProvider companyContext) : IAdminTenantGuard
 {
+    public Guid RequireAuthenticatedOrganizationId()
+    {
+        return companyContext.OrganizationId
+            ?? throw new NotFoundException("company", "authenticated-organization");
+    }
+
+    public Task<CompanyEntity> GetAuthenticatedCompanyAsync(
+        bool trackChanges,
+        CancellationToken cancellationToken)
+    {
+        var organizationId = RequireAuthenticatedOrganizationId();
+        return GetAccessibleCompanyAsync(organizationId, trackChanges, cancellationToken);
+    }
+
     public async Task<CompanyEntity> GetAccessibleCompanyAsync(
         Guid organizationId,
         bool trackChanges,
