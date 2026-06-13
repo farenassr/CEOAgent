@@ -20,7 +20,7 @@ public sealed class RegisterIntegrationCredentialEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/integration-credentials");
+        Post("/v1/admin/integration-credentials");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.IntegrationCredentials)
             .WithSummary("Register Integration Credential")
@@ -34,8 +34,8 @@ public sealed class RegisterIntegrationCredentialEndpoint(
 
     public override async Task HandleAsync(IntegrationCredentialRequest request, CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
-        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
+        await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
 
         var credential = CompanyMapper.ToEntity(request, organizationId);
 

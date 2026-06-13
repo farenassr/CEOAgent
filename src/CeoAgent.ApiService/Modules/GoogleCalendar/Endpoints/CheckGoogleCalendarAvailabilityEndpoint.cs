@@ -21,7 +21,7 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/google-calendar/availability");
+        Post("/v1/admin/google-calendar/availability");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.GoogleCalendar)
             .WithSummary("Check Google Calendar Availability")
@@ -37,9 +37,7 @@ public sealed class CheckGoogleCalendarAvailabilityEndpoint(
         CheckGoogleCalendarAvailabilityRequest request,
         CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
         var context = await resolver.ResolveAsync(
-            organizationId,
             MvpToolKeys.CheckGoogleCalendarAvailability,
             cancellationToken);
 

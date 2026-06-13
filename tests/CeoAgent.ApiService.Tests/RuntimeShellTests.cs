@@ -62,6 +62,8 @@ public sealed class RuntimeShellTests
         html.ShouldContain("CeoAgent API Reference");
         html.ShouldContain("\"theme\":\"default\"");
         html.ShouldContain("\"forceDarkModeState\":\"light\"");
+        html.ShouldContain("ceo-agent-api");
+        html.ShouldContain("\"selectedScopes\":[\"openid\",\"profile\",\"email\",\"organization\"]");
     }
 
     /// <summary>
@@ -129,7 +131,7 @@ public sealed class RuntimeShellTests
         createCompany.GetProperty("summary").GetString().ShouldBe("Create Company");
         createCompany.GetProperty("description").GetString().ShouldNotBeNullOrWhiteSpace();
 
-        var availability = GetOperation(document, "/v1/admin/companies/{organizationId}/google-calendar/availability", "post");
+        var availability = GetOperation(document, "/v1/admin/google-calendar/availability", "post");
         availability.GetProperty("summary").GetString().ShouldBe("Check Google Calendar Availability");
         availability.GetProperty("description").GetString().ShouldNotBeNullOrWhiteSpace();
 

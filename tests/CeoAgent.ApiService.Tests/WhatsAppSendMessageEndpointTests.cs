@@ -26,11 +26,11 @@ public sealed class WhatsAppSendMessageEndpointTests
         using var bootstrapClient = factory.CreateAuthenticatedClient();
         var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
-        var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient, organizationId);
-        var channelId = await RegisterWhatsAppChannelAsync(tenantClient, organizationId, credentialId);
+        var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient);
+        var channelId = await RegisterWhatsAppChannelAsync(tenantClient, credentialId);
 
         using var response = await tenantClient.PostAsJsonAsync(
-            $"/v1/admin/companies/{organizationId}/channels/{channelId}/whatsapp/messages",
+            $"/v1/admin/channels/{channelId}/whatsapp/messages",
             new
             {
                 recipientExternalId = "573001112233",
@@ -51,6 +51,35 @@ public sealed class WhatsAppSendMessageEndpointTests
         sent.IdempotencyKey.ShouldBe("manual-send-1");
     }
 
+    [Test]
+    public async Task SendWhatsAppMessage_WhenRecipientExternalIdIncludesPlus_ReturnsBadRequestWithoutSending()
+    {
+        var messaging = new RecordingMessageChannelIntegration();
+        await using var factory = new ApiFactory(configureServices: services =>
+        {
+            services.RemoveAll<IMessageChannelIntegration>();
+            services.AddSingleton<IMessageChannelIntegration>(messaging);
+        });
+
+        using var bootstrapClient = factory.CreateAuthenticatedClient();
+        var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
+        using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
+        var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient);
+        var channelId = await RegisterWhatsAppChannelAsync(tenantClient, credentialId);
+
+        using var response = await tenantClient.PostAsJsonAsync(
+            $"/v1/admin/channels/{channelId}/whatsapp/messages",
+            new
+            {
+                recipientExternalId = "+971529596724",
+                text = "Hola!",
+                idempotencyKey = (string?)null,
+            });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        messaging.TextMessages.ShouldBeEmpty();
+    }
+
     private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name)
     {
         using var response = await client.PostAsJsonAsync(
@@ -66,10 +95,10 @@ public sealed class WhatsAppSendMessageEndpointTests
         return body.Id;
     }
 
-    private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client, Guid organizationId)
+    private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client)
     {
         using var response = await client.PostAsJsonAsync(
-            $"/v1/admin/companies/{organizationId}/integration-credentials",
+            "/v1/admin/integration-credentials",
             new
             {
                 provider = "whatsapp_cloud",
@@ -82,10 +111,10 @@ public sealed class WhatsAppSendMessageEndpointTests
         return body.Id;
     }
 
-    private static async Task<Guid> RegisterWhatsAppChannelAsync(HttpClient client, Guid organizationId, Guid credentialId)
+    private static async Task<Guid> RegisterWhatsAppChannelAsync(HttpClient client, Guid credentialId)
     {
         using var response = await client.PostAsJsonAsync(
-            $"/v1/admin/companies/{organizationId}/channels",
+            "/v1/admin/channels",
             new
             {
                 provider = "whatsapp_cloud",

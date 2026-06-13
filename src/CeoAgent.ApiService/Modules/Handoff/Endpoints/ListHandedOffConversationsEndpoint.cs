@@ -20,7 +20,7 @@ public sealed class ListHandedOffConversationsEndpoint(
 {
     public override void Configure()
     {
-        Get("/v1/admin/companies/{organizationId}/conversations/handed-off");
+        Get("/v1/admin/conversations/handed-off");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.Conversations)
             .WithSummary("List Handed-Off Conversations")
@@ -34,8 +34,8 @@ public sealed class ListHandedOffConversationsEndpoint(
 
     public override async Task HandleAsync(CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
-        await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: false, cancellationToken);
+        var organizationId = tenantGuard.RequireAuthenticatedOrganizationId();
+        await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
 
         var items = await dbContext.Conversations
             .AsNoTracking()

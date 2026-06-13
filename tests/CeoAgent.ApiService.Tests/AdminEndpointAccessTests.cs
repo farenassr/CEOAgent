@@ -44,29 +44,25 @@ public sealed class AdminEndpointAccessTests
     }
 
     [Test]
-    public async Task CompanyScopedEndpoint_WhenRouteCompanyDiffersFromJwtOrganization_Returns404()
+    public async Task CompanyScopedEndpoint_UsesJwtOrganizationWithoutRouteOrganization()
     {
         await using var factory = new ApiFactory();
-        var organizationAId = Guid.CreateVersion7();
-        var organizationBId = Guid.CreateVersion7();
-        using var organizationAClient = factory.CreateAuthenticatedClient(organizationAId);
-        using var organizationBClient = factory.CreateAuthenticatedClient(organizationBId);
-        organizationAId = await CreateCompanyAsync(organizationAClient, "Organization A");
-        organizationBId = await CreateCompanyAsync(organizationBClient, "Organization B");
+        using var bootstrapClient = factory.CreateAuthenticatedClient();
+        var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
 
-        using var organizationScopedClient = factory.CreateAuthenticatedClient(organizationAId);
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{organizationBId}/channels")
+        using var organizationScopedClient = factory.CreateAuthenticatedClient(organizationId);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/channels")
         {
             Content = JsonContent.Create(new
             {
                 provider = "whatsapp_cloud",
-                providerChannelId = "tenant-b-channel-denied",
+                providerChannelId = "tenant-channel",
                 metadata = new
                 {
                     whatsapp_cloud = new
                     {
                         business_account_id = "987654321",
-                        phone_number_id = "tenant-b-channel-denied",
+                        phone_number_id = "tenant-channel",
                     },
                 },
             }),
@@ -74,7 +70,10 @@ public sealed class AdminEndpointAccessTests
 
         using var response = await organizationScopedClient.SendAsync(request);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<CompanyChannelResponse>();
+        body.ShouldNotBeNull();
+        body.OrganizationId.ShouldBe(organizationId);
     }
 
     [Test]
@@ -85,7 +84,7 @@ public sealed class AdminEndpointAccessTests
         var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
 
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{organizationId}/channels")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/channels")
         {
             Content = JsonContent.Create(new
             {
@@ -123,7 +122,6 @@ public sealed class AdminEndpointAccessTests
 
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
         using var request = CreateCredentialRequest(
-            organizationId,
             "kv://google-calendar/contoso/service-account",
             new
             {
@@ -151,7 +149,7 @@ public sealed class AdminEndpointAccessTests
         var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
 
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
-        using var request = CreateCredentialRequest(organizationId, reference);
+        using var request = CreateCredentialRequest(reference);
 
         using var response = await tenantClient.SendAsync(request);
 
@@ -169,16 +167,16 @@ public sealed class AdminEndpointAccessTests
         var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
 
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
-        using var request = CreateCredentialRequest(organizationId, reference);
+        using var request = CreateCredentialRequest(reference);
 
         using var response = await tenantClient.SendAsync(request);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    private static HttpRequestMessage CreateCredentialRequest(Guid organizationId, string reference, object? metadata = null)
+    private static HttpRequestMessage CreateCredentialRequest(string reference, object? metadata = null)
     {
-        return new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{organizationId}/integration-credentials")
+        return new HttpRequestMessage(HttpMethod.Post, "/v1/admin/integration-credentials")
         {
             Content = JsonContent.Create(new
             {

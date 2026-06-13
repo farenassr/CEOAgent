@@ -41,7 +41,7 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         // Point Npgsql at the Testcontainers instance instead of InMemory.
         builder.UseSetting("Persistence:UseInMemoryDatabase", "false");
         builder.UseSetting("ConnectionStrings:CeoAgent", _postgres.GetConnectionString());
-        builder.UseSetting("Keycloak:ClientId", "ceo-agent-web");
+        builder.UseSetting("Keycloak:ClientId", "ceo-agent-api");
         builder.UseSetting("Keycloak:Issuer", "https://keycloak.test/realms/ceo-agent");
         builder.ConfigureServices(services =>
         {

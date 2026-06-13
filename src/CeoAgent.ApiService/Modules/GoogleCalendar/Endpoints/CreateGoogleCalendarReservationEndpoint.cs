@@ -15,7 +15,7 @@ public sealed class CreateGoogleCalendarReservationEndpoint
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/google-calendar/reservations");
+        Post("/v1/admin/google-calendar/reservations");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.GoogleCalendar)
             .WithSummary("Create Google Calendar Reservation")

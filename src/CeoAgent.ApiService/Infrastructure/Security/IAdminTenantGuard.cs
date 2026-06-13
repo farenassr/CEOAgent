@@ -4,6 +4,12 @@ namespace CeoAgent.ApiService.Infrastructure.Security;
 
 public interface IAdminTenantGuard
 {
+    Guid RequireAuthenticatedOrganizationId();
+
+    Task<CompanyEntity> GetAuthenticatedCompanyAsync(
+        bool trackChanges,
+        CancellationToken cancellationToken);
+
     Task<CompanyEntity> GetAccessibleCompanyAsync(
         Guid organizationId,
         bool trackChanges,

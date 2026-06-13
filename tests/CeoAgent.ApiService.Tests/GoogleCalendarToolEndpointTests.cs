@@ -35,7 +35,7 @@ public sealed class GoogleCalendarToolEndpointTests
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/google-calendar/availability")
+            "/v1/admin/google-calendar/availability")
         {
             Content = JsonContent.Create(new
             {
@@ -78,7 +78,7 @@ public sealed class GoogleCalendarToolEndpointTests
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/google-calendar/reservations")
+            "/v1/admin/google-calendar/reservations")
         {
             Content = JsonContent.Create(new
             {
@@ -100,19 +100,15 @@ public sealed class GoogleCalendarToolEndpointTests
     }
 
     [Test]
-    public async Task CheckAvailability_WhenJwtCompanyDiffersFromRoute_ReturnsNotFound()
+    public async Task CheckAvailability_UsesJwtOrganizationWithoutRouteOrganization()
     {
         await using var factory = CreateFactory(new RecordingCalendarIntegration());
         using var client = factory.CreateAuthenticatedClient();
-        var organizationId = await CreateConfiguredCompanyAsync(client, MvpToolKeys.CheckGoogleCalendarAvailability);
-        var otherOrganizationId = Guid.CreateVersion7();
-        client.DefaultRequestHeaders.Authorization = TestAuthentication.OrganizationBearer(otherOrganizationId);
-        otherOrganizationId = await CreateCompanyAsync(client, "Other Company");
-        client.DefaultRequestHeaders.Authorization = TestAuthentication.OrganizationBearer(otherOrganizationId);
+        _ = await CreateConfiguredCompanyAsync(client, MvpToolKeys.CheckGoogleCalendarAvailability);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/google-calendar/availability")
+            "/v1/admin/google-calendar/availability")
         {
             Content = JsonContent.Create(new
             {
@@ -123,7 +119,7 @@ public sealed class GoogleCalendarToolEndpointTests
         };
         using var response = await client.SendAsync(request);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Test]
@@ -133,11 +129,11 @@ public sealed class GoogleCalendarToolEndpointTests
         using var client = factory.CreateAuthenticatedClient();
         var organizationId = await CreateCompanyAsync(client, "Company Without Tool");
         client.DefaultRequestHeaders.Authorization = TestAuthentication.OrganizationBearer(organizationId);
-        await ConfigureWorkingHoursAsync(client, organizationId);
+        await ConfigureWorkingHoursAsync(client);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/google-calendar/availability")
+            "/v1/admin/google-calendar/availability")
         {
             Content = JsonContent.Create(new
             {
@@ -161,10 +157,9 @@ public sealed class GoogleCalendarToolEndpointTests
         using var client = factory.CreateAuthenticatedClient();
         var organizationId = await CreateCompanyAsync(client, "Invalid Calendar Config Company");
         client.DefaultRequestHeaders.Authorization = TestAuthentication.OrganizationBearer(organizationId);
-        var credentialId = await RegisterGoogleCalendarCredentialAsync(client, organizationId);
+        var credentialId = await RegisterGoogleCalendarCredentialAsync(client);
 
         using var request = CreateEnableGoogleCalendarToolRequest(
-            organizationId,
             credentialId,
             MvpToolKeys.CheckGoogleCalendarAvailability,
             new
@@ -196,8 +191,10 @@ public sealed class GoogleCalendarToolEndpointTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var paths = document.RootElement.GetProperty("paths");
-        paths.TryGetProperty("/v1/admin/companies/{organizationId}/google-calendar/availability", out _).ShouldBeTrue();
-        paths.TryGetProperty("/v1/admin/companies/{organizationId}/google-calendar/reservations", out _).ShouldBeTrue();
+        paths.TryGetProperty("/v1/admin/google-calendar/availability", out _).ShouldBeTrue();
+        paths.TryGetProperty("/v1/admin/google-calendar/reservations", out _).ShouldBeTrue();
+        paths.TryGetProperty("/v1/admin/companies/{organizationId}/google-calendar/availability", out _).ShouldBeFalse();
+        paths.TryGetProperty("/v1/admin/companies/{organizationId}/google-calendar/reservations", out _).ShouldBeFalse();
     }
 
     private static ApiFactory CreateFactory(
@@ -219,9 +216,9 @@ public sealed class GoogleCalendarToolEndpointTests
     {
         var organizationId = await CreateCompanyAsync(client, "Contoso Bistro");
         client.DefaultRequestHeaders.Authorization = TestAuthentication.OrganizationBearer(organizationId);
-        await ConfigureWorkingHoursAsync(client, organizationId);
-        var credentialId = await RegisterGoogleCalendarCredentialAsync(client, organizationId);
-        await EnableGoogleCalendarToolAsync(client, organizationId, credentialId, toolKey);
+        await ConfigureWorkingHoursAsync(client);
+        var credentialId = await RegisterGoogleCalendarCredentialAsync(client);
+        await EnableGoogleCalendarToolAsync(client, credentialId, toolKey);
         return organizationId;
     }
 
@@ -242,11 +239,11 @@ public sealed class GoogleCalendarToolEndpointTests
         return body.Id;
     }
 
-    private static async Task ConfigureWorkingHoursAsync(HttpClient client, Guid organizationId)
+    private static async Task ConfigureWorkingHoursAsync(HttpClient client)
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/agent-profile")
+            "/v1/admin/agent-profile")
         {
             Content = JsonContent.Create(new
             {
@@ -275,11 +272,11 @@ public sealed class GoogleCalendarToolEndpointTests
         response.EnsureSuccessStatusCode();
     }
 
-    private static async Task<Guid> RegisterGoogleCalendarCredentialAsync(HttpClient client, Guid organizationId)
+    private static async Task<Guid> RegisterGoogleCalendarCredentialAsync(HttpClient client)
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/integration-credentials")
+            "/v1/admin/integration-credentials")
         {
             Content = JsonContent.Create(new
             {
@@ -306,12 +303,10 @@ public sealed class GoogleCalendarToolEndpointTests
 
     private static async Task EnableGoogleCalendarToolAsync(
         HttpClient client,
-        Guid organizationId,
         Guid credentialId,
         string toolKey)
     {
         using var request = CreateEnableGoogleCalendarToolRequest(
-            organizationId,
             credentialId,
             toolKey,
             new
@@ -326,14 +321,13 @@ public sealed class GoogleCalendarToolEndpointTests
     }
 
     private static HttpRequestMessage CreateEnableGoogleCalendarToolRequest(
-        Guid organizationId,
         Guid credentialId,
         string toolKey,
         object googleCalendarConfiguration)
     {
         var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/v1/admin/companies/{organizationId}/tools")
+            "/v1/admin/tools")
         {
             Content = JsonContent.Create(new
             {

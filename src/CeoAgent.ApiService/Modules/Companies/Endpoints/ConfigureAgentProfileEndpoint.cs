@@ -20,7 +20,7 @@ public sealed class ConfigureAgentProfileEndpoint(
 {
     public override void Configure()
     {
-        Post("/v1/admin/companies/{organizationId}/agent-profile");
+        Post("/v1/admin/agent-profile");
         Description(builder => builder
             .WithTags(OpenApiConstants.Tags.AgentProfile)
             .WithSummary("Configure Agent Profile")
@@ -34,8 +34,8 @@ public sealed class ConfigureAgentProfileEndpoint(
 
     public override async Task HandleAsync(AgentProfileRequest request, CancellationToken cancellationToken)
     {
-        var organizationId = Route<Guid>("organizationId");
-        var company = await tenantGuard.GetAccessibleCompanyAsync(organizationId, trackChanges: true, cancellationToken);
+        var company = await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: true, cancellationToken);
+        var organizationId = company.Id;
 
         var profile = await dbContext.AgentProfiles
             .WithDefaultTracking(trackChanges: true)

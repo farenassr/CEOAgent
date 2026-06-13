@@ -330,6 +330,37 @@ public sealed partial class ArchitectureRulesTests
     }
 
     [Test]
+    public void AppHost_ApiEndpointPorts_UseNamedConstants()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
+
+        appHost.ShouldContain("const int ApiServiceHttpsHostPort = 7584;");
+        appHost.ShouldContain("const int ApiServiceHttpHostPort = 5481;");
+        appHost.ShouldContain("endpoint.Port = ApiServiceHttpsHostPort;");
+        appHost.ShouldContain("endpoint.Port = ApiServiceHttpHostPort;");
+    }
+
+    [Test]
+    public void KeycloakConfiguration_UsesApiAndServiceClientsOnly()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var appHostSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "appsettings.json"));
+        var apiFactory = File.ReadAllText(Path.Combine(repoRoot, "tests", "CeoAgent.ApiService.Tests", "Support", "ApiFactory.cs"));
+        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
+
+        appHostSettings.ShouldContain("\"ClientId\": \"ceo-agent-api\"");
+        appHostSettings.ShouldContain("\"ServiceClientId\": \"ceo-agent-service\"");
+        appHostSettings.ShouldContain("\"AuthorizationScopes\"");
+        appHostSettings.ShouldContain("\"organization\"");
+        apiFactory.ShouldContain("builder.UseSetting(\"Keycloak:ClientId\", \"ceo-agent-api\")");
+        appHost.ShouldContain(".WithEnvironment(\"Keycloak__ServiceClientId\"");
+        appHost.ShouldContain("keycloak-service-client-secret");
+
+        FindMatchingSourceLines("ceo-agent-web").ShouldBeEmpty();
+    }
+
+    [Test]
     public void Migrations_DoNotContainSecretShapedCredentialMetadata()
     {
         var repoRoot = FindRepositoryRoot();

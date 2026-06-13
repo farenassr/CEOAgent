@@ -26,7 +26,7 @@ public sealed class JwtEndpointAccessTests
     }
 
     [Test]
-    public async Task CompanyScopedEndpoint_UsesOrganizationIdClaimAsTenantBoundary()
+    public async Task CompanyScopedEndpoint_UsesOrganizationIdClaimWithoutRouteOrganization()
     {
         await using var factory = new ApiFactory();
         var organizationId = Guid.CreateVersion7();
@@ -34,21 +34,29 @@ public sealed class JwtEndpointAccessTests
         using var organizationClient = factory.CreateAuthenticatedClient(organizationId);
         using var otherOrganizationClient = factory.CreateAuthenticatedClient(otherOrganizationId);
         organizationId = await CreateCompanyAsync(organizationClient, "Organization A");
-        otherOrganizationId = await CreateCompanyAsync(otherOrganizationClient, "Organization B");
+        _ = await CreateCompanyAsync(otherOrganizationClient, "Organization B");
 
         using var tenantAClient = factory.CreateAuthenticatedClient(organizationId);
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/admin/companies/{otherOrganizationId}/channels")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/admin/channels")
         {
             Content = JsonContent.Create(new
             {
                 provider = "whatsapp_cloud",
                 providerChannelId = "123456",
+                metadata = new
+                {
+                    whatsapp_cloud = new
+                    {
+                        business_account_id = "987654321",
+                        phone_number_id = "123456",
+                    },
+                },
             }),
         };
 
         using var response = await tenantAClient.SendAsync(request);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private static async Task<Guid> CreateCompanyAsync(HttpClient client, string name)
