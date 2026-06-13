@@ -1,5 +1,6 @@
 using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Application.Errors;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Persistence;
@@ -25,6 +26,15 @@ public sealed class ResumeConversationEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/conversations/{conversationId}/resume");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Conversations)
+            .WithSummary("Resume Conversation")
+            .WithDescription("Returns a handed-off conversation to bot control by clearing handoff state when the authenticated organization can access it. Use it after staff finishes manual handling."));
+        Summary(summary =>
+        {
+            summary.Summary = "Resume Conversation";
+            summary.Description = "Returns a handed-off conversation to bot control by clearing handoff state when the authenticated organization can access it. Use it after staff finishes manual handling.";
+        });
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)

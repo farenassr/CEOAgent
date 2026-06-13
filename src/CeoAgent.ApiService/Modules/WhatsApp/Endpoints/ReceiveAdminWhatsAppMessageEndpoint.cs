@@ -1,4 +1,5 @@
 using CeoAgent.ApiService.Infrastructure.Security;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Application.Errors;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
@@ -29,6 +30,15 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/whatsapp");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.WhatsApp)
+            .WithSummary("Receive Admin WhatsApp Message")
+            .WithDescription("Persists an inbound WhatsApp text message submitted by an admin caller and enqueues the normal worker processing flow. Use it for controlled ingestion tests and operator-driven message injection."));
+        Summary(summary =>
+        {
+            summary.Summary = "Receive Admin WhatsApp Message";
+            summary.Description = "Persists an inbound WhatsApp text message submitted by an admin caller and enqueues the normal worker processing flow. Use it for controlled ingestion tests and operator-driven message injection.";
+        });
     }
 
     public override async Task HandleAsync(ReceiveWhatsAppMessageRequest request, CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
 using CeoAgent.ApiService.Infrastructure.Security;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
 using FastEndpoints;
@@ -20,6 +21,15 @@ public sealed class RegisterIntegrationCredentialEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/integration-credentials");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.IntegrationCredentials)
+            .WithSummary("Register Integration Credential")
+            .WithDescription("Stores a provider credential reference for a company without accepting raw secret material. Use it before enabling tools that need external credentials such as Google Calendar."));
+        Summary(summary =>
+        {
+            summary.Summary = "Register Integration Credential";
+            summary.Description = "Stores a provider credential reference for a company without accepting raw secret material. Use it before enabling tools that need external credentials such as Google Calendar.";
+        });
     }
 
     public override async Task HandleAsync(IntegrationCredentialRequest request, CancellationToken cancellationToken)

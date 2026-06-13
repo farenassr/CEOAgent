@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Application.Errors;
 using CeoAgent.Shared.Request.GoogleCalendar;
 using CeoAgent.Shared.Response.GoogleCalendar;
@@ -15,6 +16,15 @@ public sealed class CreateGoogleCalendarReservationEndpoint
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/google-calendar/reservations");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.GoogleCalendar)
+            .WithSummary("Create Google Calendar Reservation")
+            .WithDescription("Documents the admin reservation route while preserving the current guardrail that blocks direct mutations. Use the audited tool execution path to create reservations."));
+        Summary(summary =>
+        {
+            summary.Summary = "Create Google Calendar Reservation";
+            summary.Description = "Documents the admin reservation route while preserving the current guardrail that blocks direct mutations. Use the audited tool execution path to create reservations.";
+        });
     }
 
     public override Task HandleAsync(

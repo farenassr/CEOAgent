@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
 using CeoAgent.ApiService.Infrastructure.Queues;
 using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
@@ -15,6 +16,15 @@ public sealed class EnqueueQueueMessageEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/queues/{queueName}/messages");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Queues)
+            .WithSummary("Replay Queue Message")
+            .WithDescription("Sends a diagnostic message to a named queue when queue writes are enabled. Use it to replay or seed queue processing flows from admin tooling."));
+        Summary(summary =>
+        {
+            summary.Summary = "Replay Queue Message";
+            summary.Description = "Sends a diagnostic message to a named queue when queue writes are enabled. Use it to replay or seed queue processing flows from admin tooling.";
+        });
     }
 
     public override async Task HandleAsync(SendQueueMessageRequest request, CancellationToken cancellationToken)

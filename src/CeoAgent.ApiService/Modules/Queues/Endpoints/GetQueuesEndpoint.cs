@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
 using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
 using FastEndpoints;
@@ -10,6 +11,15 @@ public sealed class GetQueuesEndpoint(
     public override void Configure()
     {
         Get("/v1/admin/queues");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.Queues)
+            .WithSummary("List Queues")
+            .WithDescription("Lists configured Azure Queue diagnostics with optional prefix and paging controls. Use it to inspect queue health and message counts in admin tooling."));
+        Summary(summary =>
+        {
+            summary.Summary = "List Queues";
+            summary.Description = "Lists configured Azure Queue diagnostics with optional prefix and paging controls. Use it to inspect queue health and message counts in admin tooling.";
+        });
     }
 
     public override async Task HandleAsync(CancellationToken cancellationToken)

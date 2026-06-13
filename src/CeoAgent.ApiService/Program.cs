@@ -2,6 +2,7 @@ using CeoAgent.ApiService.Dependencies;
 using CeoAgent.ApiService.Infrastructure.Organization;
 using CeoAgent.ApiService.Infrastructure.Correlation;
 using CeoAgent.ApiService.Infrastructure.ErrorHandling;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.ApiService.Infrastructure.Queues;
 using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
@@ -114,7 +115,11 @@ builder.Services.AddScoped<WhatsAppWebhookIngestionService>();
 builder.Services.AddScoped<IncomingMessageOutboxDispatcher>();
 builder.Services.AddSingleton<IWhatsAppSignatureValidator, WhatsAppSignatureValidator>();
 builder.Services.AddSingleton<WhatsAppWebhookVerificationService>();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<KeycloakOpenApiDocumentTransformer>();
+    options.AddOperationTransformer<KeycloakOpenApiOperationTransformer>();
+});
 
 var app = builder.Build();
 
@@ -142,7 +147,15 @@ app.UseAuthorization();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference("/scalar");
+    app.MapScalarApiReference("/scalar", options =>
+    {
+        options
+            .WithTitle("CeoAgent API Reference")
+            .WithTheme(ScalarTheme.Default)
+            .ForceLightMode()
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+            .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl);
+    });
 }
 
 if (app.Environment.IsEnvironment("Testing"))

@@ -1,4 +1,5 @@
 using CeoAgent.ApiService.Infrastructure.Security;
+using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure.Persistence;
 using CeoAgent.Shared.Request.Company;
 using CeoAgent.Shared.Response.Company;
@@ -20,6 +21,15 @@ public sealed class ConfigureAgentProfileEndpoint(
     public override void Configure()
     {
         Post("/v1/admin/companies/{organizationId}/agent-profile");
+        Description(builder => builder
+            .WithTags(OpenApiConstants.Tags.AgentProfile)
+            .WithSummary("Configure Agent Profile")
+            .WithDescription("Creates or updates the company agent profile used by runtime conversations. Use it to set model, display name, language, timezone, and operating policy metadata for a company."));
+        Summary(summary =>
+        {
+            summary.Summary = "Configure Agent Profile";
+            summary.Description = "Creates or updates the company agent profile used by runtime conversations. Use it to set model, display name, language, timezone, and operating policy metadata for a company.";
+        });
     }
 
     public override async Task HandleAsync(AgentProfileRequest request, CancellationToken cancellationToken)
