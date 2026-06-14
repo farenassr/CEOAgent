@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CeoAgent.ApiService.Infrastructure.ErrorHandling;
 
-public sealed class GlobalExceptionHandler(
+public sealed partial class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
     CorrelationIdAccessor correlationIdAccessor,
     ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
@@ -36,17 +36,11 @@ public sealed class GlobalExceptionHandler(
 
         if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
         {
-            logger.LogInformation(
-                "Request cancelled by client. CorrelationId: {CorrelationId}",
-                correlationIdAccessor.CorrelationId);
+            RequestCancelledByClient(logger, correlationIdAccessor.CorrelationId);
         }
         else
         {
-            logger.LogError(
-                exception,
-                "Request failed with status {StatusCode}. CorrelationId: {CorrelationId}",
-                status,
-                correlationIdAccessor.CorrelationId);
+            RequestFailed(logger, exception, status, correlationIdAccessor.CorrelationId);
         }
 
         httpContext.Response.StatusCode = status;
@@ -76,4 +70,5 @@ public sealed class GlobalExceptionHandler(
 
         return true;
     }
+
 }

@@ -29,4 +29,19 @@ public static class CeoAgentTelemetry
     {
         Meter.CreateObservableGauge("queue.backlog", () => _queueBacklog);
     }
+
+    public static class Langfuse
+    {
+        public const string ObservationType = "langfuse.observation.type";
+        public const string ObservationModelName = "langfuse.observation.model.name";
+        public const string ObservationUsageDetails = "langfuse.observation.usage_details";
+        public const string MetadataProvider = "langfuse.observation.metadata.provider";
+        public const string MetadataOrganizationId = "langfuse.observation.metadata.organization_id";
+        public const string MetadataConversationId = "langfuse.observation.metadata.conversation_id";
+        public const string MetadataChannel = "langfuse.observation.metadata.channel";
+        public const string MetadataToolKey = "langfuse.observation.metadata.tool_key";
+        public const string MetadataToolStatus = "langfuse.observation.metadata.tool_status";
+        public const string MetadataToolFailureReason = "langfuse.observation.metadata.tool_failure_reason";
+        public const string MetadataToolMutating = "langfuse.observation.metadata.tool_mutating";
+    }
 }

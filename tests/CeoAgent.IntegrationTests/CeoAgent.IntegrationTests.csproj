@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CeoAgent.Infrastructure\CeoAgent.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\CeoAgent.ServiceDefaults\CeoAgent.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>

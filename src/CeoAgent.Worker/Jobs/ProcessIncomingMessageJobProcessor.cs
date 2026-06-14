@@ -18,14 +18,14 @@ using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Shared.AITools;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
-using ZLogger;
+using System.Text.Json;
 
 namespace CeoAgent.Worker.Jobs;
 
 /// <summary>
 /// Processes an inbound message job by loading conversation context, invoking the agent, and sending the reply.
 /// </summary>
-public sealed class ProcessIncomingMessageJobProcessor(
+public sealed partial class ProcessIncomingMessageJobProcessor(
     CeoAgentDbContext dbContext,
     IMessageChannelIntegration messaging,
     IAgentRuntime agentRuntime,
@@ -71,8 +71,9 @@ public sealed class ProcessIncomingMessageJobProcessor(
                         cancellationToken);
                 }
 
-                logger.ZLogInformation(
-                    $"InboundSuppressedDuringHandoff conversation_id={context.Conversation.Id} organization_id={context.Company.Id} message_id={context.Inbound.Id}");
+                InboundSuppressedDuringHandoff(
+                    logger,
+                    context.Inbound.Id);
                 return;
             }
 
@@ -236,21 +237,9 @@ public sealed class ProcessIncomingMessageJobProcessor(
         }
         catch (DbUpdateConcurrencyException)
         {
-            logger.ZLogWarning($"ConversationConcurrencyConflict organization_id={organizationId} conversation_id={conversationId} job_id={jobId}");
+            ConversationConcurrencyConflict(logger, organizationId, conversationId, jobId);
             throw;
         }
-    }
-
-    private IDisposable? BeginJobScope(ProcessIncomingMessageJob job)
-    {
-        return logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["correlation_id"] = job.CorrelationId,
-            ["organization_id"] = job.OrganizationId,
-            ["conversation_id"] = job.ConversationId,
-            ["job_id"] = job.JobId,
-            ["trace_id"] = Activity.Current?.TraceId.ToString(),
-        });
     }
 
     private static string ReplyClientMessageId(Message inbound)
@@ -341,6 +330,12 @@ public sealed class ProcessIncomingMessageJobProcessor(
             activity?.SetTag("llm.model", context.AgentProfile.ModelName);
             activity?.SetTag("agent.iteration", iteration);
             activity?.SetTag("tool.count", context.Tools.Count);
+            activity?.SetTag(CeoAgentTelemetry.Langfuse.ObservationType, "generation");
+            activity?.SetTag(CeoAgentTelemetry.Langfuse.ObservationModelName, context.AgentProfile.ModelName);
+            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataProvider, context.AgentProfile.LlmProvider.ToString());
+            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataOrganizationId, context.Company.Id.ToString());
+            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataConversationId, context.Conversation.Id.ToString());
+            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataChannel, context.Channel.Provider.ToString());
             var stopwatch = Stopwatch.StartNew();
             try
             {
@@ -358,6 +353,7 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 activity?.SetTag("llm.response.id", agentResult.ResponseId);
                 activity?.SetTag("llm.finish_reason", agentResult.FinishReason);
                 activity?.SetTag("llm.tool_call_count", agentResult.ToolCalls.Count);
+                SetLangfuseUsageTags(activity, agentResult);
                 activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -365,9 +361,10 @@ public sealed class ProcessIncomingMessageJobProcessor(
                 stopwatch.Stop();
                 CeoAgentTelemetry.LlmCallDuration.Record(stopwatch.ElapsedMilliseconds);
                 activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-                logger.ZLogError(
+                AgentRuntimeFailed(
+                    logger,
                     exception,
-                    $"AgentRuntimeFailed conversation_id={context.Conversation.Id} organization_id={context.Company.Id} iteration={iteration}");
+                    iteration);
                 return LoopCapFallbackText;
             }
 
@@ -388,8 +385,11 @@ public sealed class ProcessIncomingMessageJobProcessor(
                     OccurredAt = timeProvider.GetUtcNow().UtcDateTime,
                 };
                 dbContext.Messages.Add(triggerMessage);
-                logger.ZLogInformation(
-                    $"ToolCallRequested tool={toolCall.Name} iteration={iteration} conversation_id={context.Conversation.Id} organization_id={context.Company.Id} side_effects_enabled={sideEffectsEnabled}");
+                ToolCallRequested(
+                    logger,
+                    toolCall.Name,
+                    iteration,
+                    sideEffectsEnabled);
 
                 messages.Add(new AgentConversationMessage(
                     "assistant",
@@ -417,10 +417,40 @@ public sealed class ProcessIncomingMessageJobProcessor(
             }
         }
 
-        logger.ZLogWarning(
-            $"AgentLoopCapReached conversation_id={context.Conversation.Id} organization_id={context.Company.Id} max_iterations={MaxToolLoopIterations}");
+        AgentLoopCapReached(
+            logger,
+            MaxToolLoopIterations);
         await EscalateToHumanAsync(context, cancellationToken);
         return LoopCapFallbackText;
+    }
+
+    private static void SetLangfuseUsageTags(Activity? activity, AgentRunResult agentResult)
+    {
+        if (activity is null)
+        {
+            return;
+        }
+
+        var usage = new Dictionary<string, int>(capacity: 3);
+        if (agentResult.InputTokenCount is { } inputTokens)
+        {
+            usage["input"] = inputTokens;
+        }
+
+        if (agentResult.OutputTokenCount is { } outputTokens)
+        {
+            usage["output"] = outputTokens;
+        }
+
+        if (agentResult.TotalTokenCount is { } totalTokens)
+        {
+            usage["total"] = totalTokens;
+        }
+
+        if (usage.Count > 0)
+        {
+            activity.SetTag(CeoAgentTelemetry.Langfuse.ObservationUsageDetails, JsonSerializer.Serialize(usage));
+        }
     }
 
     /// <summary>
@@ -440,9 +470,9 @@ public sealed class ProcessIncomingMessageJobProcessor(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.ZLogError(
-                exception,
-                $"AutoHandoffEscalationFailed conversation_id={context.Conversation.Id} organization_id={context.Company.Id}");
+            AutoHandoffEscalationFailed(
+                logger,
+                exception);
         }
     }
 

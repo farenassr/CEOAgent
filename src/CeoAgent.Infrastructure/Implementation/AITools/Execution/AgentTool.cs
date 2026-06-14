@@ -69,15 +69,12 @@ internal static class AgentToolJsonSchema
         {
             var propertyName = property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name
                 ?? JsonNamingPolicy.CamelCase.ConvertName(property.Name);
-            properties[propertyName] = PropertySchema(property.PropertyType);
 
             var state = nullability.Create(property).WriteState;
             var isNullable = Nullable.GetUnderlyingType(property.PropertyType) is not null
                 || state == NullabilityState.Nullable;
-            if (!isNullable)
-            {
-                required.Add(propertyName);
-            }
+            properties[propertyName] = PropertySchema(property.PropertyType, isNullable);
+            required.Add(propertyName);
         }
 
         return JsonSerializer.SerializeToElement(new Dictionary<string, object?>
@@ -89,34 +86,49 @@ internal static class AgentToolJsonSchema
         }, SerializerOptions);
     }
 
-    private static Dictionary<string, object?> PropertySchema(Type propertyType)
+    private static Dictionary<string, object?> PropertySchema(Type propertyType, bool isNullable)
     {
         var type = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
         if (type == typeof(int) || type == typeof(long))
         {
-            return new Dictionary<string, object?> { ["type"] = "integer" };
+            return Schema("integer", isNullable);
         }
 
         if (type == typeof(bool))
         {
-            return new Dictionary<string, object?> { ["type"] = "boolean" };
+            return Schema("boolean", isNullable);
         }
 
         if (type == typeof(DateOnly))
         {
-            return new Dictionary<string, object?> { ["type"] = "string", ["format"] = "date" };
+            return Schema("string", isNullable, "date");
         }
 
         if (type == typeof(TimeOnly))
         {
-            return new Dictionary<string, object?> { ["type"] = "string", ["format"] = "time" };
+            return Schema("string", isNullable, "time");
         }
 
         if (type == typeof(DateTimeOffset) || type == typeof(DateTime))
         {
-            return new Dictionary<string, object?> { ["type"] = "string", ["format"] = "date-time" };
+            return Schema("string", isNullable, "date-time");
         }
 
-        return new Dictionary<string, object?> { ["type"] = "string" };
+        return Schema("string", isNullable);
+    }
+
+    private static Dictionary<string, object?> Schema(string type, bool isNullable, string? format = null)
+    {
+        var schema = new Dictionary<string, object?>
+        {
+            ["type"] = isNullable ? new[] { type, "null" } : type,
+        };
+
+        if (format is not null)
+        {
+            schema["format"] = format;
+        }
+
+        return schema;
     }
 }

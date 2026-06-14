@@ -3,13 +3,10 @@ using FastEndpoints;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
-public sealed class WhatsAppWebhookVerificationEndpoint(
+public sealed partial class WhatsAppWebhookVerificationEndpoint(
     WhatsAppWebhookVerificationService verificationService,
     ILogger<WhatsAppWebhookVerificationEndpoint> logger) : EndpointWithoutRequest
 {
-    private static readonly EventId VerificationRequestedEvent = new(2201, "WhatsAppWebhookVerificationRequested");
-    private static readonly EventId VerificationRejectedEvent = new(2202, "WhatsAppWebhookVerificationRejected");
-
     public override void Configure()
     {
         Get("/v1/whatsapp/webhook");
@@ -32,9 +29,8 @@ public sealed class WhatsAppWebhookVerificationEndpoint(
         var challenge = Query<string?>("hub.challenge", isRequired: false);
         var verifiedChallenge = verificationService.Verify(mode, verifyToken, challenge);
 
-        logger.LogInformation(
-            VerificationRequestedEvent,
-            "WhatsAppWebhookVerificationRequested Mode={Mode} VerifyTokenPresent={VerifyTokenPresent} VerifyTokenLength={VerifyTokenLength} ChallengePresent={ChallengePresent} ChallengeLength={ChallengeLength}",
+        WhatsAppWebhookVerificationRequested(
+            logger,
             mode,
             !string.IsNullOrWhiteSpace(verifyToken),
             verifyToken?.Length,
@@ -43,9 +39,8 @@ public sealed class WhatsAppWebhookVerificationEndpoint(
 
         if (verifiedChallenge is null)
         {
-            logger.LogWarning(
-                VerificationRejectedEvent,
-                "WhatsAppWebhookVerificationRejected Mode={Mode} VerifyTokenPresent={VerifyTokenPresent} ChallengePresent={ChallengePresent}",
+            WhatsAppWebhookVerificationRejected(
+                logger,
                 mode,
                 !string.IsNullOrWhiteSpace(verifyToken),
                 !string.IsNullOrWhiteSpace(challenge));
@@ -57,4 +52,5 @@ public sealed class WhatsAppWebhookVerificationEndpoint(
         HttpContext.Response.ContentType = "text/plain";
         await HttpContext.Response.WriteAsync(verifiedChallenge, cancellationToken);
     }
+
 }

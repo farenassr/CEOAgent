@@ -5,15 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
-public sealed class IncomingMessageOutboxDispatcher(
+public sealed partial class IncomingMessageOutboxDispatcher(
     CeoAgentDbContext dbContext,
     IIncomingMessageJobEnqueuer incomingMessageJobEnqueuer,
     TimeProvider timeProvider,
     ILogger<IncomingMessageOutboxDispatcher> logger)
 {
-    private static readonly EventId DispatchSucceededEvent = new(2111, "IncomingMessageOutboxDispatchSucceeded");
-    private static readonly EventId DispatchFailedEvent = new(2112, "IncomingMessageOutboxDispatchFailed");
-
     public async Task<bool> DispatchAsync(Guid outboxId, CancellationToken cancellationToken)
     {
         var outbox = await dbContext.IncomingMessageOutbox
@@ -77,10 +74,9 @@ public sealed class IncomingMessageOutboxDispatcher(
             outbox.FailureReason = BoundFailureReason(exception.Message);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            logger.LogWarning(
-                DispatchFailedEvent,
+            IncomingMessageOutboxDispatchFailed(
+                logger,
                 exception,
-                "IncomingMessageOutboxDispatchFailed OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}",
                 outbox.OrganizationId,
                 outbox.ConversationId,
                 outbox.MessageId,
@@ -95,9 +91,8 @@ public sealed class IncomingMessageOutboxDispatcher(
         outbox.FailureReason = null;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation(
-            DispatchSucceededEvent,
-            "IncomingMessageOutboxDispatchSucceeded OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}",
+        IncomingMessageOutboxDispatchSucceeded(
+            logger,
             outbox.OrganizationId,
             outbox.ConversationId,
             outbox.MessageId,
@@ -111,4 +106,5 @@ public sealed class IncomingMessageOutboxDispatcher(
     {
         return message.Length <= 240 ? message : message[..240];
     }
+
 }

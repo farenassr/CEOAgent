@@ -17,6 +17,33 @@ namespace CeoAgent.Worker.Tests.Jobs;
 public sealed class CompanyToolRegistryTests
 {
     [Test]
+    public void ParametersSchema_ForNullableProperties_IsOpenAIStrictCompatible()
+    {
+        var tool = new FakeAgentTool<OptionalRequest>(
+            "optional_request_tool",
+            "Tests optional request schema.",
+            isMutating: false);
+
+        var schema = tool.ParametersSchema;
+        var properties = schema.GetProperty("properties");
+        var required = schema.GetProperty("required")
+            .EnumerateArray()
+            .Select(item => item.GetString())
+            .ToArray();
+
+        required.ShouldBe(["requiredText", "optionalText", "optionalTime"]);
+        properties.GetProperty("optionalText").GetProperty("type")
+            .EnumerateArray()
+            .Select(item => item.GetString())
+            .ShouldBe(["string", "null"]);
+        properties.GetProperty("optionalTime").GetProperty("type")
+            .EnumerateArray()
+            .Select(item => item.GetString())
+            .ShouldBe(["string", "null"]);
+        properties.GetProperty("optionalTime").GetProperty("format").GetString().ShouldBe("time");
+    }
+
+    [Test]
     public async Task GetEnabledToolsAsync_ReturnsOnlyEnabledToolsForActiveCompanyWithSchemas()
     {
         await using var fixture = await RegistryFixture.CreateAsync();
@@ -71,19 +98,19 @@ public sealed class CompanyToolRegistryTests
                 DbContext,
                 new CompositeAgentToolCatalog(
                     [
-                        new FakeAgentTool(
+                        new FakeAgentTool<FakeRequest>(
                             MvpToolKeys.CheckGoogleCalendarAvailability,
                             "Code-first check availability description.",
                             isMutating: false),
-                        new FakeAgentTool(
+                        new FakeAgentTool<FakeRequest>(
                             MvpToolKeys.FindGoogleCalendarReservations,
                             "Code-first find reservations description.",
                             isMutating: false),
-                        new FakeAgentTool(
+                        new FakeAgentTool<FakeRequest>(
                             MvpToolKeys.UpdateGoogleCalendarReservation,
                             "Code-first update reservations description.",
                             isMutating: true),
-                        new FakeAgentTool(
+                        new FakeAgentTool<FakeRequest>(
                             MvpToolKeys.CancelGoogleCalendarReservation,
                             "Code-first cancel reservations description.",
                             isMutating: true),
@@ -237,26 +264,37 @@ public sealed class CompanyToolRegistryTests
             return document.RootElement.Clone();
         }
 
-        private sealed class FakeAgentTool(
-            string toolKey,
-            string description,
-            bool isMutating) : AgentTool<FakeRequest>
+    }
+
+    private sealed class FakeAgentTool<TRequest>(
+        string toolKey,
+        string description,
+        bool isMutating) : AgentTool<TRequest>
+        where TRequest : class
+    {
+        public override string ToolKey => toolKey;
+
+        public override bool IsMutating => isMutating;
+
+        public override string Description => description;
+
+        protected override Task<ToolExecution> ExecuteToolAsync(
+            ToolExecutionContext context,
+            TRequest request,
+            CancellationToken cancellationToken)
         {
-            public override string ToolKey => toolKey;
-
-            public override bool IsMutating => isMutating;
-
-            public override string Description => description;
-
-            protected override Task<ToolExecution> ExecuteToolAsync(
-                ToolExecutionContext context,
-                FakeRequest request,
-                CancellationToken cancellationToken)
-            {
-                throw new NotSupportedException();
-            }
+            throw new NotSupportedException();
         }
+    }
 
-        private sealed class FakeRequest;
+    private sealed class FakeRequest;
+
+    private sealed class OptionalRequest
+    {
+        public required string RequiredText { get; init; }
+
+        public string? OptionalText { get; init; }
+
+        public TimeOnly? OptionalTime { get; init; }
     }
 }
