@@ -5,15 +5,12 @@ using System.Text;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
-public sealed class WhatsAppWebhookEndpoint(
+public sealed partial class WhatsAppWebhookEndpoint(
     WhatsAppWebhookIngestionService ingestionService,
     IWhatsAppSignatureValidator signatureValidator,
     IOptions<WhatsAppOptions> whatsAppOptions,
     ILogger<WhatsAppWebhookEndpoint> logger) : EndpointWithoutRequest<WhatsAppWebhookIngestionResult>
 {
-    private static readonly EventId WebhookReceivedEvent = new(2001, "WhatsAppWebhookReceived");
-    private static readonly EventId WebhookSignatureRejectedEvent = new(2002, "WhatsAppWebhookSignatureRejected");
-
     public override void Configure()
     {
         Post("/v1/whatsapp");
@@ -49,9 +46,8 @@ public sealed class WhatsAppWebhookEndpoint(
         var appSecret = whatsAppOptions.Value.AppSecret;
         var request = HttpContext.Request;
 
-        logger.LogInformation(
-            WebhookReceivedEvent,
-            "WhatsAppWebhookReceived Method={Method} Path={Path} ContentType={ContentType} ContentLength={ContentLength} SignaturePresent={SignaturePresent} SignatureLength={SignatureLength} BodyLength={BodyLength}",
+        WhatsAppWebhookReceived(
+            logger,
             request.Method,
             request.Path.Value,
             request.ContentType,
@@ -64,9 +60,8 @@ public sealed class WhatsAppWebhookEndpoint(
 
         if (!signatureValidator.IsValid(bodyBytes, signature, appSecret ?? string.Empty))
         {
-            logger.LogWarning(
-                WebhookSignatureRejectedEvent,
-                "WhatsAppWebhookSignatureRejected Path={Path} SignaturePresent={SignaturePresent} SignatureLength={SignatureLength} BodyLength={BodyLength}",
+            WhatsAppWebhookSignatureRejected(
+                logger,
                 request.Path.Value,
                 !string.IsNullOrWhiteSpace(signature),
                 signature.Length,

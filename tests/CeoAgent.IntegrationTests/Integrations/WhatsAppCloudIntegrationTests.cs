@@ -100,10 +100,11 @@ public sealed class WhatsAppCloudIntegrationTests
         client.Request.BizOpaqueCallbackData.ShouldBe("reply:1");
 
         var log = logger.Entries.Single(entry => entry.EventId.Name == "WhatsAppCloudMessageSendStarting");
-        log.Message.ShouldContain(organizationId.ToString());
-        log.Message.ShouldContain(channelId.ToString());
-        log.Message.ShouldContain("Provider=whatsapp_cloud");
+        log.EventId.Id.ShouldBe(4103);
+        log.Message.ShouldContain("IntegrationProvider=whatsapp_cloud");
         log.Message.ShouldContain("HasIdempotencyKey=True");
+        log.ScopeValues["OrganizationId"].ShouldBe(organizationId);
+        log.ScopeValues["CompanyChannelId"].ShouldBe(channelId);
         log.Message.ShouldNotContain("https://graph.facebook.com/v99.0/1152556904604978/messages");
         log.Message.ShouldNotContain("573001112233");
         log.Message.ShouldNotContain("reply:1");
@@ -160,11 +161,16 @@ public sealed class WhatsAppCloudIntegrationTests
     private sealed class RecordingLogger<T> : ILogger<T>
     {
         public List<LogEntry> Entries { get; } = [];
+        private readonly Stack<IReadOnlyDictionary<string, object?>> _scopes = [];
 
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull
         {
-            return null;
+            var values = state is IEnumerable<KeyValuePair<string, object?>> pairs
+                ? pairs.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+                : new Dictionary<string, object?>(StringComparer.Ordinal);
+            _scopes.Push(values);
+            return new Scope(() => _scopes.Pop());
         }
 
         public bool IsEnabled(LogLevel logLevel)
@@ -179,9 +185,25 @@ public sealed class WhatsAppCloudIntegrationTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            Entries.Add(new LogEntry(logLevel, eventId, formatter(state, exception)));
+            var scopeValues = _scopes
+                .Reverse()
+                .SelectMany(scope => scope)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            Entries.Add(new LogEntry(logLevel, eventId, formatter(state, exception), scopeValues));
+        }
+
+        private sealed class Scope(Action dispose) : IDisposable
+        {
+            public void Dispose()
+            {
+                dispose();
+            }
         }
     }
 
-    private sealed record LogEntry(LogLevel LogLevel, EventId EventId, string Message);
+    private sealed record LogEntry(
+        LogLevel LogLevel,
+        EventId EventId,
+        string Message,
+        IReadOnlyDictionary<string, object?> ScopeValues);
 }

@@ -19,7 +19,7 @@ namespace CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 /// <see cref="ConversationStatus.HandedOff"/>, records an idempotent <see cref="ToolExecution"/>,
 /// updates conversation state, and pushes a sanitized staff notification.
 /// </summary>
-public sealed class HumanHandoffToolExecutor(
+public sealed partial class HumanHandoffToolExecutor(
     CeoAgentDbContext dbContext,
     IMessageChannelIntegration messaging,
     TimeProvider timeProvider,
@@ -30,10 +30,6 @@ public sealed class HumanHandoffToolExecutor(
     private const string WhatsAppProvider = "whatsapp_cloud";
     private const string NotificationUnavailableReason = "notification_unavailable";
     private const string AutoEscalationReason = "agent_loop_exhausted";
-
-    private static readonly EventId HandoffEscalatedEvent = new(3101, "HumanHandoffEscalated");
-    private static readonly EventId HandoffNotificationFailedEvent = new(3102, "HumanHandoffNotificationUnavailable");
-    private static readonly EventId HandoffToolMissingEvent = new(3103, "HumanHandoffToolNotConfigured");
 
     /// <summary>
     /// Tool-driven escalation. Invoked from the agent loop through the request_human_handoff tool executor.
@@ -112,11 +108,9 @@ public sealed class HumanHandoffToolExecutor(
         // No request_human_handoff tool configured: still silence the bot (HandedOff is the single source
         // of truth) and emit an observable, sanitized signal, but skip ToolExecution persistence because it
         // requires an enabled company tool. Documented in docs/human-handoff.md.
-        logger.LogWarning(
-            HandoffToolMissingEvent,
-            "HumanHandoffToolNotConfigured OrganizationId={OrganizationId} ConversationId={ConversationId} Reason={Reason}",
-            organizationId,
-            conversationId,
+        using var logScope = BeginConversationScope(logger, organizationId, conversationId);
+        HumanHandoffToolNotConfigured(
+            logger,
             AutoEscalationReason);
 
         var conversation = await LoadConversationAsync(organizationId, conversationId, cancellationToken);
@@ -135,6 +129,7 @@ public sealed class HumanHandoffToolExecutor(
         string idempotencyKey,
         CancellationToken cancellationToken)
     {
+        using var logScope = BeginConversationScope(logger, organizationId, conversationId);
         var conversation = await LoadConversationAsync(organizationId, conversationId, cancellationToken);
         conversation.Status = ConversationStatus.HandedOff;
 
@@ -269,11 +264,8 @@ public sealed class HumanHandoffToolExecutor(
             $"Motivo: {reason}. Canal: WhatsApp. ETA: {eta}.";
 
         // Observable, sanitized push (no PII): always emitted as the MVP staff signal.
-        logger.LogInformation(
-            HandoffEscalatedEvent,
-            "HumanHandoffEscalated OrganizationId={OrganizationId} ConversationId={ConversationId} CompanyChannelId={CompanyChannelId} Provider={Provider} HandoffTicketId={HandoffTicketId} Reason={Reason} EstimatedPickupAt={EstimatedPickupAt} EscalationChannel={EscalationChannel} NotifyUserCount={NotifyUserCount}",
-            organizationId,
-            conversationId,
+        HumanHandoffEscalated(
+            logger,
             companyChannelId,
             WhatsAppProvider,
             handoffTicketId,
@@ -318,12 +310,9 @@ public sealed class HumanHandoffToolExecutor(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                logger.LogWarning(
-                    HandoffNotificationFailedEvent,
+                HumanHandoffNotificationUnavailable(
+                    logger,
                     exception,
-                    "HumanHandoffNotificationUnavailable OrganizationId={OrganizationId} ConversationId={ConversationId} HandoffTicketId={HandoffTicketId}",
-                    organizationId,
-                    conversationId,
                     handoffTicketId);
             }
         }

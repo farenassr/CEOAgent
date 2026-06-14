@@ -385,6 +385,96 @@ public sealed partial class ArchitectureRulesTests
         violations.ShouldBeEmpty();
     }
 
+    [Test]
+    public void OperationalLogs_UseSourceGeneratedLoggerMessages()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var monitoredProjects = new[]
+        {
+            "CeoAgent.ApiService",
+            "CeoAgent.Infrastructure",
+            "CeoAgent.Worker",
+        };
+        var bannedPatterns = new[]
+        {
+            ".LogInformation(",
+            ".LogWarning(",
+            ".LogError(",
+            ".ZLogInformation(",
+            ".ZLogWarning(",
+            ".ZLogError(",
+        };
+
+        var violations = monitoredProjects
+            .SelectMany(projectDirectory => EnumerateProductionFiles(repoRoot, projectDirectory, ["*.cs"]))
+            .SelectMany(filePath => File.ReadLines(filePath)
+                .Select((line, index) => new { line, index })
+                .Where(item => bannedPatterns.Any(pattern => item.line.Contains(pattern, StringComparison.Ordinal)))
+                .Select(item => $"{Path.GetRelativePath(repoRoot, filePath)}:{item.index + 1}: {item.line.Trim()}"))
+            .ToArray();
+
+        violations.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void WhatsAppLoggerMessages_LiveInModuleLoggingFolder()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var moduleRoot = Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp");
+        var loggingRoot = Path.Combine(moduleRoot, "Logging") + Path.DirectorySeparatorChar;
+        var violations = Directory.EnumerateFiles(moduleRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(filePath => !filePath.StartsWith(loggingRoot, StringComparison.Ordinal))
+            .SelectMany(filePath => File.ReadLines(filePath)
+                .Select((line, index) => new { line, index })
+                .Where(item => item.line.Contains("[LoggerMessage(", StringComparison.Ordinal))
+                .Select(item => $"{Path.GetRelativePath(repoRoot, filePath)}:{item.index + 1}: {item.line.Trim()}"))
+            .ToArray();
+
+        violations.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void OperationalLogEventIds_UseStableRanges()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var sourceText = string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Endpoints", "SendWhatsAppMessageEndpoint.cs"),
+                Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Endpoints", "WhatsAppWebhookEndpoint.cs"),
+                Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Services", "WhatsAppWebhookIngestionService.cs"),
+                Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Services", "IncomingMessageOutboxDispatcher.cs"),
+                Path.Combine(repoRoot, "src", "CeoAgent.Worker", "Jobs", "IncomingMessageQueueWorker.cs"),
+            }
+            .Concat(Directory.Exists(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Logging"))
+                ? Directory.EnumerateFiles(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Logging"), "*.cs", SearchOption.AllDirectories)
+                : [])
+            .Concat(Directory.Exists(Path.Combine(repoRoot, "src", "CeoAgent.Worker", "Jobs", "Logging"))
+                ? Directory.EnumerateFiles(Path.Combine(repoRoot, "src", "CeoAgent.Worker", "Jobs", "Logging"), "*.cs", SearchOption.AllDirectories)
+                : [])
+            .Select(File.ReadAllText));
+
+        sourceText.ShouldContain("EventId = 4101");
+        sourceText.ShouldContain("WhatsAppManualMessageSent");
+        sourceText.ShouldContain("EventId = 4102");
+        sourceText.ShouldContain("WhatsAppManualMessageSendFailed");
+        sourceText.ShouldContain("EventId = 4201");
+        sourceText.ShouldContain("WhatsAppWebhookReceived");
+        sourceText.ShouldContain("EventId = 4202");
+        sourceText.ShouldContain("WhatsAppWebhookMessagePersisted");
+        sourceText.ShouldContain("EventId = 4203");
+        sourceText.ShouldContain("WhatsAppWebhookMessageEnqueued");
+        sourceText.ShouldContain("EventId = 2101");
+        sourceText.ShouldContain("IncomingMessageOutboxDispatchSucceeded");
+        sourceText.ShouldContain("EventId = 2102");
+        sourceText.ShouldContain("IncomingMessageOutboxDispatchFailed");
+        sourceText.ShouldContain("EventId = 2201");
+        sourceText.ShouldContain("IncomingQueueMessageProcessed");
+        sourceText.ShouldContain("EventId = 2202");
+        sourceText.ShouldContain("IncomingQueueMessageFailed");
+    }
+
     private static string[] FindMatchingSourceLines(string marker)
     {
         var repoRoot = FindRepositoryRoot();

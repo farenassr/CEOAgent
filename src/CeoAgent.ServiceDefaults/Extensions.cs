@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CeoAgent.ServiceDefaults.Configuration;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using System.Text;
@@ -20,6 +21,7 @@ public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
+    private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -50,14 +52,20 @@ public static class Extensions
     public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         var serviceDefaultsOptions = ConfigureServiceDefaultsOptions(builder);
+        var useOtlpExporter = !string.IsNullOrWhiteSpace(
+            builder.Configuration[OtlpExporterEndpointConfigurationKey]);
 
         builder.Logging.AddOpenTelemetry(logging =>
         {
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
-        });
+            logging.ParseStateValues = true;
 
-        var useOtlpExporter = serviceDefaultsOptions.Otlp.IsConfigured;
+            if (useOtlpExporter)
+            {
+                logging.AddOtlpExporter();
+            }
+        });
 
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics =>
@@ -130,7 +138,7 @@ public static class Extensions
 
         tracing.AddOtlpExporter(options =>
         {
-            options.Endpoint = langfuseOptions.GetOtlpTracesEndpoint();
+            options.Endpoint = langfuseOptions.GetOtlpEndpoint();
             options.Protocol = OtlpExportProtocol.HttpProtobuf;
             options.Headers = $"Authorization=Basic {authString},x-langfuse-ingestion-version=4";
         });

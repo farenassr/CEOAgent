@@ -14,7 +14,7 @@ namespace CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
 /// <summary>
 /// Implements WhatsApp Cloud messaging operations by resolving per-channel credentials and calling the Graph API.
 /// </summary>
-public sealed class WhatsAppCloudIntegration(
+public sealed partial class WhatsAppCloudIntegration(
     IWhatsAppChannelCredentialResolver credentialResolver,
     IWhatsAppCloudClient client,
     ISecretValueProvider secrets,
@@ -23,8 +23,6 @@ public sealed class WhatsAppCloudIntegration(
 {
     private const string DefaultGraphApiBaseUrl = "https://graph.facebook.com/v25.0";
     private const string MessagingProduct = "whatsapp";
-    private static readonly EventId MessageSendStartingEvent = new(1001, "WhatsAppCloudMessageSendStarting");
-    private static readonly EventId MessageSendFailedEvent = new(1002, "WhatsAppCloudMessageSendFailed");
 
     /// <summary>
     /// Marks a provider message as read through the WhatsApp Cloud messages endpoint.
@@ -98,13 +96,14 @@ public sealed class WhatsAppCloudIntegration(
         string? idempotencyKey,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation(
-            MessageSendStartingEvent,
-            "WhatsAppCloudMessageSendStarting OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} Provider={Provider} MessageType={MessageType} Status={Status} HasIdempotencyKey={HasIdempotencyKey}",
+        using var logScope = BeginMessageSendScope(
+            logger,
             organizationId,
             companyChannelId,
             conversationId,
-            messageId,
+            messageId);
+        WhatsAppCloudMessageSendStarting(
+            logger,
             "whatsapp_cloud",
             request.Type,
             request.Status,
@@ -120,15 +119,10 @@ public sealed class WhatsAppCloudIntegration(
         }
         catch (ApiException exception)
         {
-            logger.LogWarning(
-                MessageSendFailedEvent,
+            WhatsAppCloudMessageSendFailed(
+                logger,
                 exception,
-                "WhatsAppCloudMessageSendFailed StatusCode={StatusCode} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} Provider={Provider} MessageType={MessageType} HasIdempotencyKey={HasIdempotencyKey}",
                 (int)exception.StatusCode,
-                organizationId,
-                companyChannelId,
-                conversationId,
-                messageId,
                 "whatsapp_cloud",
                 request.Type,
                 !string.IsNullOrWhiteSpace(idempotencyKey));

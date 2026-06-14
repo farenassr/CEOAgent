@@ -16,10 +16,11 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 /// <summary>
 /// Sends a manual WhatsApp text message through a registered company channel.
 /// </summary>
-public sealed class SendWhatsAppMessageEndpoint(
+public sealed partial class SendWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
     IAdminTenantGuard tenantGuard,
-    IMessageChannelIntegration messaging) : Endpoint<SendWhatsAppMessageRequest, SendWhatsAppMessageResponse>
+    IMessageChannelIntegration messaging,
+    ILogger<SendWhatsAppMessageEndpoint> logger) : Endpoint<SendWhatsAppMessageRequest, SendWhatsAppMessageResponse>
 {
     public override void Configure()
     {
@@ -60,18 +61,39 @@ public sealed class SendWhatsAppMessageEndpoint(
                 $"Provider '{channel.Provider}' is not supported for WhatsApp sends.");
         }
 
-        var sent = await messaging.SendTextAsync(
-            new ChannelTextMessage(
+        SentMessageReference sent;
+        try
+        {
+            sent = await messaging.SendTextAsync(
+                new ChannelTextMessage(
+                    organizationId,
+                    companyChannelId,
+                    Guid.Empty,
+                    Guid.CreateVersion7(),
+                    request.RecipientExternalId,
+                    request.Text,
+                    string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                        ? $"manual-whatsapp:{Guid.CreateVersion7()}"
+                        : request.IdempotencyKey),
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            WhatsAppManualMessageSendFailed(
+                logger,
+                exception,
                 organizationId,
                 companyChannelId,
-                Guid.Empty,
-                Guid.CreateVersion7(),
-                request.RecipientExternalId,
-                request.Text,
-                string.IsNullOrWhiteSpace(request.IdempotencyKey)
-                    ? $"manual-whatsapp:{Guid.CreateVersion7()}"
-                    : request.IdempotencyKey),
-            cancellationToken);
+                request.Text.Length);
+            throw;
+        }
+
+        WhatsAppManualMessageSent(
+            logger,
+            organizationId,
+            companyChannelId,
+            sent.ProviderMessageId,
+            request.Text.Length);
 
         await Send.OkAsync(
             new SendWhatsAppMessageResponse
@@ -80,6 +102,7 @@ public sealed class SendWhatsAppMessageEndpoint(
             },
             cancellationToken);
     }
+
 }
 
 public sealed class SendWhatsAppMessageValidator : Validator<SendWhatsAppMessageRequest>

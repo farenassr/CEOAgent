@@ -70,6 +70,10 @@ public sealed class WhatsAppWebhookIngestionServiceTests
             .SingleAsync(row => row.MessageId == result.MessageId.Value);
         pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.Failed);
         pendingOutbox.AttemptCount.ShouldBe(1);
+        dispatcherLogger.Entries.ShouldContain(entry =>
+            entry.EventId.Id == 2102
+            && entry.EventId.Name == "IncomingMessageOutboxDispatchFailed"
+            && entry.Message.Contains("AttemptCount=1", StringComparison.Ordinal));
 
         var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
 
@@ -78,6 +82,10 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         queue.Jobs[0].MessageId.ShouldBe(result.MessageId.Value);
         pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.Dispatched);
         pendingOutbox.AttemptCount.ShouldBe(2);
+        dispatcherLogger.Entries.ShouldContain(entry =>
+            entry.EventId.Id == 2101
+            && entry.EventId.Name == "IncomingMessageOutboxDispatchSucceeded"
+            && entry.Message.Contains("AttemptCount=2", StringComparison.Ordinal));
     }
 
     [Test]
@@ -139,6 +147,14 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         parsedLog.Message.ShouldContain("FromLength=11");
         parsedLog.Message.ShouldContain("MessageType=text");
         parsedLog.Message.ShouldContain("TextLength=4");
+        logger.Entries.ShouldContain(entry =>
+            entry.EventId.Id == 4202
+            && entry.EventId.Name == "WhatsAppWebhookMessagePersisted"
+            && entry.Message.Contains("ProviderMessageId=wamid.duplicate", StringComparison.Ordinal));
+        logger.Entries.ShouldContain(entry =>
+            entry.EventId.Id == 4203
+            && entry.EventId.Name == "WhatsAppWebhookMessageEnqueued"
+            && entry.Message.Contains("ProviderMessageId=wamid.duplicate", StringComparison.Ordinal));
     }
 
     [Test]

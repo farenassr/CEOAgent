@@ -52,6 +52,8 @@ public sealed class OtlpExporterOptions
 
 public sealed class LangfuseOptions
 {
+    private const string OtlpTracesPath = "/v1/traces";
+
     public string? Host { get; set; }
 
     public string? OtlpTracesEndpoint { get; set; }
@@ -64,14 +66,20 @@ public sealed class LangfuseOptions
         && !string.IsNullOrWhiteSpace(PublicKey)
         && !string.IsNullOrWhiteSpace(SecretKey);
 
-    public Uri GetOtlpTracesEndpoint()
+    public Uri GetOtlpEndpoint()
     {
         if (!string.IsNullOrWhiteSpace(OtlpTracesEndpoint))
         {
-            return new Uri(OtlpTracesEndpoint);
+            var endpoint = OtlpTracesEndpoint.TrimEnd('/');
+            if (endpoint.EndsWith(OtlpTracesPath, StringComparison.OrdinalIgnoreCase))
+            {
+                endpoint = endpoint[..^OtlpTracesPath.Length].TrimEnd('/');
+            }
+
+            return new Uri(endpoint);
         }
 
         var host = Host!.TrimEnd('/');
-        return new Uri($"{host}/api/public/otel/v1/traces");
+        return new Uri($"{host}/api/public/otel");
     }
 }

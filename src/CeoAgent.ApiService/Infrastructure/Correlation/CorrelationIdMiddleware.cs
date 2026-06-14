@@ -18,7 +18,7 @@ public sealed class CorrelationIdMiddleware(
 
         using (logger.BeginScope(new Dictionary<string, object>
         {
-            ["correlation_id"] = correlationId
+            ["CorrelationId"] = correlationId
         }))
         {
             try

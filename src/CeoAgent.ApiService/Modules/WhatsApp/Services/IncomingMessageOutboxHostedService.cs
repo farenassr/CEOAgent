@@ -1,6 +1,6 @@
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
-public sealed class IncomingMessageOutboxHostedService(
+public sealed partial class IncomingMessageOutboxHostedService(
     IServiceScopeFactory scopeFactory,
     ILogger<IncomingMessageOutboxHostedService> logger) : BackgroundService
 {
@@ -36,7 +36,8 @@ public sealed class IncomingMessageOutboxHostedService(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning(exception, "IncomingMessageOutboxHostedDispatchFailed");
+            IncomingMessageOutboxHostedDispatchFailed(logger, exception);
         }
     }
+
 }

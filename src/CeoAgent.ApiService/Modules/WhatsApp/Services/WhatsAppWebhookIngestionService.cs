@@ -13,19 +13,12 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 /// <summary>
 /// Parses WhatsApp webhook payloads, persists idempotent inbound messages, and enqueues background processing jobs.
 /// </summary>
-public sealed class WhatsAppWebhookIngestionService(
+public sealed partial class WhatsAppWebhookIngestionService(
     CeoAgentDbContext dbContext,
     IncomingMessageOutboxDispatcher incomingMessageOutboxDispatcher,
     TimeProvider timeProvider,
     ILogger<WhatsAppWebhookIngestionService> logger)
 {
-    private static readonly EventId WebhookIngestionStartedEvent = new(2101, "WhatsAppWebhookIngestionStarted");
-    private static readonly EventId WebhookMessageNotFoundEvent = new(2102, "WhatsAppWebhookMessageNotFound");
-    private static readonly EventId WebhookMessageParsedEvent = new(2103, "WhatsAppWebhookMessageParsed");
-    private static readonly EventId WebhookChannelResolvedEvent = new(2104, "WhatsAppWebhookChannelResolved");
-    private static readonly EventId WebhookDuplicateMessageEvent = new(2105, "WhatsAppWebhookDuplicateMessage");
-    private static readonly EventId WebhookMessageEnqueuedEvent = new(2106, "WhatsAppWebhookMessageEnqueued");
-
     /// <summary>
     /// Resolves the target channel and conversation, stores the incoming WhatsApp message once, and queues agent processing.
     /// </summary>
@@ -34,9 +27,8 @@ public sealed class WhatsAppWebhookIngestionService(
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation(
-            WebhookIngestionStartedEvent,
-            "WhatsAppWebhookIngestionStarted CorrelationId={CorrelationId} BodyLength={BodyLength}",
+        WhatsAppWebhookIngestionStarted(
+            logger,
             correlationId,
             requestBody.Length);
 
@@ -47,9 +39,8 @@ public sealed class WhatsAppWebhookIngestionService(
         }
         catch (JsonException)
         {
-            logger.LogInformation(
-                WebhookMessageNotFoundEvent,
-                "WhatsAppWebhookInvalidJson CorrelationId={CorrelationId} BodyLength={BodyLength}",
+            WhatsAppWebhookInvalidJson(
+                logger,
                 correlationId,
                 requestBody.Length);
 
@@ -61,9 +52,8 @@ public sealed class WhatsAppWebhookIngestionService(
             var messages = Parse(document.RootElement);
             if (messages.Count == 0)
             {
-                logger.LogInformation(
-                    WebhookMessageNotFoundEvent,
-                    "WhatsAppWebhookMessageNotFound CorrelationId={CorrelationId} BodyLength={BodyLength}",
+                WhatsAppWebhookMessageNotFound(
+                    logger,
                     correlationId,
                     requestBody.Length);
 
@@ -90,10 +80,8 @@ public sealed class WhatsAppWebhookIngestionService(
         string? correlationId,
         CancellationToken cancellationToken)
     {
-
-        logger.LogInformation(
-            WebhookMessageParsedEvent,
-            "WhatsAppWebhookMessageParsed CorrelationId={CorrelationId} PhoneNumberId={PhoneNumberId} ProviderMessageId={ProviderMessageId} FromLength={FromLength} HasContactName={HasContactName} MessageType={MessageType} TextLength={TextLength} OccurredAtUtc={OccurredAtUtc}",
+        WhatsAppWebhookMessageParsed(
+            logger,
             correlationId,
             message.PhoneNumberId,
             message.ProviderMessageId,
@@ -113,8 +101,8 @@ public sealed class WhatsAppWebhookIngestionService(
                 cancellationToken);
         if (channel is null)
         {
-            logger.LogInformation(
-                "WhatsAppWebhookUnknownChannel CorrelationId={CorrelationId} PhoneNumberId={PhoneNumberId} ProviderMessageId={ProviderMessageId}",
+            WhatsAppWebhookUnknownChannel(
+                logger,
                 correlationId,
                 message.PhoneNumberId,
                 message.ProviderMessageId);
@@ -122,14 +110,12 @@ public sealed class WhatsAppWebhookIngestionService(
             return EmptyResult();
         }
 
-        logger.LogInformation(
-            WebhookChannelResolvedEvent,
-            "WhatsAppWebhookChannelResolved CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} PhoneNumberId={PhoneNumberId} BusinessAccountId={BusinessAccountId}",
+        WhatsAppWebhookChannelResolved(
+            logger,
             correlationId,
             channel.OrganizationId,
             channel.Id,
-            message.PhoneNumberId,
-            null);
+            message.PhoneNumberId);
 
         var existingMessage = await dbContext.Messages
             .IgnoreQueryFilters()
@@ -140,9 +126,8 @@ public sealed class WhatsAppWebhookIngestionService(
 
         if (existingMessage is not null)
         {
-            logger.LogInformation(
-                WebhookDuplicateMessageEvent,
-                "WhatsAppWebhookDuplicateMessage CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ProviderMessageId={ProviderMessageId}",
+            WhatsAppWebhookDuplicateMessage(
+                logger,
                 correlationId,
                 channel.OrganizationId,
                 channel.Id,
@@ -183,9 +168,8 @@ public sealed class WhatsAppWebhookIngestionService(
                 throw;
             }
 
-            logger.LogInformation(
-                WebhookDuplicateMessageEvent,
-                "WhatsAppWebhookDuplicateMessage CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ProviderMessageId={ProviderMessageId}",
+            WhatsAppWebhookDuplicateMessage(
+                logger,
                 correlationId,
                 channel.OrganizationId,
                 channel.Id,
@@ -200,13 +184,23 @@ public sealed class WhatsAppWebhookIngestionService(
                 cancellationToken);
         }
 
+        WhatsAppWebhookMessagePersisted(
+            logger,
+            correlationId,
+            channel.OrganizationId,
+            channel.Id,
+            conversation.Id,
+            inbound.Id,
+            outbox.Id,
+            message.ProviderMessageId,
+            message.Text?.Length ?? 0);
+
         var dispatched = await incomingMessageOutboxDispatcher.DispatchAsync(outbox.Id, cancellationToken);
 
         if (dispatched)
         {
-            logger.LogInformation(
-                WebhookMessageEnqueuedEvent,
-                "WhatsAppWebhookMessageEnqueued CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} ProviderMessageId={ProviderMessageId} QueueCorrelationId={QueueCorrelationId}",
+            WhatsAppWebhookMessageEnqueued(
+                logger,
                 correlationId,
                 channel.OrganizationId,
                 channel.Id,
@@ -243,8 +237,8 @@ public sealed class WhatsAppWebhookIngestionService(
 
         if (!hasReply)
         {
-            logger.LogInformation(
-                "Re-enqueueing unprocessed duplicate webhook message. OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} Reason={Reason}",
+            WhatsAppWebhookDuplicateMessageRecoveryRequested(
+                logger,
                 organizationId,
                 conversationId,
                 messageId,

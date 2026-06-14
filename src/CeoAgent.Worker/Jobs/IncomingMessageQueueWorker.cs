@@ -1,18 +1,17 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Azure.Storage.Queues;
 using CeoAgent.Application;
 using CeoAgent.Application.Abstractions.Jobs;
 using CeoAgent.Shared.Jobs;
 using Microsoft.Extensions.Options;
-using System.Diagnostics;
-using ZLogger;
 
 namespace CeoAgent.Worker.Jobs;
 
 /// <summary>
 /// Polls the incoming message queue, dispatches jobs to the processor, and moves exhausted messages to poison storage.
 /// </summary>
-public sealed class IncomingMessageQueueWorker(
+public sealed partial class IncomingMessageQueueWorker(
     QueueServiceClient queues,
     IServiceScopeFactory scopeFactory,
     IOptions<IncomingQueueOptions> options,
@@ -41,7 +40,7 @@ public sealed class IncomingMessageQueueWorker(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to retrieve queue properties for backlog telemetry.");
+                IncomingQueueBacklogTelemetryFailed(logger, ex);
             }
 
             Azure.Response<Azure.Storage.Queues.Models.QueueMessage[]> messages;
@@ -55,7 +54,7 @@ public sealed class IncomingMessageQueueWorker(
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                logger.LogWarning(ex, "Failed to receive messages from the incoming message queue.");
+                IncomingQueueReceiveFailed(logger, ex);
                 await Task.Delay(
                     TimeSpan.FromMilliseconds(Math.Max(100, settings.EmptyQueueDelayMilliseconds)),
                     stoppingToken);
@@ -114,18 +113,33 @@ public sealed class IncomingMessageQueueWorker(
             var processor = scope.ServiceProvider.GetRequiredService<ProcessIncomingMessageJobProcessor>();
             await processor.ProcessAsync(job, stoppingToken);
             await queue.DeleteMessageAsync(message.MessageId, popReceipt, stoppingToken);
+            IncomingQueueMessageProcessed(
+                logger,
+                message.MessageId,
+                message.DequeueCount,
+                stopwatch.ElapsedMilliseconds,
+                "Processed");
         }
         catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
         {
-            logger.ZLogError(
+            IncomingQueueMessageFailed(
+                logger,
                 exception,
-                $"IncomingMessageJobFailed message_id={message.MessageId} dequeue_count={message.DequeueCount} organization_id={job?.OrganizationId} conversation_id={job?.ConversationId} job_id={job?.JobId} correlation_id={job?.CorrelationId} trace_id={Activity.Current?.TraceId}");
+                message.MessageId,
+                message.DequeueCount,
+                stopwatch.ElapsedMilliseconds,
+                "Failed");
 
             if (message.DequeueCount >= ProcessIncomingMessageJobRetryPolicy.MaxAttempts)
             {
                 CeoAgentTelemetry.QueuePoisonCount.Add(1);
                 await poisonQueue.SendMessageAsync(message.MessageText, stoppingToken);
                 await queue.DeleteMessageAsync(message.MessageId, popReceipt, stoppingToken);
+                IncomingQueueMessagePoisoned(
+                    logger,
+                    message.MessageId,
+                    message.DequeueCount,
+                    "Poisoned");
             }
         }
         finally
@@ -169,22 +183,9 @@ public sealed class IncomingMessageQueueWorker(
             }
             catch (Exception exception)
             {
-                logger.ZLogWarning(
-                    exception,
-                    $"IncomingMessageVisibilityRenewalFailed message_id={messageId}");
+                IncomingMessageVisibilityRenewalFailed(logger, exception, messageId);
             }
         }
     }
 
-    private IDisposable? BeginJobScope(ProcessIncomingMessageJob job)
-    {
-        return logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["correlation_id"] = job.CorrelationId,
-            ["organization_id"] = job.OrganizationId,
-            ["conversation_id"] = job.ConversationId,
-            ["job_id"] = job.JobId,
-            ["trace_id"] = Activity.Current?.TraceId.ToString(),
-        });
-    }
 }
