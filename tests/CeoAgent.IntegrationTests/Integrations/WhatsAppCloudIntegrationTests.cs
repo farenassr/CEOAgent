@@ -6,6 +6,7 @@ using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Shared.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Refit;
 using Shouldly;
 
 namespace CeoAgent.IntegrationTests.Integrations;
@@ -115,6 +116,62 @@ public sealed class WhatsAppCloudIntegrationTests
         log.Message.ShouldNotContain("Bearer token-from-key-vault");
     }
 
+    [Test]
+    public async Task SendImageAsync_UploadsPrivateImageAndSendsMediaIdMessage()
+    {
+        var organizationId = Guid.CreateVersion7();
+        var channelId = Guid.CreateVersion7();
+        const string credentialReference = "kv://whatsapp/contoso/access-token";
+        var client = new RecordingWhatsAppCloudRefitClient
+        {
+            UploadedMediaId = "media-123",
+        };
+        var resolver = new FakeWhatsAppCredentialResolver
+        {
+            Credential = new WhatsAppChannelCredentialReference(
+                "1152556904604978",
+                "840790722416204",
+                credentialReference),
+        };
+        var secrets = new FakeSecretValueProvider
+        {
+            [credentialReference] = "token-from-key-vault",
+        };
+        var configuration = new ConfigurationBuilder().Build();
+        var logger = new RecordingLogger<WhatsAppCloudIntegration>();
+        var integration = new WhatsAppCloudIntegration(
+            resolver,
+            client,
+            secrets,
+            configuration,
+            logger);
+
+        await integration.SendImageAsync(
+            new ChannelImageMessage(
+                organizationId,
+                channelId,
+                Guid.CreateVersion7(),
+                Guid.CreateVersion7(),
+                "573001112233",
+                [1, 2, 3, 4],
+                "image/png",
+                "qr.png",
+                "Datos de pago",
+                "payment:tool-execution-id"),
+            CancellationToken.None);
+
+        client.UploadedFileName.ShouldBe("qr.png");
+        client.UploadedContentType.ShouldBe("image/png");
+        client.UploadedMessagingProduct.ShouldBe("whatsapp");
+        client.Request.ShouldNotBeNull();
+        client.Request.Type.ShouldBe("image");
+        client.Request.Image.ShouldNotBeNull();
+        client.Request.Image.Id.ShouldBe("media-123");
+        client.Request.Image.Link.ShouldBeNull();
+        client.Request.Image.Caption.ShouldBe("Datos de pago");
+        client.Request.BizOpaqueCallbackData.ShouldBe("payment:tool-execution-id");
+    }
+
     private sealed class FakeWhatsAppCredentialResolver : IWhatsAppChannelCredentialResolver
     {
         public WhatsAppChannelCredentialReference? Credential { get; set; }
@@ -135,6 +192,14 @@ public sealed class WhatsAppCloudIntegrationTests
 
         public WhatsAppSendMessageRequest? Request { get; private set; }
 
+        public string UploadedMediaId { get; init; } = "media-default";
+
+        public string? UploadedMessagingProduct { get; private set; }
+
+        public string? UploadedContentType { get; private set; }
+
+        public string? UploadedFileName { get; private set; }
+
         public Task<WhatsAppSendMessageResponse> SendMessageAsync(
             string phoneNumberId,
             string authorization,
@@ -146,6 +211,21 @@ public sealed class WhatsAppCloudIntegrationTests
             Request = request;
             return Task.FromResult(new WhatsAppSendMessageResponse(
                 [new WhatsAppSentMessage("wamid.sent")]));
+        }
+
+        public Task<WhatsAppUploadMediaResponse> UploadMediaAsync(
+            string phoneNumberId,
+            string authorization,
+            string messagingProduct,
+            StreamPart file,
+            CancellationToken cancellationToken)
+        {
+            PhoneNumberId = phoneNumberId;
+            Authorization = authorization;
+            UploadedMessagingProduct = messagingProduct;
+            UploadedContentType = file.ContentType;
+            UploadedFileName = file.FileName;
+            return Task.FromResult(new WhatsAppUploadMediaResponse(UploadedMediaId));
         }
 
     }

@@ -24,6 +24,22 @@ connection strings supplied by Aspire references.
 - Database rows store credential references such as `kv://...`, never raw
   secret values.
 
+## Blob Storage Conventions
+
+- Runtime connection strings stay environmental and are supplied by Aspire or
+  deployment configuration.
+- Provider-neutral blob DTOs and value objects live in `CeoAgent.Shared`.
+- Blob upload ports live in `CeoAgent.Application.Abstractions.Storage`; Azure
+  implementations live in Infrastructure.
+- Canonical blob tag keys and values stay in code because they are part of the
+  storage contract, not environment-specific configuration.
+- Payment account QR images are uploaded from multipart form files. The API
+  accepts PNG/JPEG only, stores them in the `private` container, and persists
+  both the blob name and the full storage URI.
+- Payment QR blob names use `filename-guid.extension`, where `filename` is a
+  slug derived from the uploaded file name and the GUID is the payment account
+  id.
+
 ## Harness Checks
 
 - Use `AIHarness/scripts/aspire-smoke.ps1 -StartAppHost` for an opt-in local health

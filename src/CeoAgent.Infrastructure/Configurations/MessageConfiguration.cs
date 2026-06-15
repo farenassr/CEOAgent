@@ -19,6 +19,11 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             payload.ToJson("payload_json");
             payload.Property(entity => entity.ProviderType).HasJsonPropertyName("providerType");
             payload.Property(entity => entity.ProviderMessageId).HasJsonPropertyName("providerMessageId");
+            payload.Property(entity => entity.ProviderMediaId).HasJsonPropertyName("providerMediaId");
+            payload.Property(entity => entity.MimeType).HasJsonPropertyName("mimeType");
+            payload.Property(entity => entity.Sha256).HasJsonPropertyName("sha256");
+            payload.Property(entity => entity.BlobContainer).HasJsonPropertyName("blobContainer");
+            payload.Property(entity => entity.BlobName).HasJsonPropertyName("blobName");
         });
         builder.HasIndex(entity => new { entity.OrganizationId, entity.ProviderMessageId }).IsUnique()
             .HasFilter("provider_message_id IS NOT NULL");

@@ -408,13 +408,21 @@ public sealed partial class WhatsAppWebhookIngestionService(
             OrganizationId = organizationId,
             ConversationId = conversationId,
             Role = MessageRole.User,
-            Type = message.Type == "audio" ? MessageType.Audio : MessageType.Text,
+            Type = message.Type switch
+            {
+                "audio" => MessageType.Audio,
+                "image" => MessageType.Image,
+                _ => MessageType.Text,
+            },
             MessageText = message.Text,
             ProviderMessageId = message.ProviderMessageId,
             Payload = new MessagePayload
             {
                 ProviderType = message.Type,
                 ProviderMessageId = message.ProviderMessageId,
+                ProviderMediaId = message.MediaId,
+                MimeType = message.MimeType,
+                Sha256 = message.Sha256,
             },
             OccurredAt = message.OccurredAtUtc,
         };
@@ -468,6 +476,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
                         && textElement.TryGetProperty("body", out var textBody)
                         ? textBody.GetString()
                         : null;
+                    var media = ParseMedia(message, type);
                     parsed.Add(new ParsedWhatsAppMessage(
                         phoneNumberId.GetString() ?? string.Empty,
                         id.GetString() ?? string.Empty,
@@ -475,6 +484,9 @@ public sealed partial class WhatsAppWebhookIngestionService(
                         ContactName(value),
                         type,
                         text,
+                        media.MediaId,
+                        media.MimeType,
+                        media.Sha256,
                         OccurredAt(message)));
                 }
             }
@@ -507,6 +519,21 @@ public sealed partial class WhatsAppWebhookIngestionService(
         return DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime;
     }
 
+    private static ParsedMedia ParseMedia(JsonElement message, string type)
+    {
+        if (type is not ("image" or "audio")
+            || !message.TryGetProperty(type, out var media)
+            || media.ValueKind != JsonValueKind.Object)
+        {
+            return new ParsedMedia(null, null, null);
+        }
+
+        return new ParsedMedia(
+            media.TryGetProperty("id", out var id) ? id.GetString() : null,
+            media.TryGetProperty("mime_type", out var mimeType) ? mimeType.GetString() : null,
+            media.TryGetProperty("sha256", out var sha256) ? sha256.GetString() : null);
+    }
+
     private sealed record ParsedWhatsAppMessage(
         string PhoneNumberId,
         string ProviderMessageId,
@@ -514,7 +541,12 @@ public sealed partial class WhatsAppWebhookIngestionService(
         string? ContactName,
         string Type,
         string? Text,
+        string? MediaId,
+        string? MimeType,
+        string? Sha256,
         DateTime OccurredAtUtc);
+
+    private sealed record ParsedMedia(string? MediaId, string? MimeType, string? Sha256);
 
     private sealed record WebhookChannelContext(Guid Id, Guid OrganizationId);
 

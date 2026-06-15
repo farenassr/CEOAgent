@@ -85,6 +85,77 @@ public sealed partial class WhatsAppCloudIntegration(
         return ToSentMessageReference(response);
     }
 
+    /// <summary>
+    /// Sends a private image by uploading media to WhatsApp Cloud and sending the returned media id.
+    /// </summary>
+    public async Task<SentMessageReference> SendImageAsync(
+        ChannelImageMessage message,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var credential = await LoadCredentialAsync(message.CompanyChannelId, cancellationToken);
+        var mediaId = await UploadMediaAsync(credential, message, cancellationToken);
+        var response = await SendMessageAsync(
+            credential: credential,
+            new WhatsAppSendMessageRequest(
+                MessagingProduct: MessagingProduct,
+                RecipientType: "individual",
+                To: message.RecipientExternalId,
+                Type: "image",
+                Text: null,
+                Status: null,
+                MessageId: null,
+                BizOpaqueCallbackData: message.IdempotencyKey,
+                Image: new WhatsAppImageBody(
+                    Id: mediaId,
+                    Link: null,
+                    Caption: message.Caption)),
+            organizationId: message.OrganizationId,
+            companyChannelId: message.CompanyChannelId,
+            conversationId: message.ConversationId,
+            messageId: message.MessageId,
+            recipientExternalId: message.RecipientExternalId,
+            idempotencyKey: message.IdempotencyKey,
+            cancellationToken: cancellationToken);
+
+        return ToSentMessageReference(response);
+    }
+
+    private async Task<string> UploadMediaAsync(
+        WhatsAppCredential credential,
+        ChannelImageMessage message,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = new MemoryStream(message.Content);
+        try
+        {
+            var response = await client.UploadMediaAsync(
+                credential.PhoneNumberId,
+                credential.Authorization,
+                MessagingProduct,
+                new StreamPart(stream, message.FileName, message.ContentType),
+                cancellationToken);
+            return response.Id;
+        }
+        catch (ApiException exception)
+        {
+            WhatsAppCloudMessageSendFailed(
+                logger,
+                exception,
+                (int)exception.StatusCode,
+                "whatsapp_cloud",
+                "image_upload",
+                !string.IsNullOrWhiteSpace(message.IdempotencyKey));
+
+            throw new IntegrationException(
+                "whatsapp_cloud",
+                MapWhatsAppFailureReason(exception.StatusCode),
+                "WhatsApp Cloud media upload failed.",
+                exception);
+        }
+    }
+
     private async Task<WhatsAppSendMessageResponse> SendMessageAsync(
         WhatsAppCredential credential,
         WhatsAppSendMessageRequest request,

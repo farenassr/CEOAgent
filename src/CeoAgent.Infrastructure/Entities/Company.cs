@@ -59,4 +59,9 @@ public sealed class Company
     /// External integration credential references owned by this company. Example: google_calendar primary credential.
     /// </summary>
     public ICollection<IntegrationCredentialReference> IntegrationCredentials { get; } = [];
+
+    /// <summary>
+    /// Payment accounts configured for reservation payment instructions.
+    /// </summary>
+    public ICollection<CompanyPaymentAccount> PaymentAccounts { get; } = [];
 }

@@ -1,6 +1,8 @@
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Shared.Enums;
+using CeoAgent.Shared.Payment;
+using CeoAgent.Shared.Storage;
 using CeoAgent.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -146,6 +148,72 @@ public sealed class RelationalConstraintTests
             CreateToolExecution(organizationId, conversation.Id, seed.ToolId, triggerMessage.Id, "same-key"));
 
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
+    }
+
+    /// <summary>
+    /// Verifies that one company can have only one active default payment account per currency.
+    /// </summary>
+    [Test]
+    public async Task SaveChanges_WhenTwoActiveDefaultPaymentAccountsExistForSameOrganizationCurrency_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        await database.SeedCompanyGraphAsync(organizationId);
+        var bank = CreateBank();
+        database.Context.Banks.Add(bank);
+        await database.Context.SaveChangesAsync();
+
+        database.Context.CompanyPaymentAccounts.AddRange(
+            CreatePaymentAccount(organizationId, bank.Id, "001", isDefault: true, isActive: true),
+            CreatePaymentAccount(organizationId, bank.Id, "002", isDefault: true, isActive: true));
+
+        await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
+    }
+
+    [Test]
+    public async Task SaveChanges_WhenDefaultPaymentAccountsUseDifferentCurrencies_AllowsBoth()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        await database.SeedCompanyGraphAsync(organizationId);
+        var bank = CreateBank();
+        database.Context.Banks.Add(bank);
+        await database.Context.SaveChangesAsync();
+
+        database.Context.CompanyPaymentAccounts.AddRange(
+            CreatePaymentAccount(organizationId, bank.Id, "001", "COP", isDefault: true, isActive: true),
+            CreatePaymentAccount(organizationId, bank.Id, "002", "USD", isDefault: true, isActive: true));
+
+        await database.Context.SaveChangesAsync();
+
+        var count = await database.Context.CompanyPaymentAccounts.IgnoreQueryFilters().CountAsync();
+        count.ShouldBe(2);
+    }
+
+    [Test]
+    public async Task OrganizationQueryFilter_ForCompanyPaymentAccounts_ReturnsOnlyCurrentOrganizationRows()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        var otherOrganizationId = Guid.CreateVersion7();
+        await database.SeedCompanyGraphAsync(organizationId);
+        await database.SeedCompanyGraphAsync(otherOrganizationId);
+        var bank = CreateBank();
+        database.Context.Banks.Add(bank);
+        await database.Context.SaveChangesAsync();
+
+        database.Context.CompanyPaymentAccounts.AddRange(
+            CreatePaymentAccount(organizationId, bank.Id, "001"),
+            CreatePaymentAccount(otherOrganizationId, bank.Id, "999"));
+        await database.Context.SaveChangesAsync();
+        database.Context.ChangeTracker.Clear();
+
+        database.OrganizationContext.SetOrganization(organizationId);
+        var accounts = await database.Context.CompanyPaymentAccounts
+            .Select(account => account.AccountNumber)
+            .ToListAsync();
+
+        accounts.ShouldBe(["001"]);
     }
 
     [Test]
@@ -295,6 +363,44 @@ public sealed class RelationalConstraintTests
             IdempotencyKey = idempotencyKey,
             Status = ToolExecutionStatus.Pending
         };
+    }
+
+    private static Bank CreateBank()
+    {
+        return new Bank
+        {
+            Name = "Banco Uno",
+            CountryCode = "CO",
+            IsActive = true,
+        };
+    }
+
+    private static CompanyPaymentAccount CreatePaymentAccount(
+        Guid organizationId,
+        Guid bankId,
+        string accountNumber,
+        string currency = "COP",
+        bool isDefault = false,
+        bool isActive = true)
+    {
+        var account = new CompanyPaymentAccount
+        {
+            OrganizationId = organizationId,
+            BankId = bankId,
+            AccountNumber = accountNumber,
+            AccountType = PaymentAccountType.Ahorros,
+            AccountHolderName = "Contoso Bistro",
+            Currency = currency,
+            ReservationPaymentAmount = 50000m,
+            QrBlobContainer = string.Empty,
+            QrBlobName = string.Empty,
+            IsDefault = isDefault,
+            IsActive = isActive,
+        };
+        var qrReference = BlobStorageNaming.ForPaymentQr("qr.png", account.Id);
+        account.QrBlobContainer = qrReference.ContainerName;
+        account.QrBlobName = qrReference.BlobName;
+        return account;
     }
 
 }
