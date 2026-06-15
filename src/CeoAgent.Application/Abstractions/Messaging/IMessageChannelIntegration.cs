@@ -11,4 +11,8 @@ public interface IMessageChannelIntegration
     Task<SentMessageReference> SendTextAsync(
         ChannelTextMessage message,
         CancellationToken cancellationToken);
+
+    Task<SentMessageReference> SendImageAsync(
+        ChannelImageMessage message,
+        CancellationToken cancellationToken);
 }

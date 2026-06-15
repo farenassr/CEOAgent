@@ -32,6 +32,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     CompanyToolRegistry toolRegistry,
     ToolExecutionGateway toolGateway,
     HumanHandoffToolExecutor handoffExecutor,
+    ReservationPaymentInstructionSender paymentInstructionSender,
     IOrganizationContextAccessor companyContextAccessor,
     TimeProvider timeProvider,
     ILogger<ProcessIncomingMessageJobProcessor> logger)
@@ -87,10 +88,24 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             {
                 if (!string.IsNullOrEmpty(existingReply.Payload?.ProviderMessageId))
                 {
+                    await paymentInstructionSender.SendForSuccessfulReservationsAsync(
+                        context.Company.Id,
+                        context.Conversation.Id,
+                        context.Inbound.Id,
+                        context.Channel.Id,
+                        context.Customer.ExternalCustomerId,
+                        cancellationToken);
                     return;
                 }
 
                 await SendExistingReplyAsync(context, existingReply, replyClientMessageId, cancellationToken);
+                await paymentInstructionSender.SendForSuccessfulReservationsAsync(
+                    context.Company.Id,
+                    context.Conversation.Id,
+                    context.Inbound.Id,
+                    context.Channel.Id,
+                    context.Customer.ExternalCustomerId,
+                    cancellationToken);
                 return;
             }
 
@@ -103,6 +118,19 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                         WhatsAppProvider,
                         context.Inbound.ProviderMessageId!),
                     cancellationToken);
+            }
+
+            if (await paymentInstructionSender.TryHandlePaymentReceiptAsync(
+                context.Company.Id,
+                context.Conversation.Id,
+                context.Inbound.Id,
+                context.Channel.Id,
+                context.Customer.ExternalCustomerId,
+                context.Inbound.Type,
+                context.Inbound.MessageText,
+                cancellationToken))
+            {
+                return;
             }
 
             if (context.Inbound.Type != MessageType.Text)
@@ -149,6 +177,13 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
 
             MarkAssistantSent(assistant, sent);
             await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
+            await paymentInstructionSender.SendForSuccessfulReservationsAsync(
+                context.Company.Id,
+                context.Conversation.Id,
+                context.Inbound.Id,
+                context.Channel.Id,
+                context.Customer.ExternalCustomerId,
+                cancellationToken);
         }
         finally
         {

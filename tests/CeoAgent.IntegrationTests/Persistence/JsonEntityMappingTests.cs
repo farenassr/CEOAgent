@@ -109,6 +109,40 @@ public sealed class JsonEntityMappingTests
     }
 
     [Test]
+    public void PaymentModel_MapsBankCatalogAndCompanyPaymentAccounts()
+    {
+        using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(
+            "Host=localhost;Database=CeoAgent_model_test;Username=postgres;Password=postgres",
+            new OrganizationContextAccessor());
+        var model = dbContext.GetService<IDesignTimeModel>().Model;
+
+        var bankType = model.FindEntityType(typeof(Bank));
+        bankType.ShouldNotBeNull();
+        bankType.GetTableName().ShouldBe("bank");
+        bankType.FindProperty(nameof(Bank.Name)).ShouldNotBeNull();
+        bankType.FindProperty(nameof(Bank.CountryCode)).ShouldNotBeNull();
+        bankType.GetDeclaredQueryFilters().ShouldBeEmpty("Bank is a global catalog and must not be organization-filtered.");
+
+        var paymentAccountType = model.FindEntityType(typeof(CompanyPaymentAccount));
+        paymentAccountType.ShouldNotBeNull();
+        paymentAccountType.GetTableName().ShouldBe("company_payment_account");
+        paymentAccountType.FindProperty(nameof(CompanyPaymentAccount.QrBlobContainer)).ShouldNotBeNull();
+        paymentAccountType.FindProperty(nameof(CompanyPaymentAccount.QrBlobName)).ShouldNotBeNull();
+        paymentAccountType.FindProperty(nameof(CompanyPaymentAccount.QrBlobUri)).ShouldNotBeNull();
+        paymentAccountType.FindProperty("QrUrl").ShouldBeNull("Payment accounts must store private blob references, not public URLs.");
+        paymentAccountType.GetDeclaredQueryFilters().ShouldNotBeEmpty("Company payment accounts must be organization-filtered.");
+
+        var defaultIndex = paymentAccountType.GetIndexes().SingleOrDefault(index =>
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(CompanyPaymentAccount.OrganizationId),
+                nameof(CompanyPaymentAccount.Currency),
+            ]));
+        defaultIndex.ShouldNotBeNull();
+        defaultIndex.IsUnique.ShouldBeTrue();
+        defaultIndex.GetFilter().ShouldBe("is_default AND is_active");
+    }
+
+    [Test]
     public void Model_AddsCompanyCreatedAtDescendingIndexToAuditableOrganizationOwnedTables()
     {
         using var dbContext = CeoAgentDbContextTestFactory.CreatePostgres(

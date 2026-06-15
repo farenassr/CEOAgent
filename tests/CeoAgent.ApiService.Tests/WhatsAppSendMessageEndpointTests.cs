@@ -149,6 +149,11 @@ public sealed class WhatsAppSendMessageEndpointTests
             TextMessages.Add(message);
             return Task.FromResult(new SentMessageReference($"wamid.sent-{TextMessages.Count}"));
         }
+
+        public Task<SentMessageReference> SendImageAsync(ChannelImageMessage message, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class SendWhatsAppMessageResponse

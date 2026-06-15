@@ -15,6 +15,10 @@ public sealed class CeoAgentDbContext(
 
     public DbSet<Company> Companies => Set<Company>();
 
+    public DbSet<Bank> Banks => Set<Bank>();
+
+    public DbSet<CompanyPaymentAccount> CompanyPaymentAccounts => Set<CompanyPaymentAccount>();
+
     public DbSet<CompanyChannel> CompanyChannels => Set<CompanyChannel>();
 
     public DbSet<AgentProfile> AgentProfiles => Set<AgentProfile>();
@@ -249,6 +253,17 @@ public sealed class CeoAgentDbContext(
                 if (entry.State == EntityState.Added)
                 {
                     company.CreatedAt = now;
+                }
+            }
+
+            if (entry.Entity is Bank bank
+                && entry.State is EntityState.Added or EntityState.Modified)
+            {
+                bank.UpdatedAt = now;
+
+                if (entry.State == EntityState.Added)
+                {
+                    bank.CreatedAt = now;
                 }
             }
         }

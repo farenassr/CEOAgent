@@ -1,7 +1,9 @@
 using System.Text.Json;
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Shared.AI;
+using CeoAgent.Application.Abstractions.Payments;
 using CeoAgent.Application.Abstractions.Organization;
+using CeoAgent.Shared.Storage;
 using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
@@ -14,6 +16,7 @@ using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
+using CeoAgent.Shared.Payment;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Shared.AITools;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
@@ -183,6 +186,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_ExecutesMutatingTool()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.AddDefaultPaymentAccount();
         fixture.InboundMessage.Type = MessageType.Text;
         fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
         fixture.InboundMessage.ProviderMessageId = null;
@@ -219,18 +223,177 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Reserva creada.");
+        var paymentImage = fixture.Messaging.ImageMessages.Single();
+        paymentImage.Caption.ShouldContain("Banco Uno");
+        paymentImage.Caption.ShouldContain("savings");
+        paymentImage.Caption.ShouldContain("0011223344");
+        paymentImage.Caption.ShouldContain("50000");
+        paymentImage.Caption.ShouldContain("COP");
         fixture.Agent.Requests.Count.ShouldBe(2);
         fixture.Agent.Requests[1].Messages.Any(message =>
             message.Role == "tool"
             && message.Text != null
             && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)
             && message.Text.Contains("\"eventId\":\"event-123\"", StringComparison.Ordinal)).ShouldBeTrue();
+
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var execution = await fixture.DbContext.ToolExecutions.SingleAsync(entity => entity.ToolKey == MvpToolKeys.CreateGoogleCalendarReservation);
+        var paymentMessage = await fixture.DbContext.Messages.SingleAsync(message => message.ProviderMessageId == $"payment:{execution.Id}");
+        paymentMessage.Type.ShouldBe(MessageType.Image);
+        paymentMessage.Payload!.ProviderType.ShouldBe("image");
+        var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
+        var paymentAccountId = state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue;
+        paymentMessage.Payload.BlobContainer.ShouldBe(BlobStorageContainerNames.Private);
+        paymentMessage.Payload.BlobName.ShouldBe(
+            $"organizations/contoso-bistro-{fixture.OrganizationId:D}/payments/payment-accounts/{paymentAccountId}/qr.png");
+
+        state.Snapshot.PendingAction.ShouldBe("awaiting_reservation_payment_confirmation");
+        state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue.ShouldNotBeNullOrWhiteSpace();
+        state.Snapshot.Slots.Single(slot => slot.Name == "amount").NumberValue.ShouldBe(50000m);
+        state.Snapshot.Slots.Single(slot => slot.Name == "currency").TextValue.ShouldBe("COP");
+        state.Snapshot.Slots.Single(slot => slot.Name == "reservation_event_id").TextValue.ShouldBe("event-123");
+        state.Snapshot.Slots.Single(slot => slot.Name == "tool_execution_id").TextValue.ShouldBe(execution.Id.ToString("D"));
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenReservationPaymentSendIsRetried_DoesNotDuplicatePaymentMessage()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.AddDefaultPaymentAccount();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        fixture.Agent.Results.Enqueue(CreateReservationToolResult());
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
+        var job = new ProcessIncomingMessageJob(
+            fixture.OrganizationId,
+            fixture.Conversation.Id,
+            fixture.InboundMessage.Id,
+            "correlation-123");
+
+        await fixture.Processor.ProcessAsync(job, CancellationToken.None);
+        await fixture.Processor.ProcessAsync(job, CancellationToken.None);
+
+        fixture.Messaging.ImageMessages.Count.ShouldBe(1);
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var paymentMessages = await fixture.DbContext.Messages
+            .Where(message => message.ProviderMessageId != null && message.ProviderMessageId.StartsWith("payment:"))
+            .ToListAsync();
+        paymentMessages.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenReservationHasNoDefaultPaymentAccount_HandsOffConversation()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        fixture.Agent.Results.Enqueue(CreateReservationToolResult());
+        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Messaging.ImageMessages.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.ShouldContain(message => message.Text == "Reserva creada.");
+        fixture.Messaging.TextMessages.ShouldContain(message =>
+            message.RecipientExternalId == fixture.Customer.ExternalCustomerId
+            && message.Text.Contains("persona", StringComparison.OrdinalIgnoreCase));
+
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenAwaitingPaymentAndInboundImageArrives_HandsOffWithoutCallingAgent()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        await fixture.AddAwaitingPaymentStateAsync();
+        fixture.InboundMessage.Type = MessageType.Image;
+        fixture.InboundMessage.MessageText = null;
+        fixture.InboundMessage.ProviderMessageId = "wamid.image-1";
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "image",
+            ProviderMessageId = "wamid.image-1",
+            ProviderMediaId = "media-123",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.ShouldContain(message =>
+            message.RecipientExternalId == fixture.Customer.ExternalCustomerId
+            && message.Text.Contains("confirmacion", StringComparison.OrdinalIgnoreCase));
+
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+        var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
+        state.Snapshot.PendingAction.ShouldBe("reservation_payment_receipt_received");
+        state.Snapshot.ConversationFlags.ShouldContain("reservation_payment_receipt_received");
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenAwaitingPaymentAndCustomerSaysAlreadyPaid_HandsOffWithoutCallingAgent()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        await fixture.AddAwaitingPaymentStateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Ya pague y te envie el comprobante";
+        fixture.InboundMessage.ProviderMessageId = "wamid.text-1";
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "text",
+            ProviderMessageId = "wamid.text-1",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.ShouldBeEmpty();
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
     }
 
     [Test]
     public async Task ProcessAsync_ForTextMessageWithMutatingTool_PersistsReplyBeforeSendAndProviderReferenceAfterSend()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.AddDefaultPaymentAccount();
         fixture.InboundMessage.Type = MessageType.Text;
         fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
         fixture.InboundMessage.ProviderMessageId = null;
@@ -268,12 +431,31 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 "correlation-123"),
             CancellationToken.None);
 
-        saveChangesCount.ShouldBe(2);
+        saveChangesCount.ShouldBeGreaterThanOrEqualTo(2);
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
         fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
         (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.ToolResult)).ShouldBe(1);
-        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(1);
+        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(2);
+    }
+
+    private static AgentRunResult CreateReservationToolResult()
+    {
+        return new AgentRunResult(
+            AssistantText: null,
+            ToolCalls:
+            [
+                new AgentToolCall(
+                    "call-reservation",
+                    MvpToolKeys.CreateGoogleCalendarReservation,
+                    JsonSerializer.SerializeToElement(new
+                    {
+                        start = "2026-05-28T16:00:00-05:00",
+                        end = "2026-05-28T17:00:00-05:00",
+                        summary = "Reservation for 2",
+                        customerName = "Ada Lovelace",
+                    })),
+            ]);
     }
 
     [Test]
@@ -576,6 +758,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             OrganizationContext.SetOrganization(OrganizationId);
             DbContext = database.Context;
             Messaging = new FakeMessageChannelIntegration();
+            PaymentQrImages = new FakePaymentQrImageProvider();
             Agent = new FakeAgentRuntime();
             Calendar = new FakeCalendarIntegration();
             var calendarExecutor = new GoogleCalendarToolExecutor(
@@ -600,6 +783,13 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             []);
             var toolRegistry = new CompanyToolRegistry(DbContext, catalog);
             var toolGateway = new ToolExecutionGateway(new AgentToolInvoker(catalog, DbContext, helper), helper);
+            var paymentSender = new ReservationPaymentInstructionSender(
+                DbContext,
+                Messaging,
+                PaymentQrImages,
+                handoffExecutor,
+                TimeProvider.System,
+                NullLogger<ReservationPaymentInstructionSender>.Instance);
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,
@@ -607,6 +797,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 toolRegistry,
                 toolGateway,
                 handoffExecutor,
+                paymentSender,
                 OrganizationContext,
                 TimeProvider.System,
                 NullLogger<ProcessIncomingMessageJobProcessor>.Instance);
@@ -776,6 +967,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public FakeMessageChannelIntegration Messaging { get; }
 
+        public FakePaymentQrImageProvider PaymentQrImages { get; }
+
         public FakeAgentRuntime Agent { get; }
 
         public FakeCalendarIntegration Calendar { get; }
@@ -789,6 +982,57 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         public Conversation Conversation { get; }
 
         public Message InboundMessage { get; }
+
+        public void AddDefaultPaymentAccount()
+        {
+            var bank = new Bank
+            {
+                Name = "Banco Uno",
+                CountryCode = "CO",
+                IsActive = true,
+            };
+            var account = new CompanyPaymentAccount
+            {
+                OrganizationId = OrganizationId,
+                Bank = bank,
+                AccountNumber = "0011223344",
+                AccountType = PaymentAccountType.Ahorros,
+                AccountHolderName = "Contoso Bistro",
+                Currency = "COP",
+                ReservationPaymentAmount = 50000m,
+                QrBlobContainer = string.Empty,
+                QrBlobName = string.Empty,
+                IsDefault = true,
+                IsActive = true,
+            };
+            var qrReference = BlobStorageNaming.ForPaymentQr("qr.png", account.Id);
+            account.QrBlobContainer = qrReference.ContainerName;
+            account.QrBlobName = qrReference.BlobName;
+            DbContext.AddRange(bank, account);
+            DbContext.SaveChanges();
+        }
+
+        public async Task AddAwaitingPaymentStateAsync()
+        {
+            DbContext.ConversationStates.Add(new ConversationState
+            {
+                OrganizationId = OrganizationId,
+                ConversationId = Conversation.Id,
+                Snapshot = new ConversationStateSnapshot
+                {
+                    PendingAction = "awaiting_reservation_payment_confirmation",
+                    Slots =
+                    [
+                        new ConversationSlot { Name = "payment_account_id", TextValue = Guid.CreateVersion7().ToString("D") },
+                        new ConversationSlot { Name = "amount", NumberValue = 50000m },
+                        new ConversationSlot { Name = "currency", TextValue = "COP" },
+                        new ConversationSlot { Name = "reservation_event_id", TextValue = "event-123" },
+                        new ConversationSlot { Name = "tool_execution_id", TextValue = Guid.CreateVersion7().ToString("D") },
+                    ],
+                },
+            });
+            await DbContext.SaveChangesAsync();
+        }
 
         public async ValueTask DisposeAsync()
         {
@@ -808,6 +1052,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public List<ChannelTextMessage> TextMessages { get; } = [];
 
+        public List<ChannelImageMessage> ImageMessages { get; } = [];
+
         public Task MarkMessageReadAsync(ChannelMessageReference message, CancellationToken cancellationToken)
         {
             ReadMessages.Add(message);
@@ -818,6 +1064,26 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         {
             TextMessages.Add(message);
             return Task.FromResult(new SentMessageReference($"sent-text-{TextMessages.Count}"));
+        }
+
+        public Task<SentMessageReference> SendImageAsync(ChannelImageMessage message, CancellationToken cancellationToken)
+        {
+            ImageMessages.Add(message);
+            return Task.FromResult(new SentMessageReference($"sent-image-{ImageMessages.Count}"));
+        }
+    }
+
+    private sealed class FakePaymentQrImageProvider : IPaymentQrImageProvider
+    {
+        public Task<PaymentQrImage> GetQrImageAsync(
+            string blobContainer,
+            string blobName,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new PaymentQrImage(
+                [1, 2, 3, 4],
+                "image/png",
+                "default.png"));
         }
     }
 

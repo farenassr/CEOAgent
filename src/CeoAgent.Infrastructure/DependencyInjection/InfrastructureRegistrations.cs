@@ -3,6 +3,9 @@ using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Application.Abstractions.AITools.GoogleCalendar;
 using CeoAgent.Application.Abstractions.OpenAI;
+using CeoAgent.Application.Abstractions.Payments;
+using CeoAgent.Application.Abstractions.Storage;
+using Azure.Storage.Blobs;
 using CeoAgent.Infrastructure.ApiClient.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.Organization;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
@@ -11,6 +14,8 @@ using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
 using CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.OpenAI;
+using CeoAgent.Infrastructure.Implementation.Messaging.Payments;
+using CeoAgent.Infrastructure.Implementation.Messaging.Storage;
 using CeoAgent.Application.Abstractions.Secrets;
 using CeoAgent.Infrastructure.Implementation.Secrets;
 using CeoAgent.Infrastructure.Persistence;
@@ -86,6 +91,12 @@ public static class InfrastructureRegistrations
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
         services.AddOpenAIImplementation();
         services.AddGoogleCalendarImplementation();
+        services.AddScoped<IBlobStorageService>(provider =>
+            provider.GetService<BlobServiceClient>() is { } blobServiceClient
+                ? new AzureBlobStorageService(blobServiceClient)
+                : new UnavailableBlobStorageService());
+        services.AddScoped<IStoredFileReader, BlobStoredFileReader>();
+        services.AddScoped<IPaymentQrImageProvider, BlobPaymentQrImageProvider>();
         services.AddScoped<IMessageChannelIntegration>(provider =>
         {
             var integration = provider.GetRequiredService<WhatsAppCloudIntegration>();

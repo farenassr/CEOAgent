@@ -165,6 +165,36 @@ public sealed class RuntimeShellTests
             $"AllowAnonymous endpoints should not require security, but found {anonymousSecurity}.");
     }
 
+    [Test]
+    public async Task OpenApiDocument_PaymentAccountMultipartForm_OnlyQrImageIsBinaryAndAccountTypeIsEnum()
+    {
+        await using var factory = new ApiFactory("Development");
+        using var client = factory.CreateClient();
+
+        using var document = await GetOpenApiDocumentAsync(client);
+
+        var operation = GetOperation(document, "/v1/admin/payment-accounts", "post");
+        var properties = GetMultipartFormProperties(document, operation);
+        properties.TryGetProperty("qrImage", out var qrImage).ShouldBeTrue();
+        qrImage.GetProperty("type").GetString().ShouldBe("string");
+        qrImage.GetProperty("format").GetString().ShouldBe("binary");
+
+        var binaryProperties = properties
+            .EnumerateObject()
+            .Where(property => property.Value.TryGetProperty("format", out var format)
+                && string.Equals(format.GetString(), "binary", StringComparison.Ordinal))
+            .Select(property => property.Name)
+            .ToArray();
+        binaryProperties.ShouldBe(["qrImage"]);
+
+        properties.TryGetProperty("accountType", out var accountType).ShouldBeTrue();
+        accountType.GetProperty("type").GetString().ShouldBe("string");
+        accountType.GetProperty("enum")
+            .EnumerateArray()
+            .Select(value => value.GetString())
+            .ShouldBe(["Ahorros", "Corriente"]);
+    }
+
     /// <summary>
     /// Verifies that business rule exceptions are returned as problem details with trace and correlation metadata.
     /// </summary>
@@ -259,6 +289,33 @@ public sealed class RuntimeShellTests
         return security
             .EnumerateArray()
             .Any(requirement => requirement.TryGetProperty(schemeName, out _));
+    }
+
+    private static JsonElement GetMultipartFormProperties(JsonDocument document, JsonElement operation)
+    {
+        var schema = operation
+            .GetProperty("requestBody")
+            .GetProperty("content")
+            .GetProperty("multipart/form-data")
+            .GetProperty("schema");
+        return ResolveSchema(document, schema).GetProperty("properties");
+    }
+
+    private static JsonElement ResolveSchema(JsonDocument document, JsonElement schema)
+    {
+        if (!schema.TryGetProperty("$ref", out var schemaReference))
+        {
+            return schema;
+        }
+
+        var reference = schemaReference.GetString();
+        reference.ShouldNotBeNull();
+        var parts = reference.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        parts.ShouldBe(["#", "components", "schemas", parts[^1]]);
+        return document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty(parts[^1]);
     }
 
 }

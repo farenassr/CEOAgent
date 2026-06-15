@@ -11,4 +11,12 @@ public interface IWhatsAppCloudClient
         [Body] WhatsAppSendMessageRequest request,
         CancellationToken cancellationToken);
 
+    [Multipart]
+    [Post("/{phoneNumberId}/media")]
+    Task<WhatsAppUploadMediaResponse> UploadMediaAsync(
+        string phoneNumberId,
+        [Header("Authorization")] string authorization,
+        [AliasAs("messaging_product")] string messagingProduct,
+        [AliasAs("file")] StreamPart file,
+        CancellationToken cancellationToken);
 }

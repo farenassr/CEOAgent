@@ -13,6 +13,7 @@ La regla central es simple: casi todo lo que pertenece a una compañia lleva `Or
 | Area                         | Tablas                                                                                            | Proposito                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 🏢 Configuracion de compañia | `company`, `company_channel`, `agent_profile`, `company_tool`, `integration_credential_reference` | Define quien es la compañia, por donde habla, como se comporta su agente, que herramientas tiene y que credenciales externas usa. |
+| Pagos                       | `bank`, `company_payment_account`                                                                | Registra bancos soportados y cuentas de pago por compania, incluido el QR de pago almacenado en Blob Storage.                    |
 | 👤 Conversaciones            | `customer`, `conversation`, `conversation_state`, `message`                                       | Guarda identidades de clientes, conversaciones abiertas/cerradas, estado temporal y mensajes de texto/audio.                      |
 | 🛠️ Ejecucion de herramientas | `tool_execution`                                                                                  | Audita cada accion solicitada por el agente y su resultado.                                                                       |
 
@@ -66,6 +67,8 @@ Algunos enums se exponen o persisten con nombres externos `snake_case`, no con e
 | `IntegrationProvider` | `GoogleCalendar` | `google_calendar` |
 
 `IntegrationCredentialReference.Provider` usa `IntegrationProvider` en C# y se guarda en PostgreSQL con el nombre externo.
+
+`CompanyPaymentAccount.AccountType` usa `PaymentAccountType` en C# y se guarda como string en PostgreSQL. Los valores validos actuales son `Ahorros` y `Corriente`; la base tiene un check constraint para rechazar valores fuera de ese catalogo.
 
 ### Tipos JSON
 
@@ -196,6 +199,7 @@ Representa una compañia que usa la plataforma. La organizacion de Keycloak es e
 - Una `company` tiene un `agent_profile`.
 - Una `company` tiene muchos `company_tool`.
 - Una `company` tiene muchas credenciales externas.
+- Una `company` tiene muchas `company_payment_account`.
 - Una `company` posee clientes, conversaciones, mensajes, audios y ejecuciones de herramientas.
 
 ### Ejemplo mental
@@ -335,6 +339,79 @@ El sistema necesita integrarse con servicios externos, pero la base de datos no 
 
 ---
 
+## `bank`
+
+Representa un banco soportado por la plataforma para cuentas de pago. Es catalogo global, no organization-owned: una misma fila de banco puede ser usada por varias companias.
+
+### Para que sirve
+
+`bank` normaliza el banco seleccionado por el administrador cuando crea una cuenta de pago. El endpoint de cuentas solo acepta bancos activos.
+
+### Propiedades
+
+| Propiedad | Tipo | Explicacion | Ejemplo |
+| --------- | ---- | ----------- | ------- |
+| `Id` | `Guid` | Identificador unico del banco. | `019ec9d8-3b63-77e4-ba0b-8976d38ca56e` |
+| `Name` | `string` | Nombre visible del banco. | `Bancolombia` |
+| `CountryCode` | `string` | Codigo ISO 3166-1 alpha-2 del pais. | `CO` |
+| `IsActive` | `bool` | Indica si el banco puede usarse al crear o actualizar cuentas de pago. | `true` |
+| `CreatedAt` | `DateTime` | Fecha UTC de creacion. | `2026-06-15T12:53:21Z` |
+| `UpdatedAt` | `DateTime` | Fecha UTC de ultima actualizacion. | `2026-06-15T12:53:21Z` |
+
+### Reglas importantes
+
+- `CountryCode + Name` es unico.
+- Solo bancos activos pueden ser referenciados por `company_payment_account` desde los endpoints admin.
+
+---
+
+## `company_payment_account`
+
+Representa una cuenta bancaria de una compania para recibir pagos de reservas. Incluye el monto de pago requerido y la referencia al QR de pago guardado en Blob Storage.
+
+### Para que sirve
+
+`company_payment_account` permite que una compania configure una o varias cuentas de pago por moneda. El backend controla el QR: los endpoints admin reciben un archivo `qrImage` por `multipart/form-data`, lo suben al contenedor privado y persisten la referencia resultante. El cliente no envia `QrBlobContainer` ni `QrBlobName`.
+
+### Propiedades
+
+| Propiedad | Tipo | Explicacion | Ejemplo |
+| --------- | ---- | ----------- | ------- |
+| `Id` | `Guid` | Identificador unico de la cuenta de pago. Tambien se usa como sufijo estable del nombre del archivo QR. | `019ecb57-fe7e-7b8c-bdaf-bb701812ff2b` |
+| `OrganizationId` | `Guid` | Compania propietaria de la cuenta. | `b36cfb51-83bd-4376-b7d7-0502141ff6ae` |
+| `BankId` | `Guid` | FK al banco activo usado por la cuenta. | `019ec9d8-3b63-77e4-ba0b-8976d38ca56e` |
+| `AccountNumber` | `string` | Numero o identificador de la cuenta bancaria. | `123456789` |
+| `AccountType` | `PaymentAccountType` | Tipo de cuenta bancaria. Se persiste como string. | `Ahorros` |
+| `AccountHolderName` | `string?` | Nombre del titular de la cuenta. | `Contoso Bistro SAS` |
+| `Currency` | `string` | Codigo ISO 4217 normalizado a mayusculas. | `COP` |
+| `ReservationPaymentAmount` | `decimal(18,2)` | Monto que se solicita pagar para confirmar una reserva. | `50000.00` |
+| `QrBlobContainer` | `string` | Contenedor donde vive el QR. Para este flujo es `private`. | `private` |
+| `QrBlobName` | `string` | Nombre del blob dentro del contenedor. Usa `filename-guid.extension`. | `codex-updated-qr-019ecb57-fe7e-7b8c-bdaf-bb701812ff2b.jpg` |
+| `QrBlobUri` | `string?` | URI completo devuelto por Azure Blob Storage/Azurite al subir el archivo. | `http://127.0.0.1:10000/devstoreaccount1/private/codex-updated-qr-019ecb57-fe7e-7b8c-bdaf-bb701812ff2b.jpg` |
+| `IsDefault` | `bool` | Indica si es la cuenta predeterminada para esa organizacion y moneda. | `true` |
+| `IsActive` | `bool` | Indica si la cuenta puede usarse. Desactivar una cuenta limpia `IsDefault`. | `true` |
+| `CreatedAt` | `DateTime` | Fecha UTC de creacion. | `2026-06-15T12:53:22Z` |
+| `UpdatedAt` | `DateTime` | Fecha UTC de ultima actualizacion. | `2026-06-15T12:53:22Z` |
+
+### Valores de `PaymentAccountType`
+
+| Valor | Uso |
+| ----- | --- |
+| `Ahorros` | Cuenta de ahorros. |
+| `Corriente` | Cuenta corriente. |
+
+### Reglas importantes
+
+- `AccountType` se valida como enum y la base mantiene el check constraint `account_type IN ('Ahorros', 'Corriente')`.
+- Solo puede existir una cuenta predeterminada activa por `OrganizationId + Currency`.
+- Una cuenta marcada como predeterminada debe estar activa.
+- Al desactivar una cuenta se limpia `IsDefault`; reactivarla no la vuelve predeterminada automaticamente.
+- El QR de `POST /v1/admin/payment-accounts` es obligatorio y debe ser PNG o JPEG en el campo multipart `qrImage`.
+- El QR de `PUT /v1/admin/payment-accounts/{paymentAccountId}` es opcional; si se envia, reemplaza `QrBlobName` y `QrBlobUri`.
+- El nombre del blob se deriva del archivo subido como `filename-guid.extension`, con el nombre normalizado a slug y el `Id` de la cuenta como GUID.
+- Los tags canonicos de Blob Storage para QR de pago incluyen `organization_id`, `visibility=private`, `category=payment_qr`, `status=active`, `content_kind=image`, `payment_account_id` y `retention=permanent`.
+
+---
 ## 👤 `customer`
 
 Representa a una persona externa hablando con una compañia por un canal.
@@ -524,6 +601,16 @@ URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 
 ---
 
+# Flujo De Pagos Admin
+
+1. Un administrador autenticado consulta bancos activos con `GET /v1/admin/banks`.
+2. Crea o actualiza una cuenta con `POST /v1/admin/payment-accounts` o `PUT /v1/admin/payment-accounts/{paymentAccountId}` usando `multipart/form-data`.
+3. Los campos de negocio viajan como form fields y el QR viaja como archivo `qrImage`.
+4. El API valida banco activo, tipo de cuenta, moneda, monto, estado default/active y tipo de archivo PNG/JPEG.
+5. El API genera la referencia del blob como `filename-guid.extension`, sube el archivo al contenedor `private` y guarda `QrBlobName` y `QrBlobUri`.
+6. Si la cuenta queda default y activa, el API limpia otras cuentas default activas de la misma organizacion y moneda.
+
+---
 # Flujo De Datos Ejemplo 🌊
 
 1. Llega un webhook de WhatsApp Cloud.
@@ -546,6 +633,9 @@ URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 | `agent_profile`                    | Unico por `OrganizationId`                                                                         | Cada compañia tiene un solo perfil activo de agente.                  |
 | `company_tool`                     | Unico por `OrganizationId + ToolKey`                                                               | Evita duplicar la misma herramienta para una compañia.                |
 | `integration_credential_reference` | Unico por `OrganizationId + Provider + Purpose`                                                    | Evita multiples credenciales conflictivas para el mismo uso.          |
+| `bank`                             | Unico por `CountryCode + Name`                                                                 | Evita duplicar bancos dentro del mismo pais.                          |
+| `company_payment_account`          | Unico por `OrganizationId + Currency` cuando `IsDefault` e `IsActive` son true                 | Garantiza una sola cuenta predeterminada activa por moneda.            |
+| `company_payment_account`          | Check `account_type IN ('Ahorros', 'Corriente')`                                             | Mantiene el enum de tipo de cuenta alineado con la base.               |
 | `customer`                         | Unico por `CompanyChannelId + ExternalCustomerId`                                            | Evita duplicar clientes dentro del mismo canal concreto.              |
 | `conversation`                     | Unico por `OrganizationId + CustomerId + CompanyChannelId` cuando `Status = Open`                 | Evita dos conversaciones abiertas para el mismo cliente en el mismo canal. |
 | `conversation_state`               | Unico por `ConversationId`                                                                    | Una conversacion tiene un unico estado temporal activo.               |
@@ -564,6 +654,8 @@ Cada tabla operativa usa `OrganizationId`, persistido como `organization_id`. Es
 ## Secretos fuera de la base
 
 La base guarda referencias como `kv://...`, no secretos. Esto reduce el impacto de una exposicion de datos y mantiene separadas configuracion y credenciales sensibles.
+
+Los QR de pago son archivos en Blob Storage. La base guarda `QrBlobName` y el URI completo devuelto por storage, no el contenido binario del archivo.
 
 ## Historial crudo, no resumen
 

@@ -119,6 +119,7 @@ builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<KeycloakOpenApiDocumentTransformer>();
     options.AddOperationTransformer<KeycloakOpenApiOperationTransformer>();
+    options.AddOperationTransformer<PaymentAccountMultipartOpenApiOperationTransformer>();
 });
 
 var app = builder.Build();

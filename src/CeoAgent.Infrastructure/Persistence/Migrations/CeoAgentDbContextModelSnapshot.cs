@@ -86,6 +86,50 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.ToTable("agent_profile", "public");
                 });
 
+            modelBuilder.Entity("CeoAgent.Infrastructure.Entities.Bank", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)")
+                        .HasColumnName("country_code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_bank");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_bank_is_active");
+
+                    b.HasIndex("CountryCode", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_bank_country_code_name");
+
+                    b.ToTable("bank", "public");
+                });
+
             modelBuilder.Entity("CeoAgent.Infrastructure.Entities.Company", b =>
                 {
                     b.Property<Guid>("Id")
@@ -364,6 +408,109 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_company_channel_provider_provider_channel_id");
 
                     b.ToTable("company_channel", "public");
+                });
+
+            modelBuilder.Entity("CeoAgent.Infrastructure.Entities.CompanyPaymentAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AccountHolderName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("account_holder_name");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("account_number");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("account_type");
+
+                    b.Property<Guid>("BankId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("bank_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("QrBlobContainer")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("qr_blob_container");
+
+                    b.Property<string>("QrBlobName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("qr_blob_name");
+
+                    b.Property<string>("QrBlobUri")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("qr_blob_uri");
+
+                    b.Property<decimal>("ReservationPaymentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("reservation_payment_amount");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_company_payment_account");
+
+                    b.HasIndex("BankId")
+                        .HasDatabaseName("ix_company_payment_account_bank_id");
+
+                    b.HasIndex("OrganizationId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_company_payment_account_organization_id_created_at");
+
+                    b.HasIndex("OrganizationId", "Currency")
+                        .IsUnique()
+                        .HasDatabaseName("ix_company_payment_account_organization_id_currency")
+                        .HasFilter("is_default AND is_active");
+
+                    b.ToTable("company_payment_account", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_company_payment_account_account_type", "account_type IN ('Ahorros', 'Corriente')");
+                        });
                 });
 
             modelBuilder.Entity("CeoAgent.Infrastructure.Entities.CompanyTool", b =>
@@ -932,11 +1079,26 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Payload", "CeoAgent.Infrastructure.Entities.Message.Payload#MessagePayload", b1 =>
                         {
+                            b1.Property<string>("BlobContainer")
+                                .HasJsonPropertyName("blobContainer");
+
+                            b1.Property<string>("BlobName")
+                                .HasJsonPropertyName("blobName");
+
+                            b1.Property<string>("MimeType")
+                                .HasJsonPropertyName("mimeType");
+
+                            b1.Property<string>("ProviderMediaId")
+                                .HasJsonPropertyName("providerMediaId");
+
                             b1.Property<string>("ProviderMessageId")
                                 .HasJsonPropertyName("providerMessageId");
 
                             b1.Property<string>("ProviderType")
                                 .HasJsonPropertyName("providerType");
+
+                            b1.Property<string>("Sha256")
+                                .HasJsonPropertyName("sha256");
 
                             b1
                                 .ToJson("payload_json")
@@ -1308,6 +1470,27 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Navigation("CredentialReference");
                 });
 
+            modelBuilder.Entity("CeoAgent.Infrastructure.Entities.CompanyPaymentAccount", b =>
+                {
+                    b.HasOne("CeoAgent.Infrastructure.Entities.Bank", "Bank")
+                        .WithMany("PaymentAccounts")
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_company_payment_account_bank_bank_id");
+
+                    b.HasOne("CeoAgent.Infrastructure.Entities.Company", "Company")
+                        .WithMany("PaymentAccounts")
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_company_payment_account_company_organization_id");
+
+                    b.Navigation("Bank");
+
+                    b.Navigation("Company");
+                });
+
             modelBuilder.Entity("CeoAgent.Infrastructure.Entities.CompanyTool", b =>
                 {
                     b.HasOne("CeoAgent.Infrastructure.Entities.IntegrationCredentialReference", "CredentialReference")
@@ -1470,6 +1653,11 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Navigation("Conversations");
                 });
 
+            modelBuilder.Entity("CeoAgent.Infrastructure.Entities.Bank", b =>
+                {
+                    b.Navigation("PaymentAccounts");
+                });
+
             modelBuilder.Entity("CeoAgent.Infrastructure.Entities.Company", b =>
                 {
                     b.Navigation("AgentProfile");
@@ -1477,6 +1665,8 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                     b.Navigation("Channels");
 
                     b.Navigation("IntegrationCredentials");
+
+                    b.Navigation("PaymentAccounts");
 
                     b.Navigation("Tools");
                 });

@@ -10,11 +10,20 @@ public sealed record WhatsAppSendMessageRequest(
     [property: JsonPropertyName("text")] WhatsAppTextBody? Text,
     [property: JsonPropertyName("status")] string? Status,
     [property: JsonPropertyName("message_id")] string? MessageId,
-    [property: JsonPropertyName("biz_opaque_callback_data")] string? BizOpaqueCallbackData = null);
+    [property: JsonPropertyName("biz_opaque_callback_data")] string? BizOpaqueCallbackData = null,
+    [property: JsonPropertyName("image")] WhatsAppImageBody? Image = null);
 
 public sealed record WhatsAppTextBody(
     [property: JsonPropertyName("preview_url")] bool PreviewUrl,
     [property: JsonPropertyName("body")] string Body);
+
+public sealed record WhatsAppImageBody(
+    [property: JsonPropertyName("id")] string? Id,
+    [property: JsonPropertyName("link")] string? Link,
+    [property: JsonPropertyName("caption")] string? Caption);
+
+public sealed record WhatsAppUploadMediaResponse(
+    [property: JsonPropertyName("id")] string Id);
 
 public sealed record WhatsAppSendMessageResponse(
     [property: JsonPropertyName("messages")] IReadOnlyList<WhatsAppSentMessage>? Messages);
