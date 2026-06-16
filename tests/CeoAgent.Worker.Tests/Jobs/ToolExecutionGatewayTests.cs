@@ -117,7 +117,7 @@ public sealed class ToolExecutionGatewayTests
         await fixture.DbContext.SaveChangesAsync();
         var execution = await fixture.DbContext.ToolExecutions.SingleAsync();
         execution.ToolKey.ShouldBe(MvpToolKeys.CreateGoogleCalendarReservation);
-        execution.Status.ShouldBe(ToolExecutionStatus.Denied);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionDenied);
         execution.FailureReason.ShouldBe("tool_not_enabled");
         execution.Request.ShouldBeNull();
     }
@@ -156,6 +156,48 @@ public sealed class ToolExecutionGatewayTests
         result.Content.ShouldContain("\"status\":\"denied\"");
         result.Content.ShouldContain("\"failureReason\":\"side_effects_disabled\"");
         fixture.Calendar.ReservationRequests.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenToolIsDisabledAfterSnapshot_DeniesWithoutSideEffect()
+    {
+        await using var fixture = await GatewayFixture.CreateAsync();
+        var reservationTool = await fixture.DbContext.CompanyTools
+            .SingleAsync(tool => tool.ToolKey == MvpToolKeys.CreateGoogleCalendarReservation);
+        reservationTool.IsEnabled = true;
+        await fixture.DbContext.SaveChangesAsync();
+
+        var staleSnapshot = await fixture.Registry.GetEnabledToolsAsync(fixture.OrganizationId, CancellationToken.None);
+        reservationTool.IsEnabled = false;
+        await fixture.DbContext.SaveChangesAsync();
+        var call = new AgentToolCall(
+            "call-disabled-after-plan",
+            MvpToolKeys.CreateGoogleCalendarReservation,
+            JsonSerializer.SerializeToElement(new
+            {
+                start = "2026-05-28T16:00:00-05:00",
+                end = "2026-05-28T17:00:00-05:00",
+                summary = "Reservation for 2",
+                customerName = "Ada Lovelace",
+            }));
+
+        var result = await fixture.Gateway.ExecuteAsync(
+            new ToolExecutionGatewayRequest(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.TriggerMessage.Id,
+                fixture.InboundMessage.Id,
+                call,
+                staleSnapshot),
+            CancellationToken.None);
+
+        result.Content.ShouldContain("\"status\":\"denied\"");
+        result.Content.ShouldContain("\"failureReason\":\"tool_not_enabled\"");
+        fixture.Calendar.ReservationRequests.ShouldBeEmpty();
+        await fixture.DbContext.SaveChangesAsync();
+        var execution = await fixture.DbContext.ToolExecutions.SingleAsync();
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionDenied);
+        execution.FailureReason.ShouldBe("tool_not_enabled");
     }
 
     [Test]
@@ -418,12 +460,13 @@ public sealed class ToolExecutionGatewayTests
                     }),
                 });
 
-            DbContext.SaveChanges();
         }
 
         public static async Task<GatewayFixture> CreateAsync()
         {
-            return new GatewayFixture(await PostgresWorkerDatabase.CreateAsync());
+            var fixture = new GatewayFixture(await PostgresWorkerDatabase.CreateAsync());
+            await fixture.DbContext.SaveChangesAsync();
+            return fixture;
         }
 
         public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");

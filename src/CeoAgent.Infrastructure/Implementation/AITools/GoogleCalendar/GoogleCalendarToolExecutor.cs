@@ -64,7 +64,7 @@ public sealed class GoogleCalendarToolExecutor(
                     Available = false,
                     UnavailabilityReason = "outside_advance_booking_window",
                 }),
-                ToolExecutionStatus.Succeeded,
+                ToolExecutionStatus.ToolExecutionSucceeded,
                 failureReason: null,
                 cancellationToken);
         }
@@ -82,7 +82,7 @@ public sealed class GoogleCalendarToolExecutor(
                     Available = false,
                     UnavailabilityReason = "outside_working_hours",
                 }),
-                ToolExecutionStatus.Succeeded,
+                ToolExecutionStatus.ToolExecutionSucceeded,
                 failureReason: null,
                 cancellationToken);
         }
@@ -117,7 +117,7 @@ public sealed class GoogleCalendarToolExecutor(
                     Available = false,
                     UnavailabilityReason = "outside_working_hours",
                 }),
-                ToolExecutionStatus.Succeeded,
+                ToolExecutionStatus.ToolExecutionSucceeded,
                 failureReason: null,
                 cancellationToken);
         }
@@ -145,7 +145,7 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
                 result: null,
-                ToolExecutionStatus.Failed,
+                ToolExecutionStatus.ToolExecutionFailed,
                 availabilityFailure,
                 cancellationToken);
         }
@@ -164,7 +164,7 @@ public sealed class GoogleCalendarToolExecutor(
             executionContext.IdempotencyKey,
             ToolExecutionRequest.ForCheckGoogleCalendarAvailability(request),
             ToolExecutionResult.ForCheckGoogleCalendarAvailability(result),
-            ToolExecutionStatus.Succeeded,
+            ToolExecutionStatus.ToolExecutionSucceeded,
             failureReason: null,
             cancellationToken);
     }
@@ -204,7 +204,7 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
                 result: null,
-                ToolExecutionStatus.Denied,
+                ToolExecutionStatus.ToolExecutionDenied,
                 "outside_advance_booking_window",
                 cancellationToken);
         }
@@ -222,7 +222,7 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
                 result: null,
-                ToolExecutionStatus.Denied,
+                ToolExecutionStatus.ToolExecutionDenied,
                 "outside_working_hours",
                 cancellationToken);
         }
@@ -250,10 +250,22 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
                 result: null,
-                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
+                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.ToolExecutionFailed : ToolExecutionStatus.ToolExecutionDenied,
                 failureReason,
                 cancellationToken);
         }
+
+        var execution = await PersistExecutionAsync(
+            context,
+            executionContext.TriggerMessageId,
+            MvpToolKeys.CreateGoogleCalendarReservation,
+            executionContext.IdempotencyKey,
+            ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
+            result: null,
+            ToolExecutionStatus.ToolExecutionInProgress,
+            failureReason: null,
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         CalendarReservationResult calendarResult;
         try
@@ -276,30 +288,24 @@ public sealed class GoogleCalendarToolExecutor(
         }
         catch (IntegrationException exception)
         {
-            return await PersistExecutionAsync(
+            return await CompleteExecutionAsync(
                 context,
-                executionContext.TriggerMessageId,
-                MvpToolKeys.CreateGoogleCalendarReservation,
-                executionContext.IdempotencyKey,
-                ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
+                execution,
                 result: null,
-                ToolExecutionStatus.Failed,
+                ToolExecutionStatus.ToolExecutionFailed,
                 exception.FailureReason,
                 cancellationToken);
         }
 
-        return await PersistExecutionAsync(
+        return await CompleteExecutionAsync(
             context,
-            executionContext.TriggerMessageId,
-            MvpToolKeys.CreateGoogleCalendarReservation,
-            executionContext.IdempotencyKey,
-            ToolExecutionRequest.ForCreateGoogleCalendarReservation(request),
+            execution,
             ToolExecutionResult.ForCreateGoogleCalendarReservation(new CreateCalendarEventResult
             {
                 EventId = calendarResult.EventId,
                 EventUrl = calendarResult.EventUrl,
             }),
-            ToolExecutionStatus.Succeeded,
+            ToolExecutionStatus.ToolExecutionSucceeded,
             failureReason: null,
             cancellationToken);
     }
@@ -342,7 +348,7 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForFindGoogleCalendarReservations(request),
                 result: null,
-                ToolExecutionStatus.Failed,
+                ToolExecutionStatus.ToolExecutionFailed,
                 calendarResult.FailureReason,
                 cancellationToken);
         }
@@ -362,7 +368,7 @@ public sealed class GoogleCalendarToolExecutor(
             executionContext.IdempotencyKey,
             ToolExecutionRequest.ForFindGoogleCalendarReservations(request),
             ToolExecutionResult.ForFindGoogleCalendarReservations(result),
-            ToolExecutionStatus.Succeeded,
+            ToolExecutionStatus.ToolExecutionSucceeded,
             failureReason: null,
             cancellationToken);
     }
@@ -398,7 +404,7 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
                 result: null,
-                ToolExecutionStatus.Denied,
+                ToolExecutionStatus.ToolExecutionDenied,
                 "outside_advance_booking_window",
                 cancellationToken);
         }
@@ -416,10 +422,22 @@ public sealed class GoogleCalendarToolExecutor(
                 executionContext.IdempotencyKey,
                 ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
                 result: null,
-                ToolExecutionStatus.Denied,
+                ToolExecutionStatus.ToolExecutionDenied,
                 "outside_working_hours",
                 cancellationToken);
         }
+
+        var execution = await PersistExecutionAsync(
+            context,
+            executionContext.TriggerMessageId,
+            MvpToolKeys.UpdateGoogleCalendarReservation,
+            executionContext.IdempotencyKey,
+            ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+            result: null,
+            ToolExecutionStatus.ToolExecutionInProgress,
+            failureReason: null,
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         var calendarResult = await calendarIntegration.UpdateReservationAsync(
             new CalendarReservationUpdateRequest(
@@ -438,29 +456,23 @@ public sealed class GoogleCalendarToolExecutor(
         if (!calendarResult.Succeeded || calendarResult.Reservation is null)
         {
             var failureReason = calendarResult.FailureReason ?? "reservation_not_found_or_not_owned";
-            return await PersistExecutionAsync(
+            return await CompleteExecutionAsync(
                 context,
-                executionContext.TriggerMessageId,
-                MvpToolKeys.UpdateGoogleCalendarReservation,
-                executionContext.IdempotencyKey,
-                ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+                execution,
                 result: null,
-                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
+                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.ToolExecutionFailed : ToolExecutionStatus.ToolExecutionDenied,
                 failureReason,
                 cancellationToken);
         }
 
-        return await PersistExecutionAsync(
+        return await CompleteExecutionAsync(
             context,
-            executionContext.TriggerMessageId,
-            MvpToolKeys.UpdateGoogleCalendarReservation,
-            executionContext.IdempotencyKey,
-            ToolExecutionRequest.ForUpdateGoogleCalendarReservation(request),
+            execution,
             ToolExecutionResult.ForUpdateGoogleCalendarReservation(new UpdateGoogleCalendarReservationResult
             {
                 Reservation = ToResultItem(calendarResult.Reservation),
             }),
-            ToolExecutionStatus.Succeeded,
+            ToolExecutionStatus.ToolExecutionSucceeded,
             failureReason: null,
             cancellationToken);
     }
@@ -483,6 +495,18 @@ public sealed class GoogleCalendarToolExecutor(
             return existing;
         }
 
+        var execution = await PersistExecutionAsync(
+            context,
+            executionContext.TriggerMessageId,
+            MvpToolKeys.CancelGoogleCalendarReservation,
+            executionContext.IdempotencyKey,
+            ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
+            result: null,
+            ToolExecutionStatus.ToolExecutionInProgress,
+            failureReason: null,
+            cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
         var calendarResult = await calendarIntegration.CancelReservationAsync(
             new CalendarReservationCancellationRequest(
                 context.CredentialReference,
@@ -496,31 +520,25 @@ public sealed class GoogleCalendarToolExecutor(
         if (!calendarResult.Succeeded)
         {
             var failureReason = calendarResult.FailureReason ?? "reservation_not_found_or_not_owned";
-            return await PersistExecutionAsync(
+            return await CompleteExecutionAsync(
                 context,
-                executionContext.TriggerMessageId,
-                MvpToolKeys.CancelGoogleCalendarReservation,
-                executionContext.IdempotencyKey,
-                ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
+                execution,
                 result: null,
-                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.Failed : ToolExecutionStatus.Denied,
+                IsProviderFailureReason(failureReason) ? ToolExecutionStatus.ToolExecutionFailed : ToolExecutionStatus.ToolExecutionDenied,
                 failureReason,
                 cancellationToken);
         }
 
-        return await PersistExecutionAsync(
+        return await CompleteExecutionAsync(
             context,
-            executionContext.TriggerMessageId,
-            MvpToolKeys.CancelGoogleCalendarReservation,
-            executionContext.IdempotencyKey,
-            ToolExecutionRequest.ForCancelGoogleCalendarReservation(request),
+            execution,
             ToolExecutionResult.ForCancelGoogleCalendarReservation(new CancelGoogleCalendarReservationResult
             {
                 Cancelled = true,
                 ReservationId = calendarResult.ReservationId,
                 EventId = calendarResult.EventId,
             }),
-            ToolExecutionStatus.Succeeded,
+            ToolExecutionStatus.ToolExecutionSucceeded,
             failureReason: null,
             cancellationToken);
     }
@@ -662,6 +680,38 @@ public sealed class GoogleCalendarToolExecutor(
         }
 
         dbContext.ToolExecutions.Add(execution);
+        return execution;
+    }
+
+    private async Task<ToolExecution> CompleteExecutionAsync(
+        CalendarToolContext context,
+        ToolExecution execution,
+        ToolExecutionResult? result,
+        ToolExecutionStatus status,
+        string? failureReason,
+        CancellationToken cancellationToken)
+    {
+        execution.Status = status;
+        execution.Result = result;
+        execution.FailureReason = failureReason;
+
+        if (result is not null && execution.ResultMessageId is null)
+        {
+            var resultMessage = new Message
+            {
+                OrganizationId = context.Company.Id,
+                ConversationId = context.Conversation.Id,
+                Role = MessageRole.ToolResult,
+                Type = MessageType.Text,
+                MessageText = execution.ToolKey,
+                OccurredAt = timeProvider.GetUtcNow().UtcDateTime,
+            };
+
+            dbContext.Messages.Add(resultMessage);
+            execution.ResultMessageId = resultMessage.Id;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
         return execution;
     }
 

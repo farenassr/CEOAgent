@@ -49,7 +49,7 @@ public sealed class WhatsAppWebhookEndpointTests
             using (var scope = factory.Services.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
-                SeedCompany(dbContext);
+                await SeedCompanyAsync(dbContext);
             }
 
             using var client = factory.CreateClient();
@@ -89,7 +89,7 @@ public sealed class WhatsAppWebhookEndpointTests
             using (var scope = factory.Services.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
-                SeedCompany(dbContext);
+                await SeedCompanyAsync(dbContext);
             }
 
             var bodyBytes = Encoding.UTF8.GetPreamble()
@@ -217,7 +217,7 @@ public sealed class WhatsAppWebhookEndpointTests
         return "sha256=" + Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    private static void SeedCompany(CeoAgentDbContext dbContext)
+    private static async Task SeedCompanyAsync(CeoAgentDbContext dbContext)
     {
         var company = new Company
         {
@@ -244,7 +244,7 @@ public sealed class WhatsAppWebhookEndpointTests
             });
 
         dbContext.AddRange(company, profile, channel);
-        dbContext.SaveChanges();
+        await dbContext.SaveChangesAsync();
     }
 
     private static readonly Guid OrganizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");

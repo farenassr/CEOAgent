@@ -51,6 +51,7 @@ public sealed partial class HumanHandoffToolExecutor(
         }
 
         var tool = await dbContext.CompanyTools
+            .AsNoTracking()
             .EnabledForOrganizationTool(executionContext.OrganizationId, executionContext.CompanyToolId)
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException($"Company tool '{executionContext.CompanyToolId}' was not found or is not enabled.");
@@ -87,6 +88,7 @@ public sealed partial class HumanHandoffToolExecutor(
         }
 
         var tool = await dbContext.CompanyTools
+            .AsNoTracking()
             .EnabledForOrganization(organizationId)
             .Where(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff)
             .SingleOrDefaultAsync(cancellationToken);
@@ -167,7 +169,7 @@ public sealed partial class HumanHandoffToolExecutor(
             TriggerMessageId = triggerMessageId,
             ToolKey = MvpToolKeys.RequestHumanHandoff,
             IdempotencyKey = idempotencyKey,
-            Status = ToolExecutionStatus.Succeeded,
+            Status = ToolExecutionStatus.ToolExecutionSucceeded,
             Request = ToolExecutionRequest.ForRequestHumanHandoff(request),
             Result = ToolExecutionResult.ForRequestHumanHandoff(result),
             ResultMessageId = resultMessage.Id,

@@ -4,17 +4,20 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace CeoAgent.Infrastructure.Configurations;
 
-public sealed class IncomingMessageOutboxConfiguration : IEntityTypeConfiguration<IncomingMessageOutbox>
+public sealed class OutgoingMessageOutboxConfiguration : IEntityTypeConfiguration<OutgoingMessageOutbox>
 {
-    public void Configure(EntityTypeBuilder<IncomingMessageOutbox> builder)
+    public void Configure(EntityTypeBuilder<OutgoingMessageOutbox> builder)
     {
-        builder.ToTable("incoming_message_outbox");
+        builder.ToTable("outgoing_message_outbox");
         builder.HasKey(entity => entity.Id);
-        builder.Property(entity => entity.CorrelationId).HasMaxLength(120);
+        builder.Property(entity => entity.Provider).HasMaxLength(80).IsRequired();
         builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(64).IsRequired();
+        builder.Property(entity => entity.IdempotencyKey).HasMaxLength(240).IsRequired();
+        builder.Property(entity => entity.ProviderMessageId).HasMaxLength(200);
         builder.Property(entity => entity.ClaimedBy).HasMaxLength(120);
-        builder.Property(entity => entity.FailureReason).HasMaxLength(240);
-        builder.HasIndex(entity => new { entity.OrganizationId, entity.MessageId }).IsUnique();
+        builder.Property(entity => entity.CorrelationId).HasMaxLength(120);
+        builder.Property(entity => entity.LastError).HasMaxLength(500);
+        builder.HasIndex(entity => new { entity.OrganizationId, entity.IdempotencyKey }).IsUnique();
         builder.HasIndex(entity => new { entity.Status, entity.NextAttemptAt, entity.CreatedAt });
         builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Conversation)

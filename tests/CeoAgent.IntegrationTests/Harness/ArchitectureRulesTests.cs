@@ -208,6 +208,22 @@ public sealed partial class ArchitectureRulesTests
         declarations.ShouldBeEmpty();
     }
 
+    [Test]
+    public void ProductionEnums_LiveInSharedProject()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var violations = FindPublicTypeDeclarations(repoRoot)
+            .Where(declaration => declaration.Kind == "enum")
+            .Where(declaration => !declaration.RelativePath.StartsWith(
+                Path.Combine("src", "CeoAgent.Shared") + Path.DirectorySeparatorChar,
+                StringComparison.Ordinal))
+            .Select(declaration => $"{declaration.TypeName} in {declaration.RelativePath}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        violations.ShouldBeEmpty();
+    }
+
     /// <summary>
     /// Verifies that infrastructure implementation code stays in the approved target folders.
     /// </summary>
@@ -517,6 +533,7 @@ public sealed partial class ArchitectureRulesTests
             {
                 yield return new PublicTypeDeclaration(
                     namespaceMatch.Groups["namespace"].Value,
+                    typeMatch.Groups["kind"].Value,
                     typeMatch.Groups["name"].Value,
                     Path.GetRelativePath(repoRoot, filePath));
             }
@@ -545,8 +562,8 @@ public sealed partial class ArchitectureRulesTests
     [GeneratedRegex("namespace\\s+(?<namespace>[A-Za-z0-9_.]+)\\s*;", RegexOptions.None, 100)]
     private static partial Regex NamespaceRegex();
 
-    [GeneratedRegex("(?m)^public\\s+(?:sealed\\s+|static\\s+|abstract\\s+|partial\\s+)*?(?:interface|class|record|enum)\\s+(?<name>[A-Za-z0-9_]+)", RegexOptions.None, 100)]
+    [GeneratedRegex("(?m)^public\\s+(?:sealed\\s+|static\\s+|abstract\\s+|partial\\s+)*?(?<kind>interface|class|record|enum)\\s+(?<name>[A-Za-z0-9_]+)", RegexOptions.None, 100)]
     private static partial Regex PublicTypeRegex();
 
-    private sealed record PublicTypeDeclaration(string Namespace, string TypeName, string RelativePath);
+    private sealed record PublicTypeDeclaration(string Namespace, string Kind, string TypeName, string RelativePath);
 }

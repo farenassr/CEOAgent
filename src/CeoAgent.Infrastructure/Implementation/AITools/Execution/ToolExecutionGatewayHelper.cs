@@ -41,7 +41,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
             TriggerMessageId = request.TriggerMessageId,
             ToolKey = request.ToolCall.Name,
             IdempotencyKey = idempotencyKey,
-            Status = ToolExecutionStatus.Denied,
+            Status = ToolExecutionStatus.ToolExecutionDenied,
             FailureReason = failureReason,
         };
 
@@ -64,6 +64,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         }
 
         var companyTool = await dbContext.CompanyTools
+            .AsNoTracking()
             .SingleOrDefaultAsync(
                 tool => tool.OrganizationId == request.OrganizationId
                     && tool.ToolKey == request.ToolCall.Name,
@@ -81,7 +82,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
             TriggerMessageId = request.TriggerMessageId,
             ToolKey = request.ToolCall.Name,
             IdempotencyKey = idempotencyKey,
-            Status = ToolExecutionStatus.Denied,
+            Status = ToolExecutionStatus.ToolExecutionDenied,
             FailureReason = "tool_not_enabled",
         };
 
@@ -97,7 +98,7 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         var content = JsonSerializer.Serialize(new
         {
             toolKey = execution.ToolKey,
-            status = execution.Status.ToString().ToLowerInvariant(),
+            status = ToWireStatus(execution.Status),
             failureReason = execution.FailureReason,
             result = execution.Result,
         }, SerializerOptions);
@@ -136,5 +137,18 @@ public sealed class ToolExecutionGatewayHelper(CeoAgentDbContext dbContext)
         }, SerializerOptions);
 
         return new ToolExecutionGatewayResult(toolCall.Id, toolCall.Name, content);
+    }
+
+    private static string ToWireStatus(ToolExecutionStatus status)
+    {
+        return status switch
+        {
+            ToolExecutionStatus.ToolExecutionSucceeded => "succeeded",
+            ToolExecutionStatus.ToolExecutionDenied => "denied",
+            ToolExecutionStatus.ToolExecutionFailed => "failed",
+            ToolExecutionStatus.ToolExecutionInProgress => "in_progress",
+            ToolExecutionStatus.ToolExecutionRetryScheduled => "retry_scheduled",
+            _ => "waiting_to_run",
+        };
     }
 }

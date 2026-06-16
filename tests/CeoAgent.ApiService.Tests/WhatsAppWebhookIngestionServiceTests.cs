@@ -25,7 +25,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var dispatcherLogger = new RecordingLogger<IncomingMessageOutboxDispatcher>();
         var dispatcher = new IncomingMessageOutboxDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
         var service = new WhatsAppWebhookIngestionService(dbContext, dispatcher, TimeProvider.System, logger);
-        SeedCompany(dbContext, organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -68,7 +68,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var pendingOutbox = await dbContext.IncomingMessageOutbox
             .IgnoreQueryFilters()
             .SingleAsync(row => row.MessageId == result.MessageId.Value);
-        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.Failed);
+        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueueDispatchRetryScheduled);
         pendingOutbox.AttemptCount.ShouldBe(1);
         dispatcherLogger.Entries.ShouldContain(entry =>
             entry.EventId.Id == 2102
@@ -80,7 +80,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         dispatched.ShouldBe(1);
         queue.Jobs.Count.ShouldBe(1);
         queue.Jobs[0].MessageId.ShouldBe(result.MessageId.Value);
-        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.Dispatched);
+        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueuedForWorkerProcessing);
         pendingOutbox.AttemptCount.ShouldBe(2);
         dispatcherLogger.Entries.ShouldContain(entry =>
             entry.EventId.Id == 2101
@@ -97,7 +97,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -166,7 +166,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -231,7 +231,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -294,7 +294,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var queue = new FakeIncomingMessageQueue();
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
         var service = CreateService(dbContext, queue, logger);
-        SeedCompany(dbContext, organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
 
         const string webhookJson = """
             {
@@ -327,7 +327,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         queue.Jobs.ShouldBeEmpty();
     }
 
-    private static void SeedCompany(CeoAgentDbContext dbContext, Guid organizationId)
+    private static async Task SeedCompanyAsync(CeoAgentDbContext dbContext, Guid organizationId)
     {
         var company = new Company
         {
@@ -354,7 +354,7 @@ public sealed class WhatsAppWebhookIngestionServiceTests
             });
 
         dbContext.AddRange(company, profile, channel);
-        dbContext.SaveChanges();
+        await dbContext.SaveChangesAsync();
     }
 
     private static WhatsAppWebhookIngestionService CreateService(

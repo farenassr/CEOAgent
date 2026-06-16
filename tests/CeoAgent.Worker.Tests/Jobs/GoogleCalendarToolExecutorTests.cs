@@ -35,7 +35,7 @@ public sealed class GoogleCalendarToolExecutorTests
             request,
             CancellationToken.None);
 
-        result.Status.ShouldBe(ToolExecutionStatus.Denied);
+        result.Status.ShouldBe(ToolExecutionStatus.ToolExecutionDenied);
         fixture.Calendar.ReservationRequests.ShouldBeEmpty();
         result.ToolKey.ShouldBe(MvpToolKeys.CreateGoogleCalendarReservation);
         result.FailureReason.ShouldBe("outside_working_hours");
@@ -112,7 +112,7 @@ public sealed class GoogleCalendarToolExecutorTests
             request,
             CancellationToken.None);
 
-        second.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        second.Status.ShouldBe(ToolExecutionStatus.ToolExecutionSucceeded);
         fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
         await fixture.DbContext.SaveChangesAsync();
         (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
@@ -136,7 +136,7 @@ public sealed class GoogleCalendarToolExecutorTests
             request,
             CancellationToken.None);
 
-        result.Status.ShouldBe(ToolExecutionStatus.Denied);
+        result.Status.ShouldBe(ToolExecutionStatus.ToolExecutionDenied);
         result.FailureReason.ShouldBe("slot_unavailable");
         fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
         fixture.Calendar.ReservationRequests.ShouldBeEmpty();
@@ -238,7 +238,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Failed);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionFailed);
         execution.FailureReason.ShouldBe("upstream_error");
         execution.Result.ShouldBeNull();
         fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
@@ -262,7 +262,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Denied);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionDenied);
         execution.FailureReason.ShouldBe("reservation_not_found_or_not_owned");
         fixture.Calendar.UpdateRequests.Count.ShouldBe(1);
     }
@@ -285,7 +285,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Failed);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionFailed);
         execution.FailureReason.ShouldBe("upstream_error");
         execution.Result.ShouldBeNull();
     }
@@ -305,7 +305,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Denied);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionDenied);
         execution.FailureReason.ShouldBe("reservation_not_found_or_not_owned");
         fixture.Calendar.CancelRequests.Count.ShouldBe(1);
     }
@@ -325,7 +325,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Failed);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionFailed);
         execution.FailureReason.ShouldBe("upstream_error");
         execution.Result.ShouldBeNull();
     }
@@ -347,7 +347,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionSucceeded);
         execution.ToolKey.ShouldBe(MvpToolKeys.UpdateGoogleCalendarReservation);
         fixture.Calendar.UpdateRequests.Count.ShouldBe(1);
         fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
@@ -367,7 +367,7 @@ public sealed class GoogleCalendarToolExecutorTests
             },
             CancellationToken.None);
 
-        execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionSucceeded);
         execution.ToolKey.ShouldBe(MvpToolKeys.CancelGoogleCalendarReservation);
         fixture.Calendar.CancelRequests.Count.ShouldBe(1);
         fixture.DbContext.ChangeTracker.Entries<ToolExecution>().ShouldNotBeEmpty();
@@ -508,12 +508,13 @@ public sealed class GoogleCalendarToolExecutorTests
             };
 
             DbContext.AddRange(company, profile, channel, customer, Conversation, TriggerMessage, credential, Tool);
-            DbContext.SaveChanges();
         }
 
         public static async Task<CalendarToolFixture> CreateAsync()
         {
-            return new CalendarToolFixture(await PostgresWorkerDatabase.CreateAsync());
+            var fixture = new CalendarToolFixture(await PostgresWorkerDatabase.CreateAsync());
+            await fixture.DbContext.SaveChangesAsync();
+            return fixture;
         }
 
         public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");

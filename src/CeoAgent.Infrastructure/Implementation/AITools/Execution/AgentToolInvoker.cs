@@ -46,13 +46,25 @@ public sealed class AgentToolInvoker(
         var companyTool = await dbContext.CompanyTools
             .AsNoTracking()
             .ForOrganization(request.OrganizationId)
-            .Where(entity => entity.Id == descriptor.CompanyToolId)
+            .Where(entity =>
+                entity.Id == descriptor.CompanyToolId
+                && entity.ToolKey == request.ToolCall.Name
+                && entity.IsEnabled)
             .Select(entity => new
             {
                 entity.CredentialReferenceId,
                 entity.Configuration,
             })
             .SingleOrDefaultAsync(cancellationToken);
+        if (companyTool is null)
+        {
+            return await helper.PersistDeniedAsync(
+                request,
+                descriptor,
+                "tool_not_enabled",
+                idempotencyKey,
+                cancellationToken);
+        }
 
         var context = new ToolExecutionContext(
             request.OrganizationId,
