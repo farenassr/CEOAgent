@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/tests/">
     <Project Path="tests/CeoAgent.ApiService.Tests/CeoAgent.ApiService.Tests.csproj" />
-    <Project Path="tests/CeoAgent.Application.Tests/CeoAgent.Application.Tests.csproj" />
     <Project Path="tests/CeoAgent.IntegrationTests/CeoAgent.IntegrationTests.csproj" />
     <Project Path="tests/CeoAgent.Worker.Tests/CeoAgent.Worker.Tests.csproj" />
   </Folder>

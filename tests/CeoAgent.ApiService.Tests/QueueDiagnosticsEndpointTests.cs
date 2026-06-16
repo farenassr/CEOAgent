@@ -65,7 +65,7 @@ public sealed class QueueDiagnosticsEndpointTests
         var queueDiagnostics = new FakeQueueDiagnosticsService();
         queueDiagnostics.Queues.Add(new QueueDiagnosticsInfo(
             "process-incoming-message",
-            1L,
+            2_147_483_648L,
             [
                 new QueueDiagnosticsMessage(
                     "message-1",
@@ -88,6 +88,7 @@ public sealed class QueueDiagnosticsEndpointTests
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         body.ShouldNotBeNull();
         body.Queues.Single().Name.ShouldBe("process-incoming-message");
+        body.Queues.Single().ApproximateMessagesCount.ShouldBe(2_147_483_648L);
         body.Queues.Single().Messages.Single().MessageTextLength.ShouldBe(5);
         body.Queues.Single().Messages.Single().MessageTextSha256Prefix.ShouldBe("2CF24DBA5FB0");
         queueDiagnostics.LastMaxMessages.ShouldBe(5);
@@ -124,15 +125,6 @@ public sealed class QueueDiagnosticsEndpointTests
         body.Messages.Single().MessageTextSha256Prefix.ShouldBe("239F59ED55E7");
         queueDiagnostics.LastQueueName.ShouldBe("process-incoming-message");
         queueDiagnostics.LastMaxMessages.ShouldBe(3);
-    }
-
-    [Test]
-    public void QueueDiagnosticsInfo_UsesLongApproximateMessageCount()
-    {
-        typeof(QueueDiagnosticsInfo)
-            .GetProperty(nameof(QueueDiagnosticsInfo.ApproximateMessagesCount))!
-            .PropertyType
-            .ShouldBe(typeof(long?));
     }
 
     private sealed class FakeQueueDiagnosticsService : IQueueDiagnosticsService
