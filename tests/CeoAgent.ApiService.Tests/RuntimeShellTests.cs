@@ -11,41 +11,6 @@ namespace CeoAgent.ApiService.Tests;
 public sealed class RuntimeShellTests
 {
     /// <summary>
-    /// Verifies that the health endpoint echoes the caller-provided correlation ID header.
-    /// </summary>
-    [Test]
-    public async Task Health_ReturnsCorrelationIdHeader_revisit()
-    {
-        //await using var factory = new ApiFactory();
-        //using var client = factory.CreateClient();
-
-        //using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
-        //request.Headers.Add("X-Correlation-Id", "test-correlation-id");
-
-        //using var response = await client.SendAsync(request);
-
-        //response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        //response.Headers.TryGetValues("X-Correlation-Id", out var values).ShouldBeTrue();
-        //values.Single().ShouldBe("test-correlation-id");
-    }
-
-    /// <summary>
-    /// Verifies that the health endpoint generates a correlation ID when the request omits one.
-    /// </summary>
-    [Test]
-    public async Task Health_GeneratesCorrelationIdHeaderWhenMissing_revisite()
-    {
-        //await using var factory = new ApiFactory();
-        //using var client = factory.CreateClient();
-
-        //using var response = await client.GetAsync("/health");
-
-        //response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        //response.Headers.TryGetValues("X-Correlation-Id", out var values).ShouldBeTrue();
-        //Guid.TryParse(values.Single(), out _).ShouldBeTrue();
-    }
-
-    /// <summary>
     /// Verifies that the Scalar API reference page is exposed in the Development environment.
     /// </summary>
     [Test]
@@ -64,80 +29,6 @@ public sealed class RuntimeShellTests
         html.ShouldContain("\"forceDarkModeState\":\"light\"");
         html.ShouldContain("ceo-agent-api");
         html.ShouldContain("\"selectedScopes\":[\"openid\",\"profile\",\"email\",\"organization\"]");
-    }
-
-    /// <summary>
-    /// Verifies that the Development OpenAPI document includes the versioned API surface.
-    /// </summary>
-    [Test]
-    public async Task OpenApiDocument_IncludesHealthEndpointInDevelopment()
-    {
-        await using var factory = new ApiFactory("Development");
-        using var client = factory.CreateClient();
-
-        using var response = await client.GetAsync("/openapi/v1.json");
-        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        document.RootElement
-            .GetProperty("paths")
-            .TryGetProperty("/v1/admin/companies", out _)
-            .ShouldBeTrue();
-    }
-
-    [Test]
-    public async Task OpenApiDocument_GroupsEndpointsWithModuleTagsInDevelopment()
-    {
-        await using var factory = new ApiFactory("Development");
-        using var client = factory.CreateClient();
-
-        using var document = await GetOpenApiDocumentAsync(client);
-
-        var tags = document.RootElement
-            .GetProperty("paths")
-            .EnumerateObject()
-            .SelectMany(path => path.Value.EnumerateObject())
-            .SelectMany(operation => operation.Value.GetProperty("tags").EnumerateArray())
-            .Select(tag => tag.GetString())
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .ToHashSet(StringComparer.Ordinal);
-
-        tags.ShouldContain("🔐 Authentication");
-        tags.ShouldContain("🏢 Companies");
-        tags.ShouldContain("📡 Channels");
-        tags.ShouldContain("💬 WhatsApp");
-        tags.ShouldContain("📅 Google Calendar");
-        tags.ShouldContain("🧵 Conversations");
-        tags.ShouldContain("📬 Queues");
-        tags.ShouldContain("🔑 Integration Credentials");
-        tags.ShouldContain("🤖 Agent Profile");
-        tags.ShouldContain("🔧 Tools");
-        tags.ShouldContain("🪝 Webhooks");
-    }
-
-    [Test]
-    public async Task OpenApiDocument_IncludesFriendlySummariesAndDescriptionsInDevelopment()
-    {
-        await using var factory = new ApiFactory("Development");
-        using var client = factory.CreateClient();
-
-        using var document = await GetOpenApiDocumentAsync(client);
-
-        var authMe = GetOperation(document, "/v1/auth/me", "get");
-        authMe.GetProperty("summary").GetString().ShouldBe("Get Authenticated User");
-        authMe.GetProperty("description").GetString().ShouldNotBeNullOrWhiteSpace();
-
-        var createCompany = GetOperation(document, "/v1/admin/companies", "post");
-        createCompany.GetProperty("summary").GetString().ShouldBe("Create Company");
-        createCompany.GetProperty("description").GetString().ShouldNotBeNullOrWhiteSpace();
-
-        var availability = GetOperation(document, "/v1/admin/google-calendar/availability", "post");
-        availability.GetProperty("summary").GetString().ShouldBe("Check Google Calendar Availability");
-        availability.GetProperty("description").GetString().ShouldNotBeNullOrWhiteSpace();
-
-        var queues = GetOperation(document, "/v1/admin/queues", "get");
-        queues.GetProperty("summary").GetString().ShouldBe("List Queues");
-        queues.GetProperty("description").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
     [Test]

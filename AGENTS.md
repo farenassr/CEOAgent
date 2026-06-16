@@ -104,6 +104,17 @@ Focused checks:
 
 Run the narrowest meaningful check first, then broaden when risk warrants it.
 
+## Test Quality Rules
+
+Tests must protect meaningful behavior, public contracts, security, organization
+isolation, persistence constraints, integration boundaries, AI/tool safety, or
+operational harness rules. Do not add tests that only prove an assembly loads,
+mirror one-to-one DTO or record properties, check that an interface method
+exists when production code already calls it, or freeze cosmetic OpenAPI/Scalar
+text unless that text is an intentional public contract. Prefer one focused
+behavior test over several implementation-detail assertions, and name the
+regression or rule the test protects.
+
 ## Architecture Rules
 
 - Modular monolith for MVP. Do not split into microservices.

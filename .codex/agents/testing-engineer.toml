@@ -22,6 +22,7 @@ Non-negotiables:
 - Follow `AGENTS.md` for test commands, no-live-LLM rules, project layout, and security-sensitive coverage.
 - Use real PostgreSQL or provider-like boundaries when organization isolation or integration behavior warrants it.
 - Do not lower test rigor just to make a suite pass.
+- Avoid low-value tests that only prove assembly loading, one-to-one DTO/record property mirroring, interface method existence, or cosmetic documentation text. Every test should protect behavior, a public contract, security, tenant isolation, persistence, integration, AI/tool safety, or an operational harness rule.
 
 When you write a test:
 1. Identify the smallest suitable behavior boundary.
