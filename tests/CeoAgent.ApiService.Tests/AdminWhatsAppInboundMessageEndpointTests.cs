@@ -6,6 +6,7 @@ using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Application.Abstractions.Jobs;
+using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Jobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,7 +30,7 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         using (var scope = factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
-            SeedCompany(dbContext);
+            await SeedCompanyAsync(dbContext);
         }
 
         using var client = factory.CreateAuthenticatedClient(OrganizationId);
@@ -54,6 +55,7 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         queue.Jobs.Single().OrganizationId.ShouldBe(OrganizationId);
         queue.Jobs.Single().ConversationId.ShouldBe(body.ConversationId);
         queue.Jobs.Single().MessageId.ShouldBe(body.MessageId);
+        queue.Jobs.Single().CorrelationId.ShouldNotBeNullOrWhiteSpace();
 
         using var verifyScope = factory.Services.CreateScope();
         var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
@@ -66,9 +68,62 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         message.Payload.ShouldNotBeNull();
         message.Payload.ProviderType.ShouldBe("whatsapp_cloud");
         message.Payload.ProviderMessageId.ShouldBeNull();
+        var outbox = await verifyDbContext.IncomingMessageOutbox
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(entity => entity.MessageId == body.MessageId);
+        outbox.ShouldNotBeNull();
+        outbox.OrganizationId.ShouldBe(OrganizationId);
+        outbox.ConversationId.ShouldBe(body.ConversationId);
+        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueuedForWorkerProcessing);
+        outbox.CorrelationId.ShouldBe(queue.Jobs.Single().CorrelationId);
     }
 
-    private static void SeedCompany(CeoAgentDbContext dbContext)
+    [Test]
+    public async Task ReceiveWhatsAppMessage_WhenQueueDispatchFails_PersistsRecoverableIncomingOutbox()
+    {
+        var queue = new RecordingIncomingMessageQueue { FailNextEnqueue = true };
+        await using var factory = new ApiFactory(configureServices: services =>
+        {
+            services.RemoveAll<IIncomingMessageJobEnqueuer>();
+            services.AddSingleton<IIncomingMessageJobEnqueuer>(queue);
+        });
+        using (var scope = factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
+            await SeedCompanyAsync(dbContext);
+        }
+
+        using var client = factory.CreateAuthenticatedClient(OrganizationId);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/v1/admin/whatsapp")
+        {
+            Content = JsonContent.Create(new
+            {
+                messageText = "Necesito una mesa para dos manana",
+                externalCustomerId = "573001112233",
+            }),
+        };
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<SimulationResponse>();
+        body.ShouldNotBeNull();
+        body.Enqueued.ShouldBeFalse();
+        queue.Jobs.ShouldBeEmpty();
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
+        var outbox = await verifyDbContext.IncomingMessageOutbox
+            .IgnoreQueryFilters()
+            .SingleAsync(entity => entity.MessageId == body.MessageId);
+        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueueDispatchRetryScheduled);
+        outbox.AttemptCount.ShouldBe(1);
+        outbox.FailureReason.ShouldBe("Simulated queue outage.");
+    }
+
+    private static async Task SeedCompanyAsync(CeoAgentDbContext dbContext)
     {
         var company = new Company
         {
@@ -96,7 +151,7 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
             id: ChannelId);
 
         dbContext.AddRange(company, profile, channel);
-        dbContext.SaveChanges();
+        await dbContext.SaveChangesAsync();
     }
 
     private static readonly Guid OrganizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
@@ -120,8 +175,16 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
     {
         public List<ProcessIncomingMessageJob> Jobs { get; } = [];
 
+        public bool FailNextEnqueue { get; set; }
+
         public Task EnqueueAsync(ProcessIncomingMessageJob job, CancellationToken cancellationToken)
         {
+            if (FailNextEnqueue)
+            {
+                FailNextEnqueue = false;
+                throw new InvalidOperationException("Simulated queue outage.");
+            }
+
             Jobs.Add(job);
             return Task.CompletedTask;
         }

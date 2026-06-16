@@ -37,10 +37,11 @@ public sealed partial class ReservationPaymentInstructionSender(
     {
         var idempotencyPrefix = $"{conversationId:N}:{inboundMessageId:N}:{MvpToolKeys.CreateGoogleCalendarReservation}:";
         var executions = await dbContext.ToolExecutions
+            .AsNoTracking()
             .ForOrganization(organizationId)
             .Where(execution => execution.ConversationId == conversationId
                 && execution.ToolKey == MvpToolKeys.CreateGoogleCalendarReservation
-                && execution.Status == ToolExecutionStatus.Succeeded
+                && execution.Status == ToolExecutionStatus.ToolExecutionSucceeded
                 && EF.Functions.Like(execution.IdempotencyKey, idempotencyPrefix + "%"))
             .OrderBy(execution => execution.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -121,6 +122,7 @@ public sealed partial class ReservationPaymentInstructionSender(
         }
 
         var account = await dbContext.CompanyPaymentAccounts
+            .AsNoTracking()
             .Include(entity => entity.Bank)
             .ForOrganization(execution.OrganizationId)
             .Where(entity => entity.IsDefault && entity.IsActive)

@@ -1,5 +1,6 @@
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
+using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Jobs;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,11 +12,13 @@ public sealed partial class IncomingMessageOutboxDispatcher(
     TimeProvider timeProvider,
     ILogger<IncomingMessageOutboxDispatcher> logger)
 {
+    private const int MaxFailureReasonLength = 240;
+
     public async Task<bool> DispatchAsync(Guid outboxId, CancellationToken cancellationToken)
     {
-        var outbox = await dbContext.IncomingMessageOutbox
-            .IgnoreQueryFilters()
-            .SingleOrDefaultAsync(entity => entity.Id == outboxId, cancellationToken);
+        var outbox = await TryClaimAsync(
+            query => query.Where(entity => entity.Id == outboxId),
+            cancellationToken);
 
         return outbox is not null
             && await DispatchAsync(outbox, cancellationToken);
@@ -28,17 +31,23 @@ public sealed partial class IncomingMessageOutboxDispatcher(
             return 0;
         }
 
-        var pending = await dbContext.IncomingMessageOutbox
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var candidates = await dbContext.IncomingMessageOutbox
             .IgnoreQueryFilters()
-            .Where(entity => entity.Status != IncomingMessageOutboxStatus.Dispatched)
+            .AsNoTracking()
+            .Where(entity =>
+                (entity.Status == IncomingMessageOutboxStatus.WaitingToBeQueued
+                    || entity.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled)
+                && (entity.NextAttemptAt == null || entity.NextAttemptAt <= now))
             .OrderBy(entity => entity.CreatedAt)
+            .Select(entity => entity.Id)
             .Take(maxMessages)
             .ToListAsync(cancellationToken);
 
         var dispatched = 0;
-        foreach (var outbox in pending)
+        foreach (var outboxId in candidates)
         {
-            if (await DispatchAsync(outbox, cancellationToken))
+            if (await DispatchAsync(outboxId, cancellationToken))
             {
                 dispatched++;
             }
@@ -49,14 +58,7 @@ public sealed partial class IncomingMessageOutboxDispatcher(
 
     private async Task<bool> DispatchAsync(IncomingMessageOutbox outbox, CancellationToken cancellationToken)
     {
-        if (outbox.Status == IncomingMessageOutboxStatus.Dispatched)
-        {
-            return false;
-        }
-
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        outbox.AttemptCount++;
-        outbox.LastAttemptAt = now;
 
         var job = new ProcessIncomingMessageJob(
             outbox.OrganizationId,
@@ -70,7 +72,12 @@ public sealed partial class IncomingMessageOutboxDispatcher(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            outbox.Status = IncomingMessageOutboxStatus.Failed;
+            outbox.Status = outbox.AttemptCount >= outbox.MaxAttempts
+                ? IncomingMessageOutboxStatus.QueueDispatchFailed
+                : IncomingMessageOutboxStatus.QueueDispatchRetryScheduled;
+            outbox.NextAttemptAt = outbox.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled
+                ? now
+                : null;
             outbox.FailureReason = BoundFailureReason(exception.Message);
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -86,8 +93,9 @@ public sealed partial class IncomingMessageOutboxDispatcher(
             return false;
         }
 
-        outbox.Status = IncomingMessageOutboxStatus.Dispatched;
+        outbox.Status = IncomingMessageOutboxStatus.QueuedForWorkerProcessing;
         outbox.DispatchedAt = now;
+        outbox.NextAttemptAt = null;
         outbox.FailureReason = null;
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -102,9 +110,55 @@ public sealed partial class IncomingMessageOutboxDispatcher(
         return true;
     }
 
+    private async Task<IncomingMessageOutbox?> TryClaimAsync(
+        Func<IQueryable<IncomingMessageOutbox>, IQueryable<IncomingMessageOutbox>> filter,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var claimOwner = $"{Environment.MachineName}:{Guid.CreateVersion7():N}";
+        var query = filter(dbContext.IncomingMessageOutbox.IgnoreQueryFilters())
+            .Where(entity =>
+                (entity.Status == IncomingMessageOutboxStatus.WaitingToBeQueued
+                    || entity.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled)
+                && (entity.NextAttemptAt == null || entity.NextAttemptAt <= now));
+
+        var claimed = await query.ExecuteUpdateAsync(
+            setters => setters
+                .SetProperty(entity => entity.Status, IncomingMessageOutboxStatus.QueueDispatchInProgress)
+                .SetProperty(entity => entity.AttemptCount, entity => entity.AttemptCount + 1)
+                .SetProperty(entity => entity.LastAttemptAt, now)
+                .SetProperty(entity => entity.ClaimedAt, now)
+                .SetProperty(entity => entity.ClaimedBy, claimOwner)
+                .SetProperty(entity => entity.FailureReason, (string?)null),
+            cancellationToken);
+        if (claimed == 0)
+        {
+            return null;
+        }
+
+        var claimedOutbox = await dbContext.IncomingMessageOutbox
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .SingleAsync(entity => entity.ClaimedBy == claimOwner, cancellationToken);
+
+        var trackedEntry = dbContext.ChangeTracker
+            .Entries<IncomingMessageOutbox>()
+            .SingleOrDefault(entry =>
+                entry.State != EntityState.Deleted
+                && entry.Entity.Id == claimedOutbox.Id);
+        if (trackedEntry is not null)
+        {
+            trackedEntry.CurrentValues.SetValues(claimedOutbox);
+            return trackedEntry.Entity;
+        }
+
+        dbContext.IncomingMessageOutbox.Attach(claimedOutbox);
+        return claimedOutbox;
+    }
+
     private static string BoundFailureReason(string message)
     {
-        return message.Length <= 240 ? message : message[..240];
+        return message.Length <= MaxFailureReasonLength ? message : message[..MaxFailureReasonLength];
     }
 
 }

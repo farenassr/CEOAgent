@@ -85,7 +85,7 @@ public sealed class AgentToolCatalogTests
                 TriggerMessageId = context.TriggerMessageId,
                 ToolKey = ToolKey,
                 IdempotencyKey = context.IdempotencyKey,
-                Status = ToolExecutionStatus.Succeeded,
+                Status = ToolExecutionStatus.ToolExecutionSucceeded,
             });
         }
     }

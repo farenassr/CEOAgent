@@ -228,17 +228,18 @@ public sealed class CompanyToolRegistryTests
                 });
             }
 
-            DbContext.SaveChanges();
         }
 
         public static async Task<RegistryFixture> CreateAsync(
             bool includeReservationTools = false,
             bool includeUnsupportedTool = false)
         {
-            return new RegistryFixture(
+            var fixture = new RegistryFixture(
                 await PostgresWorkerDatabase.CreateAsync(),
                 includeReservationTools,
                 includeUnsupportedTool);
+            await fixture.DbContext.SaveChangesAsync();
+            return fixture;
         }
 
         public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");

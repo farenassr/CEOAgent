@@ -1,3 +1,4 @@
+using CeoAgent.ApiService.Infrastructure.Correlation;
 using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Application.Errors;
@@ -5,8 +6,6 @@ using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
 using CeoAgent.Infrastructure.Persistence;
-using CeoAgent.Application.Abstractions.Jobs;
-using CeoAgent.Shared.Jobs;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Request.WhatsApp;
 using CeoAgent.Shared.Response.WhatsApp;
@@ -22,7 +21,8 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
     IAdminTenantGuard tenantGuard,
-    IIncomingMessageJobEnqueuer incomingMessageJobEnqueuer,
+    IncomingMessageOutboxDispatcher incomingMessageOutboxDispatcher,
+    CorrelationIdAccessor correlationIdAccessor,
     TimeProvider timeProvider) : Endpoint<ReceiveWhatsAppMessageRequest, ReceiveWhatsAppMessageResponse>
 {
     private const string ProviderType = "whatsapp_cloud";
@@ -47,7 +47,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
         await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: false, cancellationToken);
 
         var channel = await dbContext.CompanyChannels
-            .WithDefaultTracking(trackChanges: true)
+            .WithDefaultTracking()
             .OrderBy(entity => entity.CreatedAt)
             .FirstOrDefaultAsync(
                 entity => entity.OrganizationId == organizationId
@@ -74,11 +74,18 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
         };
 
         conversation.LastMessageAt = occurredAt;
+        var outbox = new IncomingMessageOutbox
+        {
+            OrganizationId = organizationId,
+            ConversationId = conversation.Id,
+            MessageId = inbound.Id,
+            CorrelationId = correlationIdAccessor.CorrelationId,
+        };
         dbContext.Messages.Add(inbound);
+        dbContext.IncomingMessageOutbox.Add(outbox);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var job = new ProcessIncomingMessageJob(organizationId, conversation.Id, inbound.Id, HttpContext.TraceIdentifier);
-        await incomingMessageJobEnqueuer.EnqueueAsync(job, cancellationToken);
+        var dispatched = await incomingMessageOutboxDispatcher.DispatchAsync(outbox.Id, cancellationToken);
 
         await Send.OkAsync(
             new ReceiveWhatsAppMessageResponse
@@ -86,7 +93,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
                 OrganizationId = organizationId,
                 ConversationId = conversation.Id,
                 MessageId = inbound.Id,
-                Enqueued = true,
+                Enqueued = dispatched,
             },
             cancellationToken);
     }
@@ -99,7 +106,7 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     {
         var normalizedExternalCustomerId = externalCustomerId.Trim();
         var customer = await dbContext.Customers
-            .WithDefaultTracking(trackChanges: true)
+            .WithDefaultTracking()
             .SingleOrDefaultAsync(
                 entity => entity.OrganizationId == organizationId
                     && entity.CompanyChannelId == channelId

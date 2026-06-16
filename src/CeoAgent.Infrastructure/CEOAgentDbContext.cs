@@ -35,6 +35,10 @@ public sealed class CeoAgentDbContext(
 
     public DbSet<IncomingMessageOutbox> IncomingMessageOutbox => Set<IncomingMessageOutbox>();
 
+    public DbSet<OutgoingMessageOutbox> OutgoingMessageOutbox => Set<OutgoingMessageOutbox>();
+
+    public DbSet<ProviderSendLedger> ProviderSendLedger => Set<ProviderSendLedger>();
+
     public DbSet<ConversationState> ConversationStates => Set<ConversationState>();
 
     public DbSet<ToolExecution> ToolExecutions => Set<ToolExecution>();
@@ -61,9 +65,12 @@ public sealed class CeoAgentDbContext(
 
     public override int SaveChanges()
     {
-        StampAuditableEntities();
-        ValidateTenantRelationshipsAsync(CancellationToken.None).GetAwaiter().GetResult();
-        return base.SaveChanges();
+        throw new NotSupportedException("Use SaveChangesAsync in CEOAgent. Synchronous SaveChanges is not supported.");
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        throw new NotSupportedException("Use SaveChangesAsync in CEOAgent. Synchronous SaveChanges is not supported.");
     }
 
     private async Task ValidateTenantRelationshipsAsync(CancellationToken cancellationToken)
@@ -149,6 +156,29 @@ public sealed class CeoAgentDbContext(
                 outbox.OrganizationId,
                 outbox.MessageId,
                 "IncomingMessageOutbox.MessageId",
+                cancellationToken);
+        }
+
+        foreach (var outbox in Changed<OutgoingMessageOutbox>())
+        {
+            await EnsureSameOrganizationAsync<Conversation>(
+                outbox.OrganizationId,
+                outbox.ConversationId,
+                "OutgoingMessageOutbox.ConversationId",
+                cancellationToken);
+            await EnsureSameOrganizationAsync<Message>(
+                outbox.OrganizationId,
+                outbox.MessageId,
+                "OutgoingMessageOutbox.MessageId",
+                cancellationToken);
+        }
+
+        foreach (var ledger in Changed<ProviderSendLedger>())
+        {
+            await EnsureSameOrganizationAsync<OutgoingMessageOutbox>(
+                ledger.OrganizationId,
+                ledger.OutgoingMessageOutboxId,
+                "ProviderSendLedger.OutgoingMessageOutboxId",
                 cancellationToken);
         }
 

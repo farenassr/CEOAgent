@@ -361,7 +361,7 @@ public sealed class RelationalConstraintTests
             TriggerMessageId = triggerMessageId,
             ToolKey = "request_human_handoff",
             IdempotencyKey = idempotencyKey,
-            Status = ToolExecutionStatus.Pending
+            Status = ToolExecutionStatus.ToolExecutionWaitingToRun
         };
     }
 

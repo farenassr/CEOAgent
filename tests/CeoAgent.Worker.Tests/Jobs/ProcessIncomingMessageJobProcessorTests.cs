@@ -150,6 +150,25 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             .Single(message => message.Role == MessageRole.Assistant);
         assistant.ProviderMessageId.ShouldBe($"reply:{fixture.InboundMessage.Id}");
         assistant.Payload!.ProviderMessageId.ShouldBe("sent-text-1");
+
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var outbound = await fixture.DbContext.OutgoingMessageOutbox.SingleAsync();
+        outbound.OrganizationId.ShouldBe(fixture.OrganizationId);
+        outbound.ConversationId.ShouldBe(fixture.Conversation.Id);
+        outbound.MessageId.ShouldBe(assistant.Id);
+        outbound.Provider.ShouldBe("whatsapp_cloud");
+        outbound.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
+        outbound.IdempotencyKey.ShouldBe($"reply:{fixture.InboundMessage.Id}");
+        outbound.ProviderMessageId.ShouldBe("sent-text-1");
+        outbound.CorrelationId.ShouldBe("correlation-123");
+
+        var ledger = await fixture.DbContext.ProviderSendLedger.SingleAsync();
+        ledger.OutgoingMessageOutboxId.ShouldBe(outbound.Id);
+        ledger.AttemptNumber.ShouldBe(1);
+        ledger.Provider.ShouldBe("whatsapp_cloud");
+        ledger.Status.ShouldBe(ProviderSendLedgerStatus.ProviderAccepted);
+        ledger.ProviderMessageId.ShouldBe("sent-text-1");
+        ledger.CorrelationId.ShouldBe("correlation-123");
     }
 
     [Test]
@@ -186,7 +205,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_ExecutesMutatingTool()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.AddDefaultPaymentAccount();
+        await fixture.AddDefaultPaymentAccountAsync();
         fixture.InboundMessage.Type = MessageType.Text;
         fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
         fixture.InboundMessage.ProviderMessageId = null;
@@ -225,7 +244,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Reserva creada.");
         var paymentImage = fixture.Messaging.ImageMessages.Single();
         paymentImage.Caption.ShouldContain("Banco Uno");
-        paymentImage.Caption.ShouldContain("savings");
+        paymentImage.Caption.ShouldContain("Ahorros");
         paymentImage.Caption.ShouldContain("0011223344");
         paymentImage.Caption.ShouldContain("50000");
         paymentImage.Caption.ShouldContain("COP");
@@ -243,9 +262,9 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         paymentMessage.Payload!.ProviderType.ShouldBe("image");
         var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
         var paymentAccountId = state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue;
+        var expectedQrReference = BlobStorageNaming.ForPaymentQr("qr.png", Guid.Parse(paymentAccountId!));
         paymentMessage.Payload.BlobContainer.ShouldBe(BlobStorageContainerNames.Private);
-        paymentMessage.Payload.BlobName.ShouldBe(
-            $"organizations/contoso-bistro-{fixture.OrganizationId:D}/payments/payment-accounts/{paymentAccountId}/qr.png");
+        paymentMessage.Payload.BlobName.ShouldBe(expectedQrReference.BlobName);
 
         state.Snapshot.PendingAction.ShouldBe("awaiting_reservation_payment_confirmation");
         state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue.ShouldNotBeNullOrWhiteSpace();
@@ -259,7 +278,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     public async Task ProcessAsync_WhenReservationPaymentSendIsRetried_DoesNotDuplicatePaymentMessage()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.AddDefaultPaymentAccount();
+        await fixture.AddDefaultPaymentAccountAsync();
         fixture.InboundMessage.Type = MessageType.Text;
         fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
         fixture.InboundMessage.ProviderMessageId = null;
@@ -393,7 +412,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     public async Task ProcessAsync_ForTextMessageWithMutatingTool_PersistsReplyBeforeSendAndProviderReferenceAfterSend()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.AddDefaultPaymentAccount();
+        await fixture.AddDefaultPaymentAccountAsync();
         fixture.InboundMessage.Type = MessageType.Text;
         fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
         fixture.InboundMessage.ProviderMessageId = null;
@@ -657,7 +676,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         conversation.Status.ShouldBe(ConversationStatus.HandedOff);
 
         var execution = await fixture.DbContext.ToolExecutions.SingleAsync(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff);
-        execution.Status.ShouldBe(ToolExecutionStatus.Succeeded);
+        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionSucceeded);
         execution.Result!.RequestHumanHandoff!.HandoffRequested.ShouldBeTrue();
         execution.Result.RequestHumanHandoff.HandoffTicketId.ShouldNotBeNullOrWhiteSpace();
         execution.FailureReason.ShouldBeNull();
@@ -951,12 +970,13 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 }),
             };
             DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool, findTool, handoffTool);
-            DbContext.SaveChanges();
         }
 
         public static async Task<ProcessorFixture> CreateAsync()
         {
-            return new ProcessorFixture(await PostgresWorkerDatabase.CreateAsync());
+            var fixture = new ProcessorFixture(await PostgresWorkerDatabase.CreateAsync());
+            await fixture.DbContext.SaveChangesAsync();
+            return fixture;
         }
 
         public Guid OrganizationId { get; } = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
@@ -983,7 +1003,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public Message InboundMessage { get; }
 
-        public void AddDefaultPaymentAccount()
+        public async Task AddDefaultPaymentAccountAsync()
         {
             var bank = new Bank
             {
@@ -1009,7 +1029,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             account.QrBlobContainer = qrReference.ContainerName;
             account.QrBlobName = qrReference.BlobName;
             DbContext.AddRange(bank, account);
-            DbContext.SaveChanges();
+            await DbContext.SaveChangesAsync();
         }
 
         public async Task AddAwaitingPaymentStateAsync()

@@ -1,4 +1,5 @@
 using CeoAgent.Infrastructure;
+using CeoAgent.Infrastructure.Implementation.Organization;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 
@@ -35,6 +36,22 @@ public sealed class CeoAgentDbContextFactoryTests
         using var dbContext = factory.CreateDbContext([]);
 
         dbContext.Database.GetConnectionString().ShouldBe(connectionString);
+    }
+
+    [Test]
+    public void SaveChanges_ThrowsClearAsyncOnlyException()
+    {
+        var options = new DbContextOptionsBuilder<CeoAgentDbContext>()
+            .UseInMemoryDatabase($"ceoagent-sync-save-{Guid.CreateVersion7()}")
+            .Options;
+        using var dbContext = new CeoAgentDbContext(
+            options,
+            new OrganizationContextAccessor(),
+            TimeProvider.System);
+
+        var exception = Should.Throw<NotSupportedException>(() => dbContext.SaveChanges());
+
+        exception.Message.ShouldBe("Use SaveChangesAsync in CEOAgent. Synchronous SaveChanges is not supported.");
     }
 
     private sealed class ConnectionStringEnvironment : IDisposable

@@ -98,7 +98,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                     return;
                 }
 
-                await SendExistingReplyAsync(context, existingReply, replyClientMessageId, cancellationToken);
+                await SendExistingReplyAsync(context, existingReply, replyClientMessageId, job.CorrelationId, cancellationToken);
                 await paymentInstructionSender.SendForSuccessfulReservationsAsync(
                     context.Company.Id,
                     context.Conversation.Id,
@@ -162,21 +162,14 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
 
             dbContext.Messages.Add(assistant);
             context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-            await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
 
-            var sent = await messaging.SendTextAsync(
-                new ChannelTextMessage(
-                    context.Company.Id,
-                    context.Channel.Id,
-                    context.Conversation.Id,
-                    assistant.Id,
-                    context.Customer.ExternalCustomerId,
-                    assistantText,
-                    replyClientMessageId),
+            await SendTextThroughOutboxAsync(
+                context,
+                assistant,
+                assistantText,
+                replyClientMessageId,
+                job.CorrelationId,
                 cancellationToken);
-
-            MarkAssistantSent(assistant, sent);
-            await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
             await paymentInstructionSender.SendForSuccessfulReservationsAsync(
                 context.Company.Id,
                 context.Conversation.Id,
@@ -221,43 +214,135 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
 
         dbContext.Messages.Add(assistant);
         context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-        await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
-
-        var sent = await messaging.SendTextAsync(
-            new ChannelTextMessage(
-                context.Company.Id,
-                context.Channel.Id,
-                context.Conversation.Id,
-                assistant.Id,
-                context.Customer.ExternalCustomerId,
-                text,
-                replyClientMessageId),
+        await SendTextThroughOutboxAsync(
+            context,
+            assistant,
+            text,
+            replyClientMessageId,
+            job.CorrelationId,
             cancellationToken);
-
-        MarkAssistantSent(assistant, sent);
-        await SaveFinalStateAsync(job.OrganizationId, job.ConversationId, job.JobId, cancellationToken);
     }
 
     private async Task SendExistingReplyAsync(
         ProcessorContext context,
         Message existingReply,
         string replyClientMessageId,
+        string? correlationId,
         CancellationToken cancellationToken)
     {
-        var sent = await messaging.SendTextAsync(
-            new ChannelTextMessage(
-                context.Company.Id,
-                context.Channel.Id,
-                context.Conversation.Id,
-                existingReply.Id,
-                context.Customer.ExternalCustomerId,
-                existingReply.MessageText ?? string.Empty,
-                replyClientMessageId),
-            cancellationToken);
-
-        MarkAssistantSent(existingReply, sent);
         context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
+        await SendTextThroughOutboxAsync(
+            context,
+            existingReply,
+            existingReply.MessageText ?? string.Empty,
+            replyClientMessageId,
+            correlationId,
+            cancellationToken);
+    }
+
+    private async Task SendTextThroughOutboxAsync(
+        ProcessorContext context,
+        Message assistant,
+        string text,
+        string idempotencyKey,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        var existingOutbox = await dbContext.OutgoingMessageOutbox
+            .SingleOrDefaultAsync(
+                entity => entity.OrganizationId == context.Company.Id
+                    && entity.IdempotencyKey == idempotencyKey,
+                cancellationToken);
+        if (existingOutbox?.Status == OutgoingMessageOutboxStatus.SentToProvider
+            && !string.IsNullOrWhiteSpace(existingOutbox.ProviderMessageId))
+        {
+            MarkAssistantSent(assistant, new SentMessageReference(existingOutbox.ProviderMessageId));
+            return;
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var outbox = existingOutbox ?? new OutgoingMessageOutbox
+        {
+            OrganizationId = context.Company.Id,
+            ConversationId = context.Conversation.Id,
+            MessageId = assistant.Id,
+            Provider = WhatsAppProvider,
+            Status = OutgoingMessageOutboxStatus.SendingToProvider,
+            IdempotencyKey = idempotencyKey,
+            CorrelationId = correlationId,
+            ClaimedAt = now,
+            ClaimedBy = "worker",
+            AttemptCount = 0,
+        };
+
+        outbox.Status = OutgoingMessageOutboxStatus.SendingToProvider;
+        outbox.AttemptCount++;
+        outbox.ClaimedAt = now;
+        outbox.ClaimedBy = "worker";
+        outbox.CorrelationId ??= correlationId;
+        outbox.LastError = null;
+
+        if (existingOutbox is null)
+        {
+            dbContext.OutgoingMessageOutbox.Add(outbox);
+        }
+
+        var ledger = new ProviderSendLedger
+        {
+            OrganizationId = context.Company.Id,
+            OutgoingMessageOutboxId = outbox.Id,
+            AttemptNumber = outbox.AttemptCount,
+            Provider = WhatsAppProvider,
+            Status = ProviderSendLedgerStatus.SendAttemptStarted,
+            RequestHash = idempotencyKey,
+            StartedAt = now,
+            CorrelationId = correlationId,
+        };
+        dbContext.ProviderSendLedger.Add(ledger);
         await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, jobId: null, cancellationToken);
+
+        try
+        {
+            var sent = await messaging.SendTextAsync(
+                new ChannelTextMessage(
+                    context.Company.Id,
+                    context.Channel.Id,
+                    context.Conversation.Id,
+                    assistant.Id,
+                    context.Customer.ExternalCustomerId,
+                    text,
+                    idempotencyKey),
+                cancellationToken);
+
+            MarkAssistantSent(assistant, sent);
+            var completedAt = timeProvider.GetUtcNow().UtcDateTime;
+            outbox.Status = OutgoingMessageOutboxStatus.SentToProvider;
+            outbox.ProviderMessageId = sent.ProviderMessageId;
+            outbox.SentAt = completedAt;
+            outbox.CompletedAt = completedAt;
+            outbox.LastError = null;
+            ledger.Status = ProviderSendLedgerStatus.ProviderAccepted;
+            ledger.ProviderMessageId = sent.ProviderMessageId;
+            ledger.FinishedAt = completedAt;
+            await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, jobId: null, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            var failedAt = timeProvider.GetUtcNow().UtcDateTime;
+            outbox.Status = outbox.AttemptCount >= outbox.MaxAttempts
+                ? OutgoingMessageOutboxStatus.ProviderSendFailed
+                : OutgoingMessageOutboxStatus.ProviderSendRetryScheduled;
+            outbox.NextAttemptAt = outbox.Status == OutgoingMessageOutboxStatus.ProviderSendRetryScheduled
+                ? failedAt
+                : null;
+            outbox.LastError = BoundProviderError(exception.Message);
+            ledger.Status = ProviderSendLedgerStatus.ProviderUnavailable;
+            ledger.ErrorCode = exception.GetType().Name;
+            ledger.ErrorMessage = BoundProviderError(exception.Message);
+            ledger.FinishedAt = failedAt;
+            await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, jobId: null, cancellationToken);
+            throw;
+        }
     }
 
     private async Task SaveFinalStateAsync(
@@ -286,6 +371,11 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     {
         assistant.Payload ??= new MessagePayload();
         assistant.Payload.ProviderMessageId = sent.ProviderMessageId;
+    }
+
+    private static string BoundProviderError(string message)
+    {
+        return message.Length <= 500 ? message : message[..500];
     }
 
     private static void RecordTokenTelemetry(AgentRunResult agentResult)
@@ -320,6 +410,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             ?? throw new InvalidOperationException($"Customer '{conversation.CustomerId}' was not found.");
 
         var inbound = await dbContext.Messages
+            .AsNoTracking()
             .ForConversation(job.OrganizationId, job.ConversationId)
             .SingleOrDefaultAsync(
                 entity => entity.Id == job.MessageId,
@@ -327,6 +418,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             ?? throw new InvalidOperationException($"Message '{job.MessageId}' was not found.");
 
         var messageHistory = await dbContext.Messages
+            .AsNoTracking()
             .AgentEligibleHistory(dbContext.ToolExecutions, job.OrganizationId, job.ConversationId, 8)
             .Select(entity => new MessageHistoryItem(entity.Role, entity.MessageText))
             .ToArrayAsync(cancellationToken);

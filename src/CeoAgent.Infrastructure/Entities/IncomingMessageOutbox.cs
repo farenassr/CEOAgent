@@ -1,3 +1,5 @@
+using CeoAgent.Shared.Enums;
+
 namespace CeoAgent.Infrastructure.Entities;
 
 public sealed class IncomingMessageOutbox : AuditableOrganizationOwnedEntity
@@ -25,7 +27,7 @@ public sealed class IncomingMessageOutbox : AuditableOrganizationOwnedEntity
     /// <summary>
     /// Current dispatch state for the queue publication.
     /// </summary>
-    public IncomingMessageOutboxStatus Status { get; set; } = IncomingMessageOutboxStatus.Pending;
+    public IncomingMessageOutboxStatus Status { get; set; } = IncomingMessageOutboxStatus.WaitingToBeQueued;
 
     /// <summary>
     /// Number of queue dispatch attempts made for this row.
@@ -36,6 +38,26 @@ public sealed class IncomingMessageOutbox : AuditableOrganizationOwnedEntity
     /// Last UTC time when a queue dispatch was attempted.
     /// </summary>
     public DateTime? LastAttemptAt { get; set; }
+
+    /// <summary>
+    /// UTC time when a dispatcher claimed this row for queue publication.
+    /// </summary>
+    public DateTime? ClaimedAt { get; set; }
+
+    /// <summary>
+    /// Dispatcher instance that claimed this row.
+    /// </summary>
+    public string? ClaimedBy { get; set; }
+
+    /// <summary>
+    /// UTC time when this row may be retried after a transient dispatch failure.
+    /// </summary>
+    public DateTime? NextAttemptAt { get; set; }
+
+    /// <summary>
+    /// Maximum queue dispatch attempts before the row is marked permanently failed.
+    /// </summary>
+    public int MaxAttempts { get; set; } = 5;
 
     /// <summary>
     /// UTC time when the row was successfully dispatched to the queue.
@@ -56,11 +78,4 @@ public sealed class IncomingMessageOutbox : AuditableOrganizationOwnedEntity
     /// Inbound message that should be processed.
     /// </summary>
     public Message Message { get; set; } = null!;
-}
-
-public enum IncomingMessageOutboxStatus
-{
-    Pending,
-    Failed,
-    Dispatched,
 }

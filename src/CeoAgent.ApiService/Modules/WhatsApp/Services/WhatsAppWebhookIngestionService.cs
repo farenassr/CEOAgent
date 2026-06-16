@@ -93,6 +93,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
 
         var channel = await dbContext.CompanyChannels
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .Where(
                 entity => entity.Provider == CompanyChannelProvider.WhatsAppCloud
                     && entity.ProviderChannelId == message.PhoneNumberId)
@@ -119,6 +120,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
 
         var existingMessage = await dbContext.Messages
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .FirstOrDefaultAsync(
                 entity => entity.OrganizationId == channel.OrganizationId
                     && entity.ProviderMessageId == message.ProviderMessageId,
@@ -274,6 +276,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
     {
         var outbox = await dbContext.IncomingMessageOutbox
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .SingleOrDefaultAsync(
                 entity => entity.OrganizationId == organizationId && entity.MessageId == messageId,
                 cancellationToken);
@@ -291,7 +294,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        if (outbox.Status == IncomingMessageOutboxStatus.Dispatched)
+        if (outbox.Status == IncomingMessageOutboxStatus.QueuedForWorkerProcessing)
         {
             return false;
         }
@@ -368,6 +371,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
 
         var agentProfileId = await dbContext.AgentProfiles
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .Where(entity => entity.OrganizationId == channel.OrganizationId)
             .Select(entity => entity.Id)
             .SingleAsync(cancellationToken);
@@ -393,6 +397,7 @@ public sealed partial class WhatsAppWebhookIngestionService(
 
         return await dbContext.Messages
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .Where(entity => entity.OrganizationId == organizationId && entity.ProviderMessageId == providerMessageId)
             .Select(entity => new DuplicateMessageContext(entity.Id, entity.ConversationId))
             .SingleOrDefaultAsync(cancellationToken);
