@@ -44,4 +44,24 @@ public static class CeoAgentTelemetry
         public const string MetadataToolFailureReason = "langfuse.observation.metadata.tool_failure_reason";
         public const string MetadataToolMutating = "langfuse.observation.metadata.tool_mutating";
     }
+
+    public static class LangSmith
+    {
+        public const string SpanKind = "langsmith.span.kind";
+        public const string MetadataOrganizationId = "langsmith.metadata.organization_id";
+        public const string MetadataConversationId = "langsmith.metadata.conversation_id";
+        public const string MetadataInboundMessageId = "langsmith.metadata.inbound_message_id";
+        public const string MetadataCorrelationId = "langsmith.metadata.correlation_id";
+        public const string MetadataChannel = "langsmith.metadata.channel";
+        public const string MetadataProvider = "langsmith.metadata.provider";
+        public const string MetadataToolStatus = "langsmith.metadata.tool_status";
+        public const string MetadataToolFailureReason = "langsmith.metadata.tool_failure_reason";
+        public const string GenAiSystem = "gen_ai.system";
+        public const string GenAiRequestModel = "gen_ai.request.model";
+        public const string GenAiResponseModel = "gen_ai.response.model";
+        public const string GenAiUsageInputTokens = "gen_ai.usage.input_tokens";
+        public const string GenAiUsageOutputTokens = "gen_ai.usage.output_tokens";
+        public const string GenAiUsageTotalTokens = "gen_ai.usage.total_tokens";
+        public const string GenAiToolName = "gen_ai.tool.name";
+    }
 }

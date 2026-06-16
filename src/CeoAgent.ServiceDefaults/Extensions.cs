@@ -6,6 +6,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CeoAgent.ServiceDefaults.Configuration;
+using CeoAgent.ServiceDefaults.Telemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -82,7 +83,10 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
-                tracing.AddSource(builder.Environment.ApplicationName)
+                tracing.SetSampler(new AzureQueueNoiseSuppressingSampler(
+                        new ParentBasedSampler(new AlwaysOnSampler()),
+                        TimeSpan.FromSeconds(30)))
+                    .AddSource(builder.Environment.ApplicationName)
                     .AddSource("Microsoft.AgentFramework*")
                     .AddSource("Microsoft.Extensions.AI*")
                     .AddSource("CeoAgent.*")
@@ -104,6 +108,7 @@ public static class Extensions
                 }
 
                 AddLangfuseExporterIfConfigured(serviceDefaultsOptions.Langfuse, tracing);
+                AddLangSmithExporterIfConfigured(serviceDefaultsOptions.LangSmith, tracing);
             });
 
         return builder;
@@ -141,6 +146,23 @@ public static class Extensions
             options.Endpoint = langfuseOptions.GetOtlpEndpoint();
             options.Protocol = OtlpExportProtocol.HttpProtobuf;
             options.Headers = $"Authorization=Basic {authString},x-langfuse-ingestion-version=4";
+        });
+    }
+
+    private static void AddLangSmithExporterIfConfigured(
+        LangSmithOptions langSmithOptions,
+        TracerProviderBuilder tracing)
+    {
+        if (!langSmithOptions.IsConfigured)
+        {
+            return;
+        }
+
+        tracing.AddOtlpExporter(options =>
+        {
+            options.Endpoint = langSmithOptions.GetOtlpEndpoint();
+            options.Protocol = OtlpExportProtocol.HttpProtobuf;
+            options.Headers = langSmithOptions.GetHeaders();
         });
     }
 

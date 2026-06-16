@@ -1,4 +1,3 @@
-using CeoAgent.Application;
 using CeoAgent.Application.Agents;
 using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Infrastructure;
@@ -16,9 +15,9 @@ using CeoAgent.Shared.Prompt;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Shared.AITools;
+using CeoAgent.Worker.Jobs.Telemetry;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace CeoAgent.Worker.Jobs;
 
@@ -49,12 +48,14 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     {
         ArgumentNullException.ThrowIfNull(job);
 
+        using var processActivity = ProcessIncomingMessageJobTelemetry.StartMessageProcessing(job, WhatsAppProvider);
         using var logScope = BeginJobScope(job);
         companyContextAccessor.SetOrganization(job.OrganizationId);
 
         try
         {
             var context = await LoadContextAsync(job, cancellationToken);
+            ProcessIncomingMessageJobTelemetry.EnrichMessageProcessing(processActivity, CreateTelemetryContext(context));
 
             if (context.Conversation.Status == ConversationStatus.HandedOff)
             {
@@ -177,6 +178,11 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                 context.Channel.Id,
                 context.Customer.ExternalCustomerId,
                 cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ProcessIncomingMessageJobTelemetry.MarkError(processActivity, exception);
+            throw;
         }
         finally
         {
@@ -378,17 +384,16 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
         return message.Length <= 500 ? message : message[..500];
     }
 
-    private static void RecordTokenTelemetry(AgentRunResult agentResult)
+    private static ProcessIncomingMessageTelemetryContext CreateTelemetryContext(ProcessorContext context)
     {
-        if (agentResult.TotalTokenCount is { } totalTokens)
-        {
-            CeoAgentTelemetry.LlmTokensConsumed.Add(totalTokens);
-        }
-
-        if (agentResult.EstimatedCostUsd is { } estimatedCost)
-        {
-            CeoAgentTelemetry.LlmEstimatedCost.Add(estimatedCost);
-        }
+        return new ProcessIncomingMessageTelemetryContext(
+            context.Company.Id,
+            context.Conversation.Id,
+            context.AgentProfile.Id,
+            context.Channel.Provider.ToString(),
+            context.AgentProfile.LlmProvider.ToString(),
+            context.AgentProfile.ModelName,
+            context.Tools.Count);
     }
 
     private async Task<ProcessorContext> LoadContextAsync(ProcessIncomingMessageJob job, CancellationToken cancellationToken)
@@ -444,59 +449,52 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
         CancellationToken cancellationToken)
     {
         var messages = context.Messages.ToList();
+        var telemetryContext = CreateTelemetryContext(context);
         const bool sideEffectsEnabled = true;
 
         for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
         {
             AgentRunResult agentResult;
-            using var activity = CeoAgentTelemetry.ActivitySource.StartActivity("agent.run");
-            activity?.SetTag("organization.id", context.Company.Id);
-            activity?.SetTag("conversation.id", context.Conversation.Id);
-            activity?.SetTag("channel", context.Channel.Provider.ToString());
-            activity?.SetTag("llm.provider", context.AgentProfile.LlmProvider.ToString());
-            activity?.SetTag("llm.model", context.AgentProfile.ModelName);
-            activity?.SetTag("agent.iteration", iteration);
-            activity?.SetTag("tool.count", context.Tools.Count);
-            activity?.SetTag(CeoAgentTelemetry.Langfuse.ObservationType, "generation");
-            activity?.SetTag(CeoAgentTelemetry.Langfuse.ObservationModelName, context.AgentProfile.ModelName);
-            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataProvider, context.AgentProfile.LlmProvider.ToString());
-            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataOrganizationId, context.Company.Id.ToString());
-            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataConversationId, context.Conversation.Id.ToString());
-            activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataChannel, context.Channel.Provider.ToString());
-            var stopwatch = Stopwatch.StartNew();
-            try
+            using var iterationActivity = ProcessIncomingMessageJobTelemetry.StartAgentIteration(telemetryContext, iteration);
+            using (var activity = ProcessIncomingMessageJobTelemetry.StartLlmGeneration(telemetryContext, iteration))
             {
-                agentResult = await agentRuntime.RunAsync(
-                    new AgentRunRequest(
-                        context.AgentProfile.LlmProvider,
-                        context.AgentProfile.ModelName,
-                        prompt,
-                        [.. messages],
-                        context.Tools),
-                    cancellationToken);
-                stopwatch.Stop();
-                CeoAgentTelemetry.LlmCallDuration.Record(stopwatch.ElapsedMilliseconds);
-                RecordTokenTelemetry(agentResult);
-                activity?.SetTag("llm.response.id", agentResult.ResponseId);
-                activity?.SetTag("llm.finish_reason", agentResult.FinishReason);
-                activity?.SetTag("llm.tool_call_count", agentResult.ToolCalls.Count);
-                SetLangfuseUsageTags(activity, agentResult);
-                activity?.SetStatus(ActivityStatusCode.Ok);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                stopwatch.Stop();
-                CeoAgentTelemetry.LlmCallDuration.Record(stopwatch.ElapsedMilliseconds);
-                activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-                AgentRuntimeFailed(
-                    logger,
-                    exception,
-                    iteration);
-                return LoopCapFallbackText;
+                var stopwatch = Stopwatch.StartNew();
+                try
+                {
+                    agentResult = await agentRuntime.RunAsync(
+                        new AgentRunRequest(
+                            context.AgentProfile.LlmProvider,
+                            context.AgentProfile.ModelName,
+                            prompt,
+                            [.. messages],
+                            context.Tools),
+                        cancellationToken);
+                    stopwatch.Stop();
+                    ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
+                    ProcessIncomingMessageJobTelemetry.RecordTokenUsage(agentResult);
+                    ProcessIncomingMessageJobTelemetry.EnrichLlmGenerationResult(
+                        activity,
+                        agentResult,
+                        context.AgentProfile.ModelName);
+                    ProcessIncomingMessageJobTelemetry.MarkOk(activity);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    stopwatch.Stop();
+                    ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
+                    ProcessIncomingMessageJobTelemetry.MarkError(activity, exception);
+                    ProcessIncomingMessageJobTelemetry.MarkError(iterationActivity, exception);
+                    AgentRuntimeFailed(
+                        logger,
+                        exception,
+                        iteration);
+                    return LoopCapFallbackText;
+                }
             }
 
             if (agentResult.ToolCalls.Count == 0)
             {
+                ProcessIncomingMessageJobTelemetry.MarkOk(iterationActivity);
                 return agentResult.AssistantText;
             }
 
@@ -542,6 +540,8 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                     toolResult.ToolCallId,
                     toolResult.ToolName));
             }
+
+            ProcessIncomingMessageJobTelemetry.MarkOk(iterationActivity);
         }
 
         AgentLoopCapReached(
@@ -549,35 +549,6 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             MaxToolLoopIterations);
         await EscalateToHumanAsync(context, cancellationToken);
         return LoopCapFallbackText;
-    }
-
-    private static void SetLangfuseUsageTags(Activity? activity, AgentRunResult agentResult)
-    {
-        if (activity is null)
-        {
-            return;
-        }
-
-        var usage = new Dictionary<string, int>(capacity: 3);
-        if (agentResult.InputTokenCount is { } inputTokens)
-        {
-            usage["input"] = inputTokens;
-        }
-
-        if (agentResult.OutputTokenCount is { } outputTokens)
-        {
-            usage["output"] = outputTokens;
-        }
-
-        if (agentResult.TotalTokenCount is { } totalTokens)
-        {
-            usage["total"] = totalTokens;
-        }
-
-        if (usage.Count > 0)
-        {
-            activity.SetTag(CeoAgentTelemetry.Langfuse.ObservationUsageDetails, JsonSerializer.Serialize(usage));
-        }
     }
 
     /// <summary>
