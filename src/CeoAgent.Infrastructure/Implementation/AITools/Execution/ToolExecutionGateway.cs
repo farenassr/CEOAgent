@@ -34,6 +34,10 @@ public sealed class ToolExecutionGateway
         activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataOrganizationId, request.OrganizationId.ToString());
         activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataConversationId, request.ConversationId.ToString());
         activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolKey, request.ToolCall.Name);
+        activity?.SetTag(CeoAgentTelemetry.LangSmith.SpanKind, "tool");
+        activity?.SetTag(CeoAgentTelemetry.LangSmith.GenAiToolName, request.ToolCall.Name);
+        activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataOrganizationId, request.OrganizationId.ToString());
+        activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataConversationId, request.ConversationId.ToString());
         var stopwatch = Stopwatch.StartNew();
 
         var descriptor = request.EnabledTools.SingleOrDefault(tool =>
@@ -52,6 +56,8 @@ public sealed class ToolExecutionGateway
             activity?.SetTag("tool.failure_reason", "tool_not_enabled");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolStatus, "denied");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolFailureReason, "tool_not_enabled");
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolStatus, "denied");
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolFailureReason, "tool_not_enabled");
             activity?.SetStatus(ActivityStatusCode.Ok);
             return denied;
         }
@@ -70,6 +76,8 @@ public sealed class ToolExecutionGateway
             activity?.SetTag("tool.failure_reason", "side_effects_disabled");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolStatus, "denied");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolFailureReason, "side_effects_disabled");
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolStatus, "denied");
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolFailureReason, "side_effects_disabled");
             activity?.SetStatus(ActivityStatusCode.Ok);
             return denied;
         }
@@ -81,6 +89,7 @@ public sealed class ToolExecutionGateway
             CeoAgentTelemetry.ToolExecutionDuration.Record(stopwatch.ElapsedMilliseconds);
             activity?.SetTag("tool.status", "completed");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolStatus, "completed");
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolStatus, "completed");
             activity?.SetStatus(ActivityStatusCode.Ok);
             return result;
         }
@@ -92,6 +101,8 @@ public sealed class ToolExecutionGateway
             activity?.SetTag("tool.status", "failed");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolStatus, "failed");
             activity?.SetTag(CeoAgentTelemetry.Langfuse.MetadataToolFailureReason, exception.GetType().Name);
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolStatus, "failed");
+            activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataToolFailureReason, exception.GetType().Name);
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             throw;
         }

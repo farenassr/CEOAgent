@@ -90,6 +90,7 @@ if (!string.IsNullOrWhiteSpace(openAIApiKey))
 
 AddKeycloakEnvironment(builder, apiService, keyVault);
 builder.AddLangfuseEnvironment(apiService, worker, keyVault);
+builder.AddLangSmithEnvironment(apiService, worker, keyVault);
 
 await builder.Build().RunAsync();
 

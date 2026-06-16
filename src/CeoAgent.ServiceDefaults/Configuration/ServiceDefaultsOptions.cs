@@ -8,10 +8,13 @@ public sealed class ServiceDefaultsOptions
 
     public LangfuseOptions Langfuse { get; set; } = new();
 
+    public LangSmithOptions LangSmith { get; set; } = new();
+
     public static bool IsValid(ServiceDefaultsOptions options)
     {
         return IsValidOptionalUri(options.Otlp.Endpoint)
-            && IsValidLangfuseOptions(options.Langfuse);
+            && IsValidLangfuseOptions(options.Langfuse)
+            && IsValidLangSmithOptions(options.LangSmith);
     }
 
     private static bool IsValidLangfuseOptions(LangfuseOptions options)
@@ -36,10 +39,59 @@ public sealed class ServiceDefaultsOptions
             && IsValidOptionalUri(options.OtlpTracesEndpoint);
     }
 
+    private static bool IsValidLangSmithOptions(LangSmithOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            return IsValidOptionalUri(options.OtlpTracesEndpoint);
+        }
+
+        return IsValidOptionalUri(options.OtlpTracesEndpoint);
+    }
+
     private static bool IsValidOptionalUri(string? value)
     {
         return string.IsNullOrWhiteSpace(value)
             || Uri.TryCreate(value, UriKind.Absolute, out _);
+    }
+}
+
+public sealed class LangSmithOptions
+{
+    private const string DefaultOtlpEndpoint = "https://api.smith.langchain.com/otel/v1/traces";
+    private const string OtlpTracesPath = "/v1/traces";
+
+    public string? OtlpTracesEndpoint { get; set; }
+
+    public string? ApiKey { get; set; }
+
+    public string? Project { get; set; }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
+
+    public Uri GetOtlpEndpoint()
+    {
+        var endpoint = string.IsNullOrWhiteSpace(OtlpTracesEndpoint)
+            ? DefaultOtlpEndpoint
+            : OtlpTracesEndpoint.TrimEnd('/');
+
+        if (!endpoint.EndsWith(OtlpTracesPath, StringComparison.OrdinalIgnoreCase))
+        {
+            endpoint = $"{endpoint}{OtlpTracesPath}";
+        }
+
+        return new Uri(endpoint);
+    }
+
+    public string GetHeaders()
+    {
+        var headers = $"x-api-key={ApiKey}";
+        if (!string.IsNullOrWhiteSpace(Project))
+        {
+            headers += $",Langsmith-Project={Project}";
+        }
+
+        return headers;
     }
 }
 

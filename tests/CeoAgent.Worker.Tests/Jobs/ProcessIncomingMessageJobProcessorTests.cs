@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json;
+using CeoAgent.Application;
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Shared.AI;
 using CeoAgent.Application.Abstractions.Payments;
@@ -582,6 +584,97 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)).ShouldBeTrue();
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Si, tenemos disponibilidad a las 4:00 p.m.");
         fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenModelRequestsTool_CreatesLangSmithReadableActivityTree()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == CeoAgentTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        };
+        var activities = new List<Activity>();
+        listener.ActivityStopped = activity => activities.Add(activity);
+        ActivitySource.AddActivityListener(listener);
+        var previousCurrent = Activity.Current;
+        Activity.Current = null;
+
+        try
+        {
+            await using var fixture = await ProcessorFixture.CreateAsync();
+            fixture.InboundMessage.Type = MessageType.Text;
+            fixture.InboundMessage.MessageText = "Quiero reservar a las cuatro.";
+            fixture.InboundMessage.ProviderMessageId = null;
+            fixture.InboundMessage.Payload = null;
+            await fixture.DbContext.SaveChangesAsync();
+
+            fixture.Agent.Results.Enqueue(new AgentRunResult(
+                AssistantText: null,
+                ToolCalls:
+                [
+                    new AgentToolCall(
+                        "call-availability",
+                        MvpToolKeys.CheckGoogleCalendarAvailability,
+                        JsonSerializer.SerializeToElement(new
+                        {
+                            date = "2026-05-28",
+                            partySize = 2,
+                            preferredTime = "16:00",
+                        })),
+                ]));
+            fixture.Agent.Results.Enqueue(new AgentRunResult("Si, tenemos disponibilidad a las 4:00 p.m.", []));
+
+            const string correlationId = "activity-tree-correlation";
+            await fixture.Processor.ProcessAsync(
+                new ProcessIncomingMessageJob(
+                    fixture.OrganizationId,
+                    fixture.Conversation.Id,
+                    fixture.InboundMessage.Id,
+                    correlationId),
+                CancellationToken.None);
+
+            var root = activities.Single(activity =>
+                activity.DisplayName == "whatsapp.message.process"
+                && GetStringTag(activity, CeoAgentTelemetry.LangSmith.MetadataInboundMessageId) == fixture.InboundMessage.Id.ToString("D")
+                && GetStringTag(activity, CeoAgentTelemetry.LangSmith.MetadataCorrelationId) == correlationId);
+            var iterations = activities
+                .Where(activity => activity.DisplayName == "agent.iteration" && activity.TraceId == root.TraceId)
+                .OrderBy(activity => GetIntTag(activity, "agent.iteration"))
+                .ToArray();
+            var llmCalls = activities
+                .Where(activity => activity.DisplayName == "llm.generation" && activity.TraceId == root.TraceId)
+                .OrderBy(activity => GetIntTag(activity, "agent.iteration"))
+                .ToArray();
+            var tool = activities.Single(activity => activity.DisplayName == "tool.execution" && activity.TraceId == root.TraceId);
+
+            iterations.Length.ShouldBe(2);
+            llmCalls.Length.ShouldBe(2);
+            root.ParentId.ShouldBeNull();
+            GetStringTag(root, "messaging.system").ShouldBe("whatsapp_cloud");
+            GetStringTag(root, CeoAgentTelemetry.LangSmith.SpanKind).ShouldBe("chain");
+            GetStringTag(root, CeoAgentTelemetry.LangSmith.MetadataInboundMessageId).ShouldBe(fixture.InboundMessage.Id.ToString("D"));
+            GetStringTag(root, CeoAgentTelemetry.LangSmith.MetadataCorrelationId).ShouldBe(correlationId);
+
+            iterations[0].ParentSpanId.ShouldBe(root.SpanId);
+            iterations[1].ParentSpanId.ShouldBe(root.SpanId);
+            iterations[0].TraceId.ShouldBe(root.TraceId);
+            iterations[1].TraceId.ShouldBe(root.TraceId);
+
+            llmCalls[0].ParentSpanId.ShouldBe(iterations[0].SpanId);
+            llmCalls[1].ParentSpanId.ShouldBe(iterations[1].SpanId);
+            llmCalls[0].TraceId.ShouldBe(root.TraceId);
+            llmCalls[1].TraceId.ShouldBe(root.TraceId);
+            GetStringTag(llmCalls[0], CeoAgentTelemetry.LangSmith.SpanKind).ShouldBe("llm");
+
+            tool.ParentSpanId.ShouldBe(iterations[0].SpanId);
+            tool.TraceId.ShouldBe(root.TraceId);
+            GetStringTag(tool, CeoAgentTelemetry.LangSmith.SpanKind).ShouldBe("tool");
+        }
+        finally
+        {
+            Activity.Current = previousCurrent;
+        }
     }
 
     [Test]
@@ -1184,5 +1277,16 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         {
             return utcNow;
         }
+    }
+
+    private static string? GetStringTag(Activity activity, string key)
+    {
+        return activity.Tags.SingleOrDefault(tag => tag.Key == key).Value;
+    }
+
+    private static int GetIntTag(Activity activity, string key)
+    {
+        var tagValue = activity.TagObjects.Single(tag => tag.Key == key).Value;
+        return tagValue.ShouldBeOfType<int>();
     }
 }
