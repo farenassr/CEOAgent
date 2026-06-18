@@ -4,6 +4,8 @@ public sealed class PersistenceOptions
 {
     public const string SectionName = "Persistence";
 
+    public bool ApplyMigrationsOnStartup { get; set; }
+
     public bool UseInMemoryDatabase { get; set; }
 
     public string InMemoryDatabaseName { get; set; } = "CeoAgent";

@@ -11,6 +11,7 @@ using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using System.Data.Common;
 using System.Text;
 
 namespace CeoAgent.ServiceDefaults;
@@ -23,6 +24,10 @@ public static class Extensions
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
     private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
+    private const string CeoAgentConnectionStringName = "CeoAgent";
+    private const string CeoAgentConnectionStringKey = "ConnectionStrings:CeoAgent";
+    private const string PostgresConfigurationSectionName = "Postgres";
+    private const string DefaultPostgresPort = "5432";
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -46,6 +51,44 @@ public static class Extensions
         // {
         //     options.AllowedSchemes = ["https"];
         // });
+
+        return builder;
+    }
+
+    public static TBuilder AddCeoAgentPostgresConnectionString<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString(CeoAgentConnectionStringName)))
+        {
+            return builder;
+        }
+
+        var postgres = builder.Configuration.GetSection(PostgresConfigurationSectionName);
+        var host = postgres["Host"];
+        var username = postgres["Username"];
+        var password = postgres["Password"];
+        var database = postgres["Database"];
+
+        if (string.IsNullOrWhiteSpace(host)
+            || string.IsNullOrWhiteSpace(username)
+            || string.IsNullOrWhiteSpace(password)
+            || string.IsNullOrWhiteSpace(database))
+        {
+            return builder;
+        }
+
+        var connectionString = new DbConnectionStringBuilder
+        {
+            ["Host"] = host,
+            ["Port"] = postgres["Port"] ?? DefaultPostgresPort,
+            ["Username"] = username,
+            ["Password"] = password,
+            ["Database"] = database,
+        }.ConnectionString;
+
+        builder.Configuration.AddInMemoryCollection(
+        [
+            new KeyValuePair<string, string?>(CeoAgentConnectionStringKey, connectionString),
+        ]);
 
         return builder;
     }

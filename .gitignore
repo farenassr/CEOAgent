@@ -370,3 +370,9 @@ docs/CODE_REVIEW
 /ngrok.exe
 
 TestResults
+
+# Local knowledge graph artifacts
+graphify-out/
+
+.codex/skills/graphify
+.codex/hooks.json
