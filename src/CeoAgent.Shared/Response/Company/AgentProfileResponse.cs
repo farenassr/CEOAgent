@@ -38,4 +38,14 @@ public sealed class AgentProfileResponse
     /// Optional company-specific prompt instructions. Example: Use a warm but concise tone.
     /// </summary>
     public string? PromptOverride { get; set; }
+
+    /// <summary>
+    /// Maximum output tokens requested from the model per runtime call.
+    /// </summary>
+    public int MaxOutputTokenCount { get; set; }
+
+    /// <summary>
+    /// Maximum estimated LLM cost allowed for one inbound message job.
+    /// </summary>
+    public double MaxEstimatedCostUsdPerJob { get; set; }
 }

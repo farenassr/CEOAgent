@@ -101,6 +101,16 @@ internal static class ProcessIncomingMessageJobTelemetry
         }
     }
 
+    public static void RecordLlmBudgetExceeded()
+    {
+        CeoAgentTelemetry.LlmBudgetExceeded.Add(1);
+    }
+
+    public static void RecordLlmCostEstimationMissing()
+    {
+        CeoAgentTelemetry.LlmCostEstimationMissing.Add(1);
+    }
+
     public static void EnrichLlmGenerationResult(
         Activity? activity,
         AgentRunResult agentResult,

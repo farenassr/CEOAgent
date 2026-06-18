@@ -2,6 +2,10 @@ using CeoAgent.Application.Errors;
 using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.Infrastructure;
+using CeoAgent.Infrastructure.Entities;
+using CeoAgent.Infrastructure.Entities.JsonDocuments;
+using CeoAgent.Infrastructure.Persistence;
+using CeoAgent.Infrastructure.Persistence.Extensions;
 using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Enums;
@@ -19,7 +23,8 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 public sealed partial class SendWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
     IAdminTenantGuard tenantGuard,
-    IMessageChannelIntegration messaging,
+    IOutboundMessageDispatcher outboundMessageDispatcher,
+    TimeProvider timeProvider,
     ILogger<SendWhatsAppMessageEndpoint> logger) : Endpoint<SendWhatsAppMessageRequest, SendWhatsAppMessageResponse>
 {
     public override void Configure()
@@ -61,20 +66,63 @@ public sealed partial class SendWhatsAppMessageEndpoint(
                 $"Provider '{channel.Provider}' is not supported for WhatsApp sends.");
         }
 
-        SentMessageReference sent;
+        var conversation = await dbContext.Conversations
+            .WithDefaultTracking(trackChanges: true)
+            .Include(entity => entity.Customer)
+            .SingleOrDefaultAsync(
+                entity => entity.OrganizationId == organizationId
+                    && entity.Id == request.ConversationId
+                    && entity.CompanyChannelId == companyChannelId,
+                cancellationToken) ?? throw new NotFoundException("conversation", request.ConversationId);
+        if (!string.Equals(conversation.Customer.ExternalCustomerId, request.RecipientExternalId, StringComparison.Ordinal))
+        {
+            throw new BusinessRuleException(
+                "conversation_recipient_mismatch",
+                "RecipientExternalId must match the customer for the selected conversation.");
+        }
+
+        var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey)
+            ? $"manual-whatsapp:{Guid.CreateVersion7()}"
+            : request.IdempotencyKey;
+        var message = await dbContext.Messages
+            .ForConversation(organizationId, conversation.Id)
+            .SingleOrDefaultAsync(entity =>
+                entity.Role == MessageRole.Assistant
+                && entity.ProviderMessageId == idempotencyKey,
+                cancellationToken);
+        if (message is null)
+        {
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            message = new Message
+            {
+                OrganizationId = organizationId,
+                ConversationId = conversation.Id,
+                Role = MessageRole.Assistant,
+                Type = MessageType.Text,
+                MessageText = request.Text,
+                ProviderMessageId = idempotencyKey,
+                Payload = new MessagePayload
+                {
+                    ProviderType = "text",
+                },
+                OccurredAt = now,
+            };
+            dbContext.Messages.Add(message);
+            conversation.LastMessageAt = now;
+        }
+
+        OutboundMessageDispatchResult sent;
         try
         {
-            sent = await messaging.SendTextAsync(
-                new ChannelTextMessage(
+            sent = await outboundMessageDispatcher.SendTextAsync(
+                new OutboundTextDispatchRequest(
                     organizationId,
                     companyChannelId,
-                    Guid.Empty,
-                    Guid.CreateVersion7(),
+                    conversation.Id,
+                    message.Id,
                     request.RecipientExternalId,
                     request.Text,
-                    string.IsNullOrWhiteSpace(request.IdempotencyKey)
-                        ? $"manual-whatsapp:{Guid.CreateVersion7()}"
-                        : request.IdempotencyKey),
+                    idempotencyKey),
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -109,6 +157,8 @@ public sealed class SendWhatsAppMessageValidator : Validator<SendWhatsAppMessage
 {
     public SendWhatsAppMessageValidator()
     {
+        RuleFor(request => request.ConversationId)
+            .NotEmpty();
         RuleFor(request => request.RecipientExternalId)
             .NotEmpty()
             .MaximumLength(160)

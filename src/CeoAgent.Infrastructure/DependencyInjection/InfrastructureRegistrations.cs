@@ -12,6 +12,7 @@ using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
+using CeoAgent.Infrastructure.Implementation.Messaging;
 using CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.OpenAI;
 using CeoAgent.Infrastructure.Implementation.Messaging.Payments;
@@ -102,6 +103,7 @@ public static class InfrastructureRegistrations
             var integration = provider.GetRequiredService<WhatsAppCloudIntegration>();
             return integration;
         });
+        services.AddScoped<IOutboundMessageDispatcher, OutboundMessageDispatcher>();
 
         return services;
     }

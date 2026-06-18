@@ -4,6 +4,7 @@ using CeoAgent.ApiService.Infrastructure.Queues;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
 using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
 using CeoAgent.Application.Errors;
+using CeoAgent.Shared.Response.Queues;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Text;

@@ -34,13 +34,6 @@ builder.Logging.AddZLoggerConsole(options =>
     options.UseJsonFormatter();
 });
 
-builder.Logging.AddOpenTelemetry(logging =>
-{
-    logging.IncludeFormattedMessage = true;
-    logging.IncludeScopes = true;
-    logging.ParseStateValues = true;
-});
-
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     if (builder.Configuration.GetConnectionString("CeoAgent") is { Length: > 0 } postgresConnectionString)

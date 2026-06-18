@@ -15,7 +15,7 @@ namespace CeoAgent.Worker.Jobs;
 
 public sealed partial class ReservationPaymentInstructionSender(
     CeoAgentDbContext dbContext,
-    IMessageChannelIntegration messaging,
+    IOutboundMessageDispatcher outboundMessageDispatcher,
     IPaymentQrImageProvider qrImageProvider,
     HumanHandoffToolExecutor handoffExecutor,
     TimeProvider timeProvider,
@@ -84,20 +84,15 @@ public sealed partial class ReservationPaymentInstructionSender(
             $"payment-receipt:{inboundMessageId:N}",
             cancellationToken);
 
-        if (message.Payload?.ProviderMessageId is null)
-        {
-            var sent = await messaging.SendTextAsync(
-                new ChannelTextMessage(
-                    organizationId,
-                    companyChannelId,
-                    conversationId,
-                    message.Id,
-                    recipientExternalId,
-                    ReceiptConfirmationText,
-                    message.ProviderMessageId!),
-                cancellationToken);
-            MarkSent(message, sent);
-        }
+        await SendTextIfPendingAsync(
+            message,
+            organizationId,
+            companyChannelId,
+            conversationId,
+            recipientExternalId,
+            ReceiptConfirmationText,
+            message.ProviderMessageId!,
+            cancellationToken);
         await handoffExecutor.AutoEscalateAsync(organizationId, conversationId, inboundMessageId, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
@@ -168,8 +163,8 @@ public sealed partial class ReservationPaymentInstructionSender(
         try
         {
             var qr = await qrImageProvider.GetQrImageAsync(account.QrBlobContainer, account.QrBlobName, cancellationToken);
-            var sent = await messaging.SendImageAsync(
-                new ChannelImageMessage(
+            await outboundMessageDispatcher.SendImageAsync(
+                new OutboundImageDispatchRequest(
                     execution.OrganizationId,
                     companyChannelId,
                     execution.ConversationId,
@@ -181,7 +176,6 @@ public sealed partial class ReservationPaymentInstructionSender(
                     caption,
                     paymentIdempotencyKey),
                 cancellationToken);
-            MarkSent(paymentMessage, sent);
             await UpsertAwaitingPaymentStateAsync(execution, account, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -190,8 +184,8 @@ public sealed partial class ReservationPaymentInstructionSender(
             PaymentQrImageSendFailed(logger, exception, execution.OrganizationId, execution.ConversationId, execution.Id);
             paymentMessage.Type = MessageType.Text;
             paymentMessage.Payload = new MessagePayload { ProviderType = "text" };
-            var sent = await messaging.SendTextAsync(
-                new ChannelTextMessage(
+            await outboundMessageDispatcher.SendTextAsync(
+                new OutboundTextDispatchRequest(
                     execution.OrganizationId,
                     companyChannelId,
                     execution.ConversationId,
@@ -200,7 +194,6 @@ public sealed partial class ReservationPaymentInstructionSender(
                     caption,
                     paymentIdempotencyKey),
                 cancellationToken);
-            MarkSent(paymentMessage, sent);
             await UpsertAwaitingPaymentStateAsync(execution, account, cancellationToken);
             await handoffExecutor.AutoEscalateAsync(execution.OrganizationId, execution.ConversationId, execution.TriggerMessageId, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -220,20 +213,15 @@ public sealed partial class ReservationPaymentInstructionSender(
             $"payment-config-missing:{execution.Id}",
             cancellationToken);
 
-        if (message.Payload?.ProviderMessageId is null)
-        {
-            var sent = await messaging.SendTextAsync(
-                new ChannelTextMessage(
-                    execution.OrganizationId,
-                    companyChannelId,
-                    execution.ConversationId,
-                    message.Id,
-                    recipientExternalId,
-                    PaymentFallbackText,
-                    message.ProviderMessageId!),
-                cancellationToken);
-            MarkSent(message, sent);
-        }
+        await SendTextIfPendingAsync(
+            message,
+            execution.OrganizationId,
+            companyChannelId,
+            execution.ConversationId,
+            recipientExternalId,
+            PaymentFallbackText,
+            message.ProviderMessageId!,
+            cancellationToken);
 
         await handoffExecutor.AutoEscalateAsync(execution.OrganizationId, execution.ConversationId, execution.TriggerMessageId, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -375,10 +363,31 @@ public sealed partial class ReservationPaymentInstructionSender(
         };
     }
 
-    private static void MarkSent(Message message, SentMessageReference sent)
+    private async Task SendTextIfPendingAsync(
+        Message message,
+        Guid organizationId,
+        Guid companyChannelId,
+        Guid conversationId,
+        string recipientExternalId,
+        string text,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
     {
-        message.Payload ??= new MessagePayload();
-        message.Payload.ProviderMessageId = sent.ProviderMessageId;
+        if (message.Payload?.ProviderMessageId is { Length: > 0 })
+        {
+            return;
+        }
+
+        await outboundMessageDispatcher.SendTextAsync(
+            new OutboundTextDispatchRequest(
+                organizationId,
+                companyChannelId,
+                conversationId,
+                message.Id,
+                recipientExternalId,
+                text,
+                idempotencyKey),
+            cancellationToken);
     }
 
     [LoggerMessage(

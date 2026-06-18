@@ -89,6 +89,88 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     }
 
     [Test]
+    public async Task DispatchPendingAsync_WhenInProgressClaimIsStale_ReclaimsAndDispatches()
+    {
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        await using var database = await PostgresApiDatabase.CreateAsync();
+        var dbContext = database.Context;
+        database.OrganizationContext.SetOrganization(organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
+        var message = await SeedConversationMessageAsync(dbContext, organizationId);
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 6, 18, 12, 0, 0, TimeSpan.Zero));
+        var staleClaimedAt = clock.GetUtcNow().AddMinutes(-10).UtcDateTime;
+        var outbox = new IncomingMessageOutbox
+        {
+            OrganizationId = organizationId,
+            ConversationId = message.ConversationId,
+            MessageId = message.Id,
+            Status = IncomingMessageOutboxStatus.QueueDispatchInProgress,
+            AttemptCount = 1,
+            LastAttemptAt = staleClaimedAt,
+            ClaimedAt = staleClaimedAt,
+            ClaimedBy = "dead-dispatcher",
+            MaxAttempts = 5,
+        };
+        dbContext.IncomingMessageOutbox.Add(outbox);
+        await dbContext.SaveChangesAsync();
+        var queue = new FakeIncomingMessageQueue();
+        var dispatcher = new IncomingMessageOutboxDispatcher(
+            dbContext,
+            queue,
+            clock,
+            new RecordingLogger<IncomingMessageOutboxDispatcher>());
+
+        var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
+
+        dispatched.ShouldBe(1);
+        queue.Jobs.Count.ShouldBe(1);
+        queue.Jobs[0].MessageId.ShouldBe(message.Id);
+        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueuedForWorkerProcessing);
+        outbox.AttemptCount.ShouldBe(2);
+        outbox.ClaimedBy.ShouldNotBe("dead-dispatcher");
+    }
+
+    [Test]
+    public async Task DispatchPendingAsync_WhenInProgressClaimIsFresh_DoesNotReclaim()
+    {
+        var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
+        await using var database = await PostgresApiDatabase.CreateAsync();
+        var dbContext = database.Context;
+        database.OrganizationContext.SetOrganization(organizationId);
+        await SeedCompanyAsync(dbContext, organizationId);
+        var message = await SeedConversationMessageAsync(dbContext, organizationId);
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 6, 18, 12, 0, 0, TimeSpan.Zero));
+        var outbox = new IncomingMessageOutbox
+        {
+            OrganizationId = organizationId,
+            ConversationId = message.ConversationId,
+            MessageId = message.Id,
+            Status = IncomingMessageOutboxStatus.QueueDispatchInProgress,
+            AttemptCount = 1,
+            LastAttemptAt = clock.GetUtcNow().AddMinutes(-1).UtcDateTime,
+            ClaimedAt = clock.GetUtcNow().AddMinutes(-1).UtcDateTime,
+            ClaimedBy = "active-dispatcher",
+            MaxAttempts = 5,
+        };
+        dbContext.IncomingMessageOutbox.Add(outbox);
+        await dbContext.SaveChangesAsync();
+        var queue = new FakeIncomingMessageQueue();
+        var dispatcher = new IncomingMessageOutboxDispatcher(
+            dbContext,
+            queue,
+            clock,
+            new RecordingLogger<IncomingMessageOutboxDispatcher>());
+
+        var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
+
+        dispatched.ShouldBe(0);
+        queue.Jobs.ShouldBeEmpty();
+        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueueDispatchInProgress);
+        outbox.AttemptCount.ShouldBe(1);
+        outbox.ClaimedBy.ShouldBe("active-dispatcher");
+    }
+
+    [Test]
     public async Task IngestAsync_WhenDuplicateMessageHasNoReplyAndOutboxAlreadyDispatched_DoesNotReenqueueExistingMessage()
     {
         var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
@@ -357,6 +439,41 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         await dbContext.SaveChangesAsync();
     }
 
+    private static async Task<Message> SeedConversationMessageAsync(CeoAgentDbContext dbContext, Guid organizationId)
+    {
+        var customer = new Customer
+        {
+            Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b33"),
+            OrganizationId = organizationId,
+            CompanyChannelId = dbContext.CompanyChannels.Local.Single().Id,
+            ExternalCustomerId = "15551234567",
+        };
+        var conversation = new Conversation
+        {
+            Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b34"),
+            OrganizationId = organizationId,
+            Customer = customer,
+            CompanyChannelId = customer.CompanyChannelId,
+            AgentProfileId = dbContext.AgentProfiles.Local.Single().Id,
+            LastMessageAt = new DateTime(2026, 6, 18, 12, 0, 0, DateTimeKind.Utc),
+        };
+        var message = new Message
+        {
+            Id = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b35"),
+            OrganizationId = organizationId,
+            Conversation = conversation,
+            Role = MessageRole.User,
+            Type = MessageType.Text,
+            MessageText = "Hola",
+            ProviderMessageId = "wamid.stale-claim",
+            OccurredAt = new DateTime(2026, 6, 18, 12, 0, 0, DateTimeKind.Utc),
+        };
+
+        dbContext.AddRange(customer, conversation, message);
+        await dbContext.SaveChangesAsync();
+        return message;
+    }
+
     private static WhatsAppWebhookIngestionService CreateService(
         CeoAgentDbContext dbContext,
         FakeIncomingMessageQueue queue,
@@ -413,4 +530,12 @@ public sealed class WhatsAppWebhookIngestionServiceTests
     }
 
     private sealed record LogEntry(LogLevel LogLevel, EventId EventId, string Message);
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return utcNow;
+        }
+    }
 }

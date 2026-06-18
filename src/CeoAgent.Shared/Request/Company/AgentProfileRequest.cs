@@ -49,6 +49,20 @@ public sealed class AgentProfileRequest
     public string? PromptOverride { get; set; }
 
     /// <summary>
+    /// Maximum output tokens requested from the model per runtime call.
+    /// </summary>
+    [Description("Maximum output tokens requested from the model per runtime call.")]
+    [DefaultValue(1024)]
+    public int MaxOutputTokenCount { get; set; } = 1024;
+
+    /// <summary>
+    /// Maximum estimated LLM cost allowed for one inbound message job.
+    /// </summary>
+    [Description("Maximum estimated LLM cost allowed for one inbound message job.")]
+    [DefaultValue(0.05d)]
+    public double MaxEstimatedCostUsdPerJob { get; set; } = 0.05d;
+
+    /// <summary>
     /// Working hours configuration as JSON.
     /// </summary>
     [Description("Working hours configuration as JSON.")]

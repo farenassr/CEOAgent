@@ -1,6 +1,7 @@
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
 using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
 using CeoAgent.Application.Errors;
+using CeoAgent.Shared.Response.Queues;
 
 namespace CeoAgent.ApiService.Infrastructure.Queues.Implementation;
 

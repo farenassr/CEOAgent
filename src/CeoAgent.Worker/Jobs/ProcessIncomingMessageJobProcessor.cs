@@ -17,6 +17,7 @@ using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Shared.AITools;
 using CeoAgent.Worker.Jobs.Telemetry;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using System.Diagnostics;
 
 namespace CeoAgent.Worker.Jobs;
@@ -27,6 +28,7 @@ namespace CeoAgent.Worker.Jobs;
 public sealed partial class ProcessIncomingMessageJobProcessor(
     CeoAgentDbContext dbContext,
     IMessageChannelIntegration messaging,
+    IOutboundMessageDispatcher outboundMessageDispatcher,
     IAgentRuntime agentRuntime,
     CompanyToolRegistry toolRegistry,
     ToolExecutionGateway toolGateway,
@@ -34,6 +36,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     ReservationPaymentInstructionSender paymentInstructionSender,
     IOrganizationContextAccessor companyContextAccessor,
     TimeProvider timeProvider,
+    IHostEnvironment hostEnvironment,
     ILogger<ProcessIncomingMessageJobProcessor> logger)
 {
     private const string WhatsAppProvider = "whatsapp_cloud";
@@ -164,12 +167,16 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             dbContext.Messages.Add(assistant);
             context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
 
-            await SendTextThroughOutboxAsync(
-                context,
-                assistant,
-                assistantText,
-                replyClientMessageId,
-                job.CorrelationId,
+            await outboundMessageDispatcher.SendTextAsync(
+                new OutboundTextDispatchRequest(
+                    context.Company.Id,
+                    context.Channel.Id,
+                    context.Conversation.Id,
+                    assistant.Id,
+                    context.Customer.ExternalCustomerId,
+                    assistantText,
+                    replyClientMessageId,
+                    job.CorrelationId),
                 cancellationToken);
             await paymentInstructionSender.SendForSuccessfulReservationsAsync(
                 context.Company.Id,
@@ -220,12 +227,16 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
 
         dbContext.Messages.Add(assistant);
         context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-        await SendTextThroughOutboxAsync(
-            context,
-            assistant,
-            text,
-            replyClientMessageId,
-            job.CorrelationId,
+        await outboundMessageDispatcher.SendTextAsync(
+            new OutboundTextDispatchRequest(
+                context.Company.Id,
+                context.Channel.Id,
+                context.Conversation.Id,
+                assistant.Id,
+                context.Customer.ExternalCustomerId,
+                text,
+                replyClientMessageId,
+                job.CorrelationId),
             cancellationToken);
     }
 
@@ -237,151 +248,22 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
         CancellationToken cancellationToken)
     {
         context.Conversation.LastMessageAt = timeProvider.GetUtcNow().UtcDateTime;
-        await SendTextThroughOutboxAsync(
-            context,
-            existingReply,
-            existingReply.MessageText ?? string.Empty,
-            replyClientMessageId,
-            correlationId,
+        await outboundMessageDispatcher.SendTextAsync(
+            new OutboundTextDispatchRequest(
+                context.Company.Id,
+                context.Channel.Id,
+                context.Conversation.Id,
+                existingReply.Id,
+                context.Customer.ExternalCustomerId,
+                existingReply.MessageText ?? string.Empty,
+                replyClientMessageId,
+                correlationId),
             cancellationToken);
-    }
-
-    private async Task SendTextThroughOutboxAsync(
-        ProcessorContext context,
-        Message assistant,
-        string text,
-        string idempotencyKey,
-        string? correlationId,
-        CancellationToken cancellationToken)
-    {
-        var existingOutbox = await dbContext.OutgoingMessageOutbox
-            .SingleOrDefaultAsync(
-                entity => entity.OrganizationId == context.Company.Id
-                    && entity.IdempotencyKey == idempotencyKey,
-                cancellationToken);
-        if (existingOutbox?.Status == OutgoingMessageOutboxStatus.SentToProvider
-            && !string.IsNullOrWhiteSpace(existingOutbox.ProviderMessageId))
-        {
-            MarkAssistantSent(assistant, new SentMessageReference(existingOutbox.ProviderMessageId));
-            return;
-        }
-
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        var outbox = existingOutbox ?? new OutgoingMessageOutbox
-        {
-            OrganizationId = context.Company.Id,
-            ConversationId = context.Conversation.Id,
-            MessageId = assistant.Id,
-            Provider = WhatsAppProvider,
-            Status = OutgoingMessageOutboxStatus.SendingToProvider,
-            IdempotencyKey = idempotencyKey,
-            CorrelationId = correlationId,
-            ClaimedAt = now,
-            ClaimedBy = "worker",
-            AttemptCount = 0,
-        };
-
-        outbox.Status = OutgoingMessageOutboxStatus.SendingToProvider;
-        outbox.AttemptCount++;
-        outbox.ClaimedAt = now;
-        outbox.ClaimedBy = "worker";
-        outbox.CorrelationId ??= correlationId;
-        outbox.LastError = null;
-
-        if (existingOutbox is null)
-        {
-            dbContext.OutgoingMessageOutbox.Add(outbox);
-        }
-
-        var ledger = new ProviderSendLedger
-        {
-            OrganizationId = context.Company.Id,
-            OutgoingMessageOutboxId = outbox.Id,
-            AttemptNumber = outbox.AttemptCount,
-            Provider = WhatsAppProvider,
-            Status = ProviderSendLedgerStatus.SendAttemptStarted,
-            RequestHash = idempotencyKey,
-            StartedAt = now,
-            CorrelationId = correlationId,
-        };
-        dbContext.ProviderSendLedger.Add(ledger);
-        await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, jobId: null, cancellationToken);
-
-        try
-        {
-            var sent = await messaging.SendTextAsync(
-                new ChannelTextMessage(
-                    context.Company.Id,
-                    context.Channel.Id,
-                    context.Conversation.Id,
-                    assistant.Id,
-                    context.Customer.ExternalCustomerId,
-                    text,
-                    idempotencyKey),
-                cancellationToken);
-
-            MarkAssistantSent(assistant, sent);
-            var completedAt = timeProvider.GetUtcNow().UtcDateTime;
-            outbox.Status = OutgoingMessageOutboxStatus.SentToProvider;
-            outbox.ProviderMessageId = sent.ProviderMessageId;
-            outbox.SentAt = completedAt;
-            outbox.CompletedAt = completedAt;
-            outbox.LastError = null;
-            ledger.Status = ProviderSendLedgerStatus.ProviderAccepted;
-            ledger.ProviderMessageId = sent.ProviderMessageId;
-            ledger.FinishedAt = completedAt;
-            await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, jobId: null, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            var failedAt = timeProvider.GetUtcNow().UtcDateTime;
-            outbox.Status = outbox.AttemptCount >= outbox.MaxAttempts
-                ? OutgoingMessageOutboxStatus.ProviderSendFailed
-                : OutgoingMessageOutboxStatus.ProviderSendRetryScheduled;
-            outbox.NextAttemptAt = outbox.Status == OutgoingMessageOutboxStatus.ProviderSendRetryScheduled
-                ? failedAt
-                : null;
-            outbox.LastError = BoundProviderError(exception.Message);
-            ledger.Status = ProviderSendLedgerStatus.ProviderUnavailable;
-            ledger.ErrorCode = exception.GetType().Name;
-            ledger.ErrorMessage = BoundProviderError(exception.Message);
-            ledger.FinishedAt = failedAt;
-            await SaveFinalStateAsync(context.Company.Id, context.Conversation.Id, jobId: null, cancellationToken);
-            throw;
-        }
-    }
-
-    private async Task SaveFinalStateAsync(
-        Guid organizationId,
-        Guid conversationId,
-        Guid? jobId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            ConversationConcurrencyConflict(logger, organizationId, conversationId, jobId);
-            throw;
-        }
     }
 
     private static string ReplyClientMessageId(Message inbound)
     {
         return $"reply:{inbound.Id}";
-    }
-
-    private static void MarkAssistantSent(Message assistant, SentMessageReference sent)
-    {
-        assistant.Payload ??= new MessagePayload();
-        assistant.Payload.ProviderMessageId = sent.ProviderMessageId;
-    }
-
-    private static string BoundProviderError(string message)
-    {
-        return message.Length <= 500 ? message : message[..500];
     }
 
     private static ProcessIncomingMessageTelemetryContext CreateTelemetryContext(ProcessorContext context)
@@ -451,9 +333,40 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
         var messages = context.Messages.ToList();
         var telemetryContext = CreateTelemetryContext(context);
         const bool sideEffectsEnabled = true;
+        var maxEstimatedCostUsd = context.AgentProfile.MaxEstimatedCostUsdPerJob;
+        var accumulatedEstimatedCostUsd = 0d;
+
+        if (maxEstimatedCostUsd > 0
+            && !IsLocalDevelopmentOrTesting()
+            && !agentRuntime.CanEstimateCost(context.AgentProfile.LlmProvider, context.AgentProfile.ModelName))
+        {
+            ProcessIncomingMessageJobTelemetry.RecordLlmCostEstimationMissing();
+            LlmCostPricingMissing(
+                logger,
+                context.Company.Id,
+                context.AgentProfile.Id,
+                context.AgentProfile.ModelName,
+                hostEnvironment.EnvironmentName);
+            await EscalateToHumanAsync(context, cancellationToken);
+            return LoopCapFallbackText;
+        }
 
         for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
         {
+            if (IsLlmBudgetExceeded(maxEstimatedCostUsd, accumulatedEstimatedCostUsd))
+            {
+                ProcessIncomingMessageJobTelemetry.RecordLlmBudgetExceeded();
+                LlmBudgetExceeded(
+                    logger,
+                    context.Company.Id,
+                    context.AgentProfile.Id,
+                    context.AgentProfile.ModelName,
+                    accumulatedEstimatedCostUsd,
+                    maxEstimatedCostUsd);
+                await EscalateToHumanAsync(context, cancellationToken);
+                return LoopCapFallbackText;
+            }
+
             AgentRunResult agentResult;
             using var iterationActivity = ProcessIncomingMessageJobTelemetry.StartAgentIteration(telemetryContext, iteration);
             using (var activity = ProcessIncomingMessageJobTelemetry.StartLlmGeneration(telemetryContext, iteration))
@@ -467,11 +380,21 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                             context.AgentProfile.ModelName,
                             prompt,
                             [.. messages],
-                            context.Tools),
+                            context.Tools,
+                            context.AgentProfile.MaxOutputTokenCount),
                         cancellationToken);
                     stopwatch.Stop();
                     ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
                     ProcessIncomingMessageJobTelemetry.RecordTokenUsage(agentResult);
+                    if (agentResult.EstimatedCostUsd is { } estimatedCost)
+                    {
+                        accumulatedEstimatedCostUsd += estimatedCost;
+                    }
+                    else if (maxEstimatedCostUsd > 0)
+                    {
+                        ProcessIncomingMessageJobTelemetry.RecordLlmCostEstimationMissing();
+                    }
+
                     ProcessIncomingMessageJobTelemetry.EnrichLlmGenerationResult(
                         activity,
                         agentResult,
@@ -490,6 +413,20 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                         iteration);
                     return LoopCapFallbackText;
                 }
+            }
+
+            if (IsLlmBudgetExceeded(maxEstimatedCostUsd, accumulatedEstimatedCostUsd))
+            {
+                ProcessIncomingMessageJobTelemetry.RecordLlmBudgetExceeded();
+                LlmBudgetExceeded(
+                    logger,
+                    context.Company.Id,
+                    context.AgentProfile.Id,
+                    context.AgentProfile.ModelName,
+                    accumulatedEstimatedCostUsd,
+                    maxEstimatedCostUsd);
+                await EscalateToHumanAsync(context, cancellationToken);
+                return LoopCapFallbackText;
             }
 
             if (agentResult.ToolCalls.Count == 0)
@@ -580,46 +517,16 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
         return TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timeZone);
     }
 
-    private static CeoAgent.Shared.JsonDocuments.WorkingHours? ToSharedWorkingHours(WorkingHours? workingHours)
+    private bool IsLocalDevelopmentOrTesting()
     {
-        if (workingHours is null)
-        {
-            return null;
-        }
-
-        return new CeoAgent.Shared.JsonDocuments.WorkingHours
-        {
-            Schedule = new CeoAgent.Shared.JsonDocuments.WeeklySchedule
-            {
-                Monday = ConvertSlots(workingHours.Schedule.Monday),
-                Tuesday = ConvertSlots(workingHours.Schedule.Tuesday),
-                Wednesday = ConvertSlots(workingHours.Schedule.Wednesday),
-                Thursday = ConvertSlots(workingHours.Schedule.Thursday),
-                Friday = ConvertSlots(workingHours.Schedule.Friday),
-                Saturday = ConvertSlots(workingHours.Schedule.Saturday),
-                Sunday = ConvertSlots(workingHours.Schedule.Sunday),
-            },
-            Holidays = workingHours.Holidays
-                .ConvertAll(holiday => new CeoAgent.Shared.JsonDocuments.SpecialDay
-                {
-                    Date = holiday.Date,
-                    IsClosed = holiday.IsClosed,
-                    Reason = holiday.Reason,
-                    TimeSlots = ConvertSlots(holiday.TimeSlots),
-                })
-,
-        };
+        return hostEnvironment.IsDevelopment()
+            || string.Equals(hostEnvironment.EnvironmentName, "Local", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hostEnvironment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static List<CeoAgent.Shared.JsonDocuments.TimeSlot> ConvertSlots(IEnumerable<TimeSlot> slots)
+    private static bool IsLlmBudgetExceeded(double maxEstimatedCostUsd, double accumulatedEstimatedCostUsd)
     {
-        return slots
-            .Select(slot => new CeoAgent.Shared.JsonDocuments.TimeSlot
-            {
-                Start = slot.Start,
-                End = slot.End,
-            })
-            .ToList();
+        return maxEstimatedCostUsd > 0 && accumulatedEstimatedCostUsd >= maxEstimatedCostUsd;
     }
 
     private sealed record ProcessorContext(
@@ -654,7 +561,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             Language = context.AgentProfile.Language,
             ModelName = context.AgentProfile.ModelName,
             PromptOverride = context.AgentProfile.PromptOverride,
-            WorkingHoursSummary = WorkingHoursPromptFormatter.Format(ToSharedWorkingHours(context.Company.WorkingHours)),
+            WorkingHoursSummary = WorkingHoursPromptFormatter.Format(WorkingHoursSharedAdapter.ToShared(context.Company.WorkingHours)),
             Tools = context.Tools,
         });
     }

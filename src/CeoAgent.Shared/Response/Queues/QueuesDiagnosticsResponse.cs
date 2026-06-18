@@ -1,4 +1,4 @@
-namespace CeoAgent.ApiService.Infrastructure.Queues.Contracts;
+namespace CeoAgent.Shared.Response.Queues;
 
 public sealed record QueuesDiagnosticsResponse(
     IReadOnlyList<QueueDiagnosticsInfo> Queues,

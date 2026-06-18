@@ -23,9 +23,12 @@ using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Shared.AITools;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
+using CeoAgent.Infrastructure.Implementation.Messaging;
 using CeoAgent.Worker.Jobs;
 using CeoAgent.Worker.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 
@@ -107,6 +110,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         fixture.Messaging.ReadMessages.ShouldBeEmpty();
         var request = fixture.Agent.Requests.Single();
+        request.MaxOutputTokenCount.ShouldBe(1024);
         request.Messages[^1].Text.ShouldBe("Hola desde WhatsApp admin");
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
         fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
@@ -262,6 +266,17 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         var paymentMessage = await fixture.DbContext.Messages.SingleAsync(message => message.ProviderMessageId == $"payment:{execution.Id}");
         paymentMessage.Type.ShouldBe(MessageType.Image);
         paymentMessage.Payload!.ProviderType.ShouldBe("image");
+        paymentMessage.Payload.ProviderMessageId.ShouldBe("sent-image-1");
+        var paymentOutbox = await fixture.DbContext.OutgoingMessageOutbox
+            .SingleAsync(entity => entity.IdempotencyKey == $"payment:{execution.Id}");
+        paymentOutbox.MessageId.ShouldBe(paymentMessage.Id);
+        paymentOutbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
+        paymentOutbox.ProviderMessageId.ShouldBe("sent-image-1");
+        var paymentLedger = await fixture.DbContext.ProviderSendLedger
+            .SingleAsync(entity => entity.OutgoingMessageOutboxId == paymentOutbox.Id);
+        paymentLedger.AttemptNumber.ShouldBe(1);
+        paymentLedger.Status.ShouldBe(ProviderSendLedgerStatus.ProviderAccepted);
+        paymentLedger.ProviderMessageId.ShouldBe("sent-image-1");
         var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
         var paymentAccountId = state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue;
         var expectedQrReference = BlobStorageNaming.ForPaymentQr("qr.png", Guid.Parse(paymentAccountId!));
@@ -342,6 +357,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
         conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+        var configMissingMessage = await fixture.DbContext.Messages
+            .SingleAsync(message => message.ProviderMessageId != null && message.ProviderMessageId.StartsWith("payment-config-missing:"));
+        var configMissingOutbox = await fixture.DbContext.OutgoingMessageOutbox
+            .SingleAsync(entity => entity.MessageId == configMissingMessage.Id);
+        configMissingOutbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
     }
 
     [Test]
@@ -379,6 +399,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
         state.Snapshot.PendingAction.ShouldBe("reservation_payment_receipt_received");
         state.Snapshot.ConversationFlags.ShouldContain("reservation_payment_receipt_received");
+        var receiptMessage = await fixture.DbContext.Messages
+            .SingleAsync(message => message.ProviderMessageId == $"payment-receipt:{fixture.InboundMessage.Id:N}");
+        var receiptOutbox = await fixture.DbContext.OutgoingMessageOutbox
+            .SingleAsync(entity => entity.MessageId == receiptMessage.Id);
+        receiptOutbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
     }
 
     [Test]
@@ -859,11 +884,76 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(0);
     }
 
+    [Test]
+    public async Task ProcessAsync_WhenProductionBudgetHasNoPricing_DoesNotCallAgentAndHandsOff()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync("Production");
+        fixture.Agent.CanEstimateCosts = false;
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola desde WhatsApp";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.ShouldBeEmpty();
+        fixture.Messaging.TextMessages.ShouldContain(message =>
+            message.RecipientExternalId == fixture.Customer.ExternalCustomerId
+            && message.Text == "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+    }
+
+    [Test]
+    public async Task ProcessAsync_WhenEstimatedLlmCostExceedsProfileBudget_HandsOff()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola desde WhatsApp";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        fixture.Agent.Results.Enqueue(new AgentRunResult(
+            "Respuesta costosa",
+            [],
+            EstimatedCostUsd: 0.06d));
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        fixture.Agent.Requests.Count.ShouldBe(1);
+        fixture.Messaging.TextMessages.ShouldContain(message =>
+            message.RecipientExternalId == fixture.Customer.ExternalCustomerId
+            && message.Text == "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
+        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+    }
+
     private sealed class ProcessorFixture
     {
         private readonly PostgresWorkerDatabase database;
 
-        private ProcessorFixture(PostgresWorkerDatabase database)
+        private ProcessorFixture(PostgresWorkerDatabase database, string environmentName)
         {
             this.database = database;
             OrganizationContext = database.OrganizationContext;
@@ -883,6 +973,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Messaging,
                 TimeProvider.System,
                 NullLogger<HumanHandoffToolExecutor>.Instance);
+            var outboundMessageDispatcher = new OutboundMessageDispatcher(
+                DbContext,
+                Messaging,
+                TimeProvider.System,
+                NullLogger<OutboundMessageDispatcher>.Instance);
             var catalog = new CompositeAgentToolCatalog(
             [
                 new CheckGoogleCalendarAvailabilityTool(calendarExecutor),
@@ -897,7 +992,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             var toolGateway = new ToolExecutionGateway(new AgentToolInvoker(catalog, DbContext, helper), helper);
             var paymentSender = new ReservationPaymentInstructionSender(
                 DbContext,
-                Messaging,
+                outboundMessageDispatcher,
                 PaymentQrImages,
                 handoffExecutor,
                 TimeProvider.System,
@@ -905,6 +1000,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             Processor = new ProcessIncomingMessageJobProcessor(
                 DbContext,
                 Messaging,
+                outboundMessageDispatcher,
                 Agent,
                 toolRegistry,
                 toolGateway,
@@ -912,6 +1008,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 paymentSender,
                 OrganizationContext,
                 TimeProvider.System,
+                new FakeHostEnvironment(environmentName),
                 NullLogger<ProcessIncomingMessageJobProcessor>.Instance);
 
             var company = new Company
@@ -1065,9 +1162,9 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             DbContext.AddRange(company, profile, Channel, Customer, Conversation, InboundMessage, credential, checkTool, createTool, findTool, handoffTool);
         }
 
-        public static async Task<ProcessorFixture> CreateAsync()
+        public static async Task<ProcessorFixture> CreateAsync(string environmentName = "Testing")
         {
-            var fixture = new ProcessorFixture(await PostgresWorkerDatabase.CreateAsync());
+            var fixture = new ProcessorFixture(await PostgresWorkerDatabase.CreateAsync(), environmentName);
             await fixture.DbContext.SaveChangesAsync();
             return fixture;
         }
@@ -1206,7 +1303,14 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public Queue<AgentRunResult> Results { get; } = [];
 
+        public bool CanEstimateCosts { get; set; } = true;
+
         public Exception? ThrowOnRun { get; set; }
+
+        public bool CanEstimateCost(LlmProvider provider, string modelName)
+        {
+            return CanEstimateCosts;
+        }
 
         public Task<AgentRunResult> RunAsync(AgentRunRequest request, CancellationToken cancellationToken)
         {
@@ -1277,6 +1381,17 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         {
             return utcNow;
         }
+    }
+
+    private sealed class FakeHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+
+        public string ApplicationName { get; set; } = "CeoAgent.Worker.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private static string? GetStringTag(Activity activity, string key)
