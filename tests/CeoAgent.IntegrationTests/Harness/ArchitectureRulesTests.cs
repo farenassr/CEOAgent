@@ -326,8 +326,14 @@ public sealed partial class ArchitectureRulesTests
     public void AppHost_Postgres_UsesStableDataVolume()
     {
         var repoRoot = FindRepositoryRoot();
-        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
-        appHost.ShouldContain(".WithDataVolume(\"ceoagent-postgres-database-volume\")");
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+
+        ceoAgentApplication.ShouldContain(".WithDataVolume(\"ceoagent-postgres-database-volume\")");
     }
 
     /// <summary>
@@ -337,24 +343,103 @@ public sealed partial class ArchitectureRulesTests
     public void AppHost_ApiResourceLinks_DeepLinkToScalar()
     {
         var repoRoot = FindRepositoryRoot();
-        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
 
-        appHost.ShouldContain(".WithUrlForEndpoint(\"https\", url =>");
-        appHost.ShouldContain(".WithUrlForEndpoint(\"http\", url =>");
-        appHost.ShouldContain("url.DisplayText = \"Scalar API Reference\";");
-        appHost.ShouldContain("url.Url = \"/scalar\";");
+        ceoAgentApplication.ShouldContain(".WithUrlForEndpoint(\"https\", url =>");
+        ceoAgentApplication.ShouldContain(".WithUrlForEndpoint(\"http\", url =>");
+        ceoAgentApplication.ShouldContain("url.DisplayText = \"Scalar API Reference\";");
+        ceoAgentApplication.ShouldContain("url.Url = \"/scalar\";");
     }
 
     [Test]
-    public void AppHost_ApiEndpointPorts_UseNamedConstants()
+    public void AppHost_RuntimePortsAndPostgresSettings_ComeFromAppSettings()
     {
         var repoRoot = FindRepositoryRoot();
         var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
+        var appHostOptions = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "AppHostOptions.cs"));
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+        var providerEnvironment = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "ProviderEnvironmentExtensions.cs"));
+        var appHostSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "appsettings.json"));
 
-        appHost.ShouldContain("const int ApiServiceHttpsHostPort = 7584;");
-        appHost.ShouldContain("const int ApiServiceHttpHostPort = 5481;");
-        appHost.ShouldContain("endpoint.Port = ApiServiceHttpsHostPort;");
-        appHost.ShouldContain("endpoint.Port = ApiServiceHttpHostPort;");
+        appHost.ShouldNotContain("const int PgAdminHostPort");
+        appHost.ShouldNotContain("const int PostgresHostPort");
+        appHost.ShouldNotContain("const int ApiServiceHttpsHostPort");
+        appHost.ShouldNotContain("const int ApiServiceHttpHostPort");
+        appHost.ShouldNotContain("const int AzuriteBlobPort");
+        appHost.ShouldNotContain("const int AzuriteQueuePort");
+        appHost.ShouldNotContain("const int AzuriteTablePort");
+        appHost.ShouldNotContain("const string PostgresResourceName");
+        appHost.ShouldNotContain("const string PostgresUsername");
+        appHost.ShouldNotContain("const string PostgresPasswordSecretName");
+        appHost.ShouldContain("var options = builder.Configuration.GetRequiredAppHostOptions();");
+        appHost.ShouldContain("builder.AddCeoAgentApplication(options);");
+
+        appHostOptions.ShouldContain("internal sealed class AppHostOptions");
+        appHostOptions.ShouldContain("public ResourceNameOptions Resources");
+        appHostOptions.ShouldContain("public PostgresOptions Postgres");
+        appHostOptions.ShouldContain("public static AppHostOptions GetRequiredAppHostOptions");
+        appHostOptions.ShouldContain("Require(options.Resources.Storage, \"Resources:Storage\")");
+        appHostOptions.ShouldContain("Require(options.Postgres.ResourceName, \"Postgres:ResourceName\")");
+        appHostOptions.ShouldContain("Require(options.Postgres.Host, \"Postgres:Host\")");
+        appHostOptions.ShouldContain("RequirePositive(options.Postgres.Port, \"Postgres:Port\")");
+        appHostOptions.ShouldContain("RequirePositive(options.Postgres.HostPort, \"Postgres:HostPort\")");
+        appHostOptions.ShouldContain("Require(options.Postgres.Username, \"Postgres:Username\")");
+        appHostOptions.ShouldContain("Require(options.Postgres.PasswordSecretName, \"Postgres:PasswordSecretName\")");
+
+        ceoAgentApplication.ShouldContain("options.Resources.Storage");
+        ceoAgentApplication.ShouldContain("options.Resources.Queues");
+        ceoAgentApplication.ShouldContain("options.Resources.Blobs");
+        ceoAgentApplication.ShouldContain("options.ApiService.HttpsHostPort");
+        ceoAgentApplication.ShouldContain("options.ApiService.HttpHostPort");
+        ceoAgentApplication.ShouldContain("options.Azurite.BlobPort");
+        ceoAgentApplication.ShouldContain("options.Azurite.QueuePort");
+        ceoAgentApplication.ShouldContain("options.Azurite.TablePort");
+        ceoAgentApplication.ShouldContain("AddPostgresConnectionEnvironment(apiService, publishKeyVault, options.Postgres)");
+        ceoAgentApplication.ShouldContain("AddPostgresConnectionEnvironment(worker, publishKeyVault, options.Postgres)");
+        ceoAgentApplication.ShouldContain("apiService.WaitFor(postgresDatabase)");
+        ceoAgentApplication.ShouldContain("worker.WaitFor(postgresDatabase)");
+        providerEnvironment.ShouldContain("var applyApiMigrationsOnStartup = ShouldApplyApiMigrationsOnStartup(deploymentEnvironmentName) ? \"true\" : \"false\";");
+        providerEnvironment.ShouldContain(".WithEnvironment(\"Persistence__ApplyMigrationsOnStartup\", applyApiMigrationsOnStartup)");
+        providerEnvironment.ShouldContain("string.Equals(deploymentEnvironmentName, \"Dev\", StringComparison.OrdinalIgnoreCase)");
+        providerEnvironment.ShouldContain("string.Equals(deploymentEnvironmentName, \"Tst\", StringComparison.OrdinalIgnoreCase)");
+        (providerEnvironment.Split("Persistence__ApplyMigrationsOnStartup", StringSplitOptions.None).Length - 1).ShouldBe(1);
+
+        appHostSettings.ShouldContain("\"Resources\"");
+        appHostSettings.ShouldContain("\"Storage\": \"storage\"");
+        appHostSettings.ShouldContain("\"Queues\": \"queues\"");
+        appHostSettings.ShouldContain("\"Blobs\": \"blobs\"");
+        appHostSettings.ShouldContain("\"HostPort\": 5050");
+        appHostSettings.ShouldContain("\"ResourceName\": \"postgres\"");
+        appHostSettings.ShouldContain("\"Host\": \"postgres\"");
+        appHostSettings.ShouldContain("\"Port\": 5432");
+        appHostSettings.ShouldContain("\"HostPort\": 55432");
+        appHostSettings.ShouldContain("\"Username\": \"postgres\"");
+        appHostSettings.ShouldContain("\"PasswordSecretName\": \"PostgresPassword\"");
+        appHostSettings.ShouldContain("\"HttpsHostPort\": 7584");
+        appHostSettings.ShouldContain("\"HttpHostPort\": 5481");
+        appHostSettings.ShouldContain("\"BlobPort\": 10000");
+        appHostSettings.ShouldContain("\"QueuePort\": 10001");
+        appHostSettings.ShouldContain("\"TablePort\": 10002");
     }
 
     [Test]
@@ -363,15 +448,27 @@ public sealed partial class ArchitectureRulesTests
         var repoRoot = FindRepositoryRoot();
         var appHostSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "appsettings.json"));
         var apiFactory = File.ReadAllText(Path.Combine(repoRoot, "tests", "CeoAgent.ApiService.Tests", "Support", "ApiFactory.cs"));
-        var appHost = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "AppHost.cs"));
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+        var keycloakEnvironment = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "KeycloakEnvironmentExtensions.cs"));
 
         appHostSettings.ShouldContain("\"ClientId\": \"ceo-agent-api\"");
         appHostSettings.ShouldContain("\"ServiceClientId\": \"ceo-agent-service\"");
         appHostSettings.ShouldContain("\"AuthorizationScopes\"");
         appHostSettings.ShouldContain("\"organization\"");
         apiFactory.ShouldContain("builder.UseSetting(\"Keycloak:ClientId\", \"ceo-agent-api\")");
-        appHost.ShouldContain(".WithEnvironment(\"Keycloak__ServiceClientId\"");
-        appHost.ShouldContain("keycloak-service-client-secret");
+        ceoAgentApplication.ShouldContain("builder.AddKeycloakEnvironment(apiService, keyVault);");
+        keycloakEnvironment.ShouldContain(".WithEnvironment(\"Keycloak__ServiceClientId\"");
+        keycloakEnvironment.ShouldContain("keycloak-service-client-secret");
 
         FindMatchingSourceLines("ceo-agent-web").ShouldBeEmpty();
     }

@@ -11,6 +11,7 @@ builder.Logging.AddZLoggerConsole(options =>
     options.UseJsonFormatter();
 });
 builder.AddServiceDefaults();
+builder.AddCeoAgentPostgresConnectionString();
 
 if (builder.Configuration.GetConnectionString("CeoAgent") is { Length: > 0 } postgresConnectionString)
 {

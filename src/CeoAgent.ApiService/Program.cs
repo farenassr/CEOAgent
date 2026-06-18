@@ -3,6 +3,7 @@ using CeoAgent.ApiService.Infrastructure.Organization;
 using CeoAgent.ApiService.Infrastructure.Correlation;
 using CeoAgent.ApiService.Infrastructure.ErrorHandling;
 using CeoAgent.ApiService.Infrastructure.OpenApi;
+using CeoAgent.ApiService.Infrastructure.Persistence;
 using CeoAgent.ApiService.Infrastructure.Queues;
 using CeoAgent.ApiService.Infrastructure.Security;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
@@ -25,6 +26,7 @@ builder.Logging.ClearProviders();
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
+builder.AddCeoAgentPostgresConnectionString();
 
 builder.Logging.AddZLoggerConsole(options =>
 {
@@ -124,6 +126,8 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+await app.ApplyConfiguredDatabaseMigrationsAsync();
+
 // Configure the HTTP request pipeline.
 app.UseForwardedHeaders();
 
@@ -145,7 +149,7 @@ app.UseAuthentication();
 app.UseMiddleware<OrganizationContextMiddleware>();
 app.UseAuthorization();
 
-if (app.Environment.IsDevelopment())
+if (ShouldExposeApiReference(app.Environment))
 {
     app.MapOpenApi();
     app.MapScalarApiReference("/scalar", options =>
@@ -159,6 +163,8 @@ if (app.Environment.IsDevelopment())
             {
                 flow.ClientId = keycloakOptions.ClientId;
                 flow.Pkce = Pkce.Sha256;
+                flow.RedirectUri = ResolveScalarRedirectUri(keycloakOptions.RedirectUri);
+                flow.CredentialsLocation = CredentialsLocation.Body;
                 flow.SelectedScopes = keycloakOptions.AuthorizationScopes;
             })
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
@@ -179,3 +185,18 @@ if (app.Environment.IsEnvironment("Testing"))
 app.UseFastEndpoints();
 
 await app.RunAsync();
+
+static bool ShouldExposeApiReference(IHostEnvironment environment)
+{
+    return environment.IsDevelopment()
+        || environment.IsEnvironment("Local")
+        || environment.IsEnvironment("Dev")
+        || environment.IsEnvironment("Tst");
+}
+
+static string ResolveScalarRedirectUri(string configuredRedirectUri)
+{
+    return string.IsNullOrWhiteSpace(configuredRedirectUri)
+        ? "http://localhost:5481/scalar/"
+        : configuredRedirectUri;
+}
