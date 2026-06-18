@@ -37,6 +37,16 @@ public sealed class AgentProfile : AuditableOrganizationOwnedEntity
     public string? PromptOverride { get; set; }
 
     /// <summary>
+    /// Maximum output tokens requested from the model per runtime call.
+    /// </summary>
+    public int MaxOutputTokenCount { get; set; } = 1024;
+
+    /// <summary>
+    /// Maximum estimated LLM cost allowed for one inbound message job.
+    /// </summary>
+    public double MaxEstimatedCostUsdPerJob { get; set; } = 0.05d;
+
+    /// <summary>
     /// Company that owns this agent profile. Example: Contoso Bistro.
     /// </summary>
     public Company Company { get; set; } = null!;

@@ -16,6 +16,11 @@ public sealed class OpenAIAgentRuntime(
 {
     private readonly OpenAIAgentRuntimeOptions runtimeOptions = options.Value;
 
+    public bool CanEstimateCost(LlmProvider provider, string modelName)
+    {
+        return provider == LlmProvider.OpenAI && runtimeOptions.TryGetPricing(modelName, out _);
+    }
+
     public async Task<AgentRunResult> RunAsync(
         AgentRunRequest request,
         CancellationToken cancellationToken)
@@ -32,7 +37,7 @@ public sealed class OpenAIAgentRuntime(
             CreateOptions(request),
             cancellationToken);
 
-        return ToAgentRunResult(response.Value);
+        return ToAgentRunResult(response.Value, request.ModelName);
     }
 
     private static CreateResponseOptions CreateOptions(AgentRunRequest request)
@@ -44,6 +49,10 @@ public sealed class OpenAIAgentRuntime(
             ParallelToolCallsEnabled = false,
             StoredOutputEnabled = false,
         };
+        if (request.MaxOutputTokenCount is { } maxOutputTokenCount)
+        {
+            options.MaxOutputTokenCount = maxOutputTokenCount;
+        }
 
         foreach (var message in request.Messages)
         {
@@ -80,7 +89,7 @@ public sealed class OpenAIAgentRuntime(
         };
     }
 
-    private AgentRunResult ToAgentRunResult(ResponseResult response)
+    private AgentRunResult ToAgentRunResult(ResponseResult response, string modelName)
     {
         var toolCalls = response.OutputItems
             .OfType<FunctionCallResponseItem>()
@@ -95,7 +104,7 @@ public sealed class OpenAIAgentRuntime(
             response.Usage?.InputTokenCount,
             response.Usage?.OutputTokenCount,
             response.Usage?.TotalTokenCount,
-            EstimatedCostUsd(response.Usage, runtimeOptions));
+            EstimatedCostUsd(response.Usage, modelName, runtimeOptions));
     }
 
     private static AgentToolCall ToToolCall(FunctionCallResponseItem item)
@@ -124,16 +133,18 @@ public sealed class OpenAIAgentRuntime(
         }
     }
 
-    private static double? EstimatedCostUsd(ResponseTokenUsage? usage, OpenAIAgentRuntimeOptions options)
+    private static double? EstimatedCostUsd(
+        ResponseTokenUsage? usage,
+        string modelName,
+        OpenAIAgentRuntimeOptions options)
     {
-        if (usage is null
-            || (options.InputTokenCostPerMillion <= 0 && options.OutputTokenCostPerMillion <= 0))
+        if (usage is null || !options.TryGetPricing(modelName, out var pricing))
         {
             return null;
         }
 
-        return (usage.InputTokenCount / 1_000_000d * options.InputTokenCostPerMillion)
-            + (usage.OutputTokenCount / 1_000_000d * options.OutputTokenCostPerMillion);
+        return (usage.InputTokenCount / 1_000_000d * pricing.InputTokenCostPerMillion)
+            + (usage.OutputTokenCount / 1_000_000d * pricing.OutputTokenCostPerMillion);
     }
 }
 

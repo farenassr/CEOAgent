@@ -2,8 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using CeoAgent.ApiService.Tests.Support;
 using CeoAgent.Application.Abstractions.Messaging;
+using CeoAgent.Infrastructure;
+using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Response.Company;
+using CeoAgent.Shared.Response.WhatsApp;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
@@ -26,13 +30,16 @@ public sealed class WhatsAppSendMessageEndpointTests
         using var bootstrapClient = factory.CreateAuthenticatedClient();
         var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
+        await ConfigureAgentProfileAsync(tenantClient);
         var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient);
         var channelId = await RegisterWhatsAppChannelAsync(tenantClient, credentialId);
+        var conversationId = await CreateConversationAsync(tenantClient, "573001112233");
 
         using var response = await tenantClient.PostAsJsonAsync(
             $"/v1/admin/channels/{channelId}/whatsapp/messages",
             new
             {
+                conversationId,
                 recipientExternalId = "573001112233",
                 text = "Hola desde CeoAgent",
                 idempotencyKey = "manual-send-1",
@@ -49,6 +56,27 @@ public sealed class WhatsAppSendMessageEndpointTests
         sent.RecipientExternalId.ShouldBe("573001112233");
         sent.Text.ShouldBe("Hola desde CeoAgent");
         sent.IdempotencyKey.ShouldBe("manual-send-1");
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
+        var outbox = await dbContext.OutgoingMessageOutbox
+            .IgnoreQueryFilters()
+            .SingleAsync();
+        outbox.OrganizationId.ShouldBe(organizationId);
+        outbox.ConversationId.ShouldBe(conversationId);
+        outbox.Provider.ShouldBe("whatsapp_cloud");
+        outbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
+        outbox.IdempotencyKey.ShouldBe("manual-send-1");
+        outbox.ProviderMessageId.ShouldBe("wamid.sent-1");
+
+        var ledger = await dbContext.ProviderSendLedger
+            .IgnoreQueryFilters()
+            .SingleAsync();
+        ledger.OutgoingMessageOutboxId.ShouldBe(outbox.Id);
+        ledger.AttemptNumber.ShouldBe(1);
+        ledger.Provider.ShouldBe("whatsapp_cloud");
+        ledger.Status.ShouldBe(ProviderSendLedgerStatus.ProviderAccepted);
+        ledger.ProviderMessageId.ShouldBe("wamid.sent-1");
     }
 
     [Test]
@@ -64,13 +92,16 @@ public sealed class WhatsAppSendMessageEndpointTests
         using var bootstrapClient = factory.CreateAuthenticatedClient();
         var organizationId = await CreateCompanyAsync(bootstrapClient, "Organization A");
         using var tenantClient = factory.CreateAuthenticatedClient(organizationId);
+        await ConfigureAgentProfileAsync(tenantClient);
         var credentialId = await RegisterWhatsAppCredentialAsync(tenantClient);
         var channelId = await RegisterWhatsAppChannelAsync(tenantClient, credentialId);
+        var conversationId = await CreateConversationAsync(tenantClient, "971529596724");
 
         using var response = await tenantClient.PostAsJsonAsync(
             $"/v1/admin/channels/{channelId}/whatsapp/messages",
             new
             {
+                conversationId,
                 recipientExternalId = "+971529596724",
                 text = "Hola!",
                 idempotencyKey = (string?)null,
@@ -93,6 +124,37 @@ public sealed class WhatsAppSendMessageEndpointTests
         var body = await response.Content.ReadFromJsonAsync<CompanyResponse>();
         body.ShouldNotBeNull();
         return body.Id;
+    }
+
+    private static async Task ConfigureAgentProfileAsync(HttpClient client)
+    {
+        using var response = await client.PostAsJsonAsync(
+            "/v1/admin/agent-profile",
+            new
+            {
+                modelName = "gpt-4.1-mini",
+                llmProvider = "openai",
+                displayName = "Contoso Assistant",
+                language = "es",
+                timeZoneId = "America/Bogota",
+                promptOverride = "Responde corto.",
+            });
+        response.EnsureSuccessStatusCode();
+    }
+
+    private static async Task<Guid> CreateConversationAsync(HttpClient client, string externalCustomerId)
+    {
+        using var response = await client.PostAsJsonAsync(
+            "/v1/admin/whatsapp",
+            new
+            {
+                messageText = "Hola",
+                externalCustomerId,
+            });
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<ReceiveWhatsAppMessageResponse>();
+        body.ShouldNotBeNull();
+        return body.ConversationId;
     }
 
     private static async Task<Guid> RegisterWhatsAppCredentialAsync(HttpClient client)
@@ -156,8 +218,4 @@ public sealed class WhatsAppSendMessageEndpointTests
         }
     }
 
-    private sealed class SendWhatsAppMessageResponse
-    {
-        public string ProviderMessageId { get; set; } = string.Empty;
-    }
 }

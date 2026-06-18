@@ -1,4 +1,4 @@
-namespace CeoAgent.ApiService.Modules.Queues.Contracts;
+namespace CeoAgent.Shared.Request.Queues;
 
 public sealed class SendQueueMessageRequest
 {

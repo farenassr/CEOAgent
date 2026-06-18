@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
 using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
 using CeoAgent.ApiService.Tests.Support;
+using CeoAgent.Shared.Response.Queues;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;

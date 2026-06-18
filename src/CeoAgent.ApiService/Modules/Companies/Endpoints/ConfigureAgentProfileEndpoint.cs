@@ -66,5 +66,7 @@ public sealed class AgentProfileValidator : Validator<AgentProfileRequest>
         RuleFor(request => request.DisplayName).NotEmpty().MaximumLength(160);
         RuleFor(request => request.Language).NotEmpty().MaximumLength(16);
         RuleFor(request => request.TimeZoneId).NotEmpty().MaximumLength(120);
+        RuleFor(request => request.MaxOutputTokenCount).InclusiveBetween(1, 128_000);
+        RuleFor(request => request.MaxEstimatedCostUsdPerJob).GreaterThan(0);
     }
 }

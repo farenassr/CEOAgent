@@ -13,6 +13,8 @@ public sealed class AgentProfileConfiguration : IEntityTypeConfiguration<AgentPr
         builder.Property(entity => entity.ModelName).HasMaxLength(120).IsRequired();
         builder.Property(entity => entity.DisplayName).HasMaxLength(160).IsRequired();
         builder.Property(entity => entity.Language).HasMaxLength(16).IsRequired();
+        builder.Property(entity => entity.MaxOutputTokenCount).HasDefaultValue(1024).IsRequired();
+        builder.Property(entity => entity.MaxEstimatedCostUsdPerJob).HasDefaultValue(0.05d).IsRequired();
         builder.HasIndex(entity => entity.OrganizationId).IsUnique();
         builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
         builder.HasOne(entity => entity.Company)

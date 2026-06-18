@@ -67,6 +67,29 @@ public sealed partial class ProcessIncomingMessageJobProcessor
         int maxIterations);
 
     [LoggerMessage(
+        EventId = 6006,
+        Level = LogLevel.Warning,
+        Message = "LlmCostPricingMissing OrganizationId={OrganizationId} AgentProfileId={AgentProfileId} ModelName={ModelName} EnvironmentName={EnvironmentName}")]
+    private static partial void LlmCostPricingMissing(
+        ILogger logger,
+        Guid organizationId,
+        Guid agentProfileId,
+        string modelName,
+        string environmentName);
+
+    [LoggerMessage(
+        EventId = 6007,
+        Level = LogLevel.Warning,
+        Message = "LlmBudgetExceeded OrganizationId={OrganizationId} AgentProfileId={AgentProfileId} ModelName={ModelName} EstimatedCostUsd={EstimatedCostUsd} MaxEstimatedCostUsd={MaxEstimatedCostUsd}")]
+    private static partial void LlmBudgetExceeded(
+        ILogger logger,
+        Guid organizationId,
+        Guid agentProfileId,
+        string modelName,
+        double estimatedCostUsd,
+        double maxEstimatedCostUsd);
+
+    [LoggerMessage(
         EventId = 6004,
         Level = LogLevel.Error,
         Message = "AutoHandoffEscalationFailed")]

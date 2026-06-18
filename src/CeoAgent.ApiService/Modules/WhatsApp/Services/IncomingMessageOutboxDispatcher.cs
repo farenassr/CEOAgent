@@ -12,6 +12,7 @@ public sealed partial class IncomingMessageOutboxDispatcher(
     TimeProvider timeProvider,
     ILogger<IncomingMessageOutboxDispatcher> logger)
 {
+    private static readonly TimeSpan ClaimLeaseDuration = TimeSpan.FromMinutes(5);
     private const int MaxFailureReasonLength = 240;
 
     public async Task<bool> DispatchAsync(Guid outboxId, CancellationToken cancellationToken)
@@ -32,13 +33,17 @@ public sealed partial class IncomingMessageOutboxDispatcher(
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
+        var staleClaimCutoff = now - ClaimLeaseDuration;
         var candidates = await dbContext.IncomingMessageOutbox
             .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(entity =>
-                (entity.Status == IncomingMessageOutboxStatus.WaitingToBeQueued
-                    || entity.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled)
-                && (entity.NextAttemptAt == null || entity.NextAttemptAt <= now))
+                ((entity.Status == IncomingMessageOutboxStatus.WaitingToBeQueued
+                        || entity.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled)
+                    && (entity.NextAttemptAt == null || entity.NextAttemptAt <= now))
+                || (entity.Status == IncomingMessageOutboxStatus.QueueDispatchInProgress
+                    && entity.ClaimedAt != null
+                    && entity.ClaimedAt <= staleClaimCutoff))
             .OrderBy(entity => entity.CreatedAt)
             .Select(entity => entity.Id)
             .Take(maxMessages)
@@ -115,12 +120,16 @@ public sealed partial class IncomingMessageOutboxDispatcher(
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow().UtcDateTime;
+        var staleClaimCutoff = now - ClaimLeaseDuration;
         var claimOwner = $"{Environment.MachineName}:{Guid.CreateVersion7():N}";
         var query = filter(dbContext.IncomingMessageOutbox.IgnoreQueryFilters())
             .Where(entity =>
-                (entity.Status == IncomingMessageOutboxStatus.WaitingToBeQueued
-                    || entity.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled)
-                && (entity.NextAttemptAt == null || entity.NextAttemptAt <= now));
+                ((entity.Status == IncomingMessageOutboxStatus.WaitingToBeQueued
+                        || entity.Status == IncomingMessageOutboxStatus.QueueDispatchRetryScheduled)
+                    && (entity.NextAttemptAt == null || entity.NextAttemptAt <= now))
+                || (entity.Status == IncomingMessageOutboxStatus.QueueDispatchInProgress
+                    && entity.ClaimedAt != null
+                    && entity.ClaimedAt <= staleClaimCutoff));
 
         var claimed = await query.ExecuteUpdateAsync(
             setters => setters

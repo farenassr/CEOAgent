@@ -13,6 +13,8 @@ public static class CeoAgentTelemetry
     public static readonly Histogram<double> LlmCallDuration = Meter.CreateHistogram<double>("llm.calls.duration", "ms");
     public static readonly Counter<long> LlmTokensConsumed = Meter.CreateCounter<long>("llm.tokens.consumed");
     public static readonly Counter<double> LlmEstimatedCost = Meter.CreateCounter<double>("llm.estimated_cost", "USD");
+    public static readonly Counter<long> LlmBudgetExceeded = Meter.CreateCounter<long>("llm.budget.exceeded");
+    public static readonly Counter<long> LlmCostEstimationMissing = Meter.CreateCounter<long>("llm.cost_estimation.missing");
     public static readonly Histogram<double> ToolExecutionDuration = Meter.CreateHistogram<double>("tools.execution.duration", "ms");
     public static readonly Counter<long> ToolExecutionFailures = Meter.CreateCounter<long>("tools.execution.failures");
     public static readonly Counter<long> HumanHandoffEscalations = Meter.CreateCounter<long>("handoff.escalations");

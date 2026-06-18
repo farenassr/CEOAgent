@@ -116,32 +116,18 @@ internal static class CeoAgentApplicationExtensions
             postgresServer.WithEnvironment("POSTGRES_DB", options.Postgres.DatabaseName!);
         }
 
-        if (options.PgAdmin.Enabled)
+        if (options.PgAdmin.Enabled && !builder.ExecutionContext.IsPublishMode)
         {
-            AddPgAdmin(builder, postgresServer, options, postgresPassword);
+            AddPgAdmin(postgresServer, options);
         }
 
         return postgresServer.AddDatabase(options.Postgres.DatabaseName!);
     }
 
     private static void AddPgAdmin(
-        IDistributedApplicationBuilder builder,
         IResourceBuilder<PostgresServerResource> postgresServer,
-        AppHostOptions options,
-        IResourceBuilder<ParameterResource> postgresPassword)
+        AppHostOptions options)
     {
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            builder.AddContainer("pgadmin", options.PgAdmin.Image!)
-                .WithEnvironment("PGADMIN_DEFAULT_EMAIL", options.PgAdmin.DefaultEmail!)
-                .WithEnvironment("PGADMIN_DEFAULT_PASSWORD", postgresPassword)
-                .WithEnvironment("PGADMIN_LISTEN_PORT", options.PgAdmin.HostPort.ToString(CultureInfo.InvariantCulture))
-                .WithHttpEndpoint(targetPort: options.PgAdmin.HostPort, name: "http")
-                .WithEndpoint("http", endpoint => endpoint.IsExternal = true)
-                .WaitFor(postgresServer);
-            return;
-        }
-
         postgresServer.WithPgAdmin(pgAdmin => pgAdmin.WithHostPort(options.PgAdmin.HostPort));
     }
 

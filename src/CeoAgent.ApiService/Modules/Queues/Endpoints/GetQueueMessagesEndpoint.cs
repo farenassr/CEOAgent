@@ -1,6 +1,6 @@
 using CeoAgent.ApiService.Infrastructure.OpenApi;
 using CeoAgent.ApiService.Infrastructure.Queues.Abstractions;
-using CeoAgent.ApiService.Infrastructure.Queues.Contracts;
+using CeoAgent.Shared.Response.Queues;
 using FastEndpoints;
 
 namespace CeoAgent.ApiService.Modules.Queues.Endpoints;

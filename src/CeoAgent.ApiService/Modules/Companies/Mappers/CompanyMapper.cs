@@ -45,6 +45,8 @@ public static partial class CompanyMapper
             DisplayName = request.DisplayName,
             Language = request.Language,
             PromptOverride = request.PromptOverride,
+            MaxOutputTokenCount = request.MaxOutputTokenCount,
+            MaxEstimatedCostUsdPerJob = request.MaxEstimatedCostUsdPerJob,
         };
     }
 
@@ -55,6 +57,8 @@ public static partial class CompanyMapper
         profile.DisplayName = request.DisplayName;
         profile.Language = request.Language;
         profile.PromptOverride = request.PromptOverride;
+        profile.MaxOutputTokenCount = request.MaxOutputTokenCount;
+        profile.MaxEstimatedCostUsdPerJob = request.MaxEstimatedCostUsdPerJob;
         company.TimeZoneId = request.TimeZoneId;
         company.WorkingHours = request.WorkingHours.DeserializeOptional<WorkingHours>();
     }

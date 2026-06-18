@@ -588,6 +588,81 @@ public sealed partial class ArchitectureRulesTests
         sourceText.ShouldContain("IncomingQueueMessageFailed");
     }
 
+    [Test]
+    public void ApiService_DoesNotRegisterOpenTelemetryLoggingOutsideServiceDefaults()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var apiProgram = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Program.cs"));
+        var serviceDefaults = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.ServiceDefaults", "Extensions.cs"));
+
+        apiProgram.ShouldNotContain("builder.Logging.AddOpenTelemetry");
+        serviceDefaults.ShouldContain("builder.Logging.AddOpenTelemetry");
+    }
+
+    [Test]
+    public void ApiService_BaseConfiguration_DoesNotApplyMigrationsOnStartup()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var baseSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "appsettings.json"));
+        var localSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "appsettings.Local.json"));
+        var developmentSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "appsettings.Development.json"));
+
+        baseSettings.ShouldContain("\"ApplyMigrationsOnStartup\": false");
+        localSettings.ShouldContain("\"ApplyMigrationsOnStartup\": true");
+        developmentSettings.ShouldContain("\"ApplyMigrationsOnStartup\": true");
+    }
+
+    [Test]
+    public void AppHost_DoesNotPublishPgAdminContainer()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+
+        ceoAgentApplication.ShouldContain("!builder.ExecutionContext.IsPublishMode");
+        ceoAgentApplication.ShouldContain("postgresServer.WithPgAdmin");
+        ceoAgentApplication.ShouldNotContain("builder.AddContainer(\"pgadmin\"");
+        ceoAgentApplication.ShouldNotContain("PGADMIN_DEFAULT_EMAIL");
+    }
+
+    [Test]
+    public void QueueHttpContracts_LiveInSharedProject()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var requiredSharedContracts = new[]
+        {
+            Path.Combine("src", "CeoAgent.Shared", "Request", "Queues", "SendQueueMessageRequest.cs"),
+            Path.Combine("src", "CeoAgent.Shared", "Response", "Queues", "QueueDiagnosticsInfo.cs"),
+            Path.Combine("src", "CeoAgent.Shared", "Response", "Queues", "QueueDiagnosticsMessage.cs"),
+            Path.Combine("src", "CeoAgent.Shared", "Response", "Queues", "QueueMessageEnqueuedResponse.cs"),
+            Path.Combine("src", "CeoAgent.Shared", "Response", "Queues", "QueueMessagesResponse.cs"),
+            Path.Combine("src", "CeoAgent.Shared", "Response", "Queues", "QueuesDiagnosticsResponse.cs"),
+        };
+
+        foreach (var relativePath in requiredSharedContracts)
+        {
+            File.Exists(Path.Combine(repoRoot, relativePath)).ShouldBeTrue($"{relativePath} should exist.");
+        }
+
+        Directory.Exists(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "Queues", "Contracts")).ShouldBeFalse();
+        var apiServiceQueueModelsDirectory = Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Infrastructure", "Queues", "Models");
+        var remainingApiServiceContractFiles = Directory.Exists(apiServiceQueueModelsDirectory)
+            ? Directory.EnumerateFiles(apiServiceQueueModelsDirectory, "*.cs", SearchOption.AllDirectories)
+                .Select(Path.GetFileName)
+                .ToArray()
+            : [];
+
+        remainingApiServiceContractFiles.ShouldNotContain("QueueDiagnosticsInfo.cs");
+        remainingApiServiceContractFiles.ShouldNotContain("QueueDiagnosticsMessage.cs");
+        remainingApiServiceContractFiles.ShouldNotContain("QueueMessageEnqueuedResponse.cs");
+        remainingApiServiceContractFiles.ShouldNotContain("QueueMessagesResponse.cs");
+        remainingApiServiceContractFiles.ShouldNotContain("QueuesDiagnosticsResponse.cs");
+    }
+
     private static string[] FindMatchingSourceLines(string marker)
     {
         var repoRoot = FindRepositoryRoot();

@@ -8,7 +8,8 @@ public sealed record AgentRunRequest(
     string ModelName,
     string SystemPrompt,
     IReadOnlyList<AgentConversationMessage> Messages,
-    IReadOnlyList<AgentToolDescriptor> Tools);
+    IReadOnlyList<AgentToolDescriptor> Tools,
+    int? MaxOutputTokenCount = null);
 
 public sealed record AgentConversationMessage(
     string Role,
