@@ -68,18 +68,20 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
         message.Payload.ShouldNotBeNull();
         message.Payload.ProviderType.ShouldBe("whatsapp_cloud");
         message.Payload.ProviderMessageId.ShouldBeNull();
-        var outbox = await verifyDbContext.IncomingMessageOutbox
+        var dispatch = await verifyDbContext.MessageDispatches
             .IgnoreQueryFilters()
             .SingleOrDefaultAsync(entity => entity.MessageId == body.MessageId);
-        outbox.ShouldNotBeNull();
-        outbox.OrganizationId.ShouldBe(OrganizationId);
-        outbox.ConversationId.ShouldBe(body.ConversationId);
-        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueuedForWorkerProcessing);
-        outbox.CorrelationId.ShouldBe(queue.Jobs.Single().CorrelationId);
+        dispatch.ShouldNotBeNull();
+        dispatch.OrganizationId.ShouldBe(OrganizationId);
+        dispatch.ConversationId.ShouldBe(body.ConversationId);
+        dispatch.Operation.ShouldBe(MessageDispatchOperation.InboundQueueDispatch);
+        dispatch.Provider.ShouldBe("azure_queue");
+        dispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
+        dispatch.CorrelationId.ShouldBe(queue.Jobs.Single().CorrelationId);
     }
 
     [Test]
-    public async Task ReceiveWhatsAppMessage_WhenQueueDispatchFails_PersistsRecoverableIncomingOutbox()
+    public async Task ReceiveWhatsAppMessage_WhenQueueDispatchFails_PersistsRecoverableIncomingDispatch()
     {
         var queue = new RecordingIncomingMessageQueue { FailNextEnqueue = true };
         await using var factory = new ApiFactory(configureServices: services =>
@@ -115,12 +117,13 @@ public sealed class AdminWhatsAppInboundMessageEndpointTests
 
         using var verifyScope = factory.Services.CreateScope();
         var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
-        var outbox = await verifyDbContext.IncomingMessageOutbox
+        var dispatch = await verifyDbContext.MessageDispatches
             .IgnoreQueryFilters()
             .SingleAsync(entity => entity.MessageId == body.MessageId);
-        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueueDispatchRetryScheduled);
-        outbox.AttemptCount.ShouldBe(1);
-        outbox.FailureReason.ShouldBe("Simulated queue outage.");
+        dispatch.Operation.ShouldBe(MessageDispatchOperation.InboundQueueDispatch);
+        dispatch.Status.ShouldBe(MessageDispatchStatus.RetryScheduled);
+        dispatch.AttemptCount.ShouldBe(1);
+        dispatch.LastError.ShouldBe("Simulated queue outage.");
     }
 
     private static async Task SeedCompanyAsync(CeoAgentDbContext dbContext)

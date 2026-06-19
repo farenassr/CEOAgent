@@ -150,6 +150,43 @@ public sealed class RelationalConstraintTests
         await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
     }
 
+    [Test]
+    public async Task SaveChanges_WhenDuplicateMessageDispatchExistsForMessageAndOperation_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        var seed = await database.SeedCompanyGraphAsync(organizationId);
+        var conversation = CreateConversation(organizationId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
+        var message = CreateMessage(organizationId, conversation.Id, null);
+
+        database.Context.Conversations.Add(conversation);
+        database.Context.Messages.Add(message);
+        database.Context.MessageDispatches.AddRange(
+            CreateMessageDispatch(organizationId, conversation.Id, message.Id, MessageDispatchOperation.InboundQueueDispatch, "dispatch-1"),
+            CreateMessageDispatch(organizationId, conversation.Id, message.Id, MessageDispatchOperation.InboundQueueDispatch, "dispatch-2"));
+
+        await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
+    }
+
+    [Test]
+    public async Task SaveChanges_WhenDuplicateMessageDispatchIdempotencyKeyExistsForOperation_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        var seed = await database.SeedCompanyGraphAsync(organizationId);
+        var conversation = CreateConversation(organizationId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
+        var firstMessage = CreateMessage(organizationId, conversation.Id, null);
+        var secondMessage = CreateMessage(organizationId, conversation.Id, null);
+
+        database.Context.Conversations.Add(conversation);
+        database.Context.Messages.AddRange(firstMessage, secondMessage);
+        database.Context.MessageDispatches.AddRange(
+            CreateMessageDispatch(organizationId, conversation.Id, firstMessage.Id, MessageDispatchOperation.OutboundProviderSend, "same-key"),
+            CreateMessageDispatch(organizationId, conversation.Id, secondMessage.Id, MessageDispatchOperation.OutboundProviderSend, "same-key"));
+
+        await Should.ThrowAsync<DbUpdateException>(database.Context.SaveChangesAsync());
+    }
+
     /// <summary>
     /// Verifies that one company can have only one active default payment account per currency.
     /// </summary>
@@ -282,6 +319,52 @@ public sealed class RelationalConstraintTests
         exception.Message.ShouldContain("cross-organization relationship");
     }
 
+    [Test]
+    public async Task SaveChanges_WhenMessageDispatchReferencesConversationFromDifferentCompany_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        var otherOrganizationId = Guid.CreateVersion7();
+        var seed = await database.SeedCompanyGraphAsync(organizationId);
+        var otherSeed = await database.SeedCompanyGraphAsync(otherOrganizationId);
+        var otherConversation = CreateConversation(otherOrganizationId, otherSeed.CustomerId, otherSeed.ChannelId, otherSeed.AgentProfileId);
+        database.Context.Conversations.Add(otherConversation);
+        await database.Context.SaveChangesAsync();
+
+        var conversation = CreateConversation(organizationId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
+        var message = CreateMessage(organizationId, conversation.Id, null);
+        database.Context.Conversations.Add(conversation);
+        database.Context.Messages.Add(message);
+        database.Context.MessageDispatches.Add(
+            CreateMessageDispatch(organizationId, otherConversation.Id, message.Id, MessageDispatchOperation.InboundQueueDispatch, "cross-conversation"));
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(database.Context.SaveChangesAsync());
+        exception.Message.ShouldContain("cross-organization relationship");
+    }
+
+    [Test]
+    public async Task SaveChanges_WhenMessageDispatchReferencesMessageFromDifferentCompany_Throws()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        var organizationId = Guid.CreateVersion7();
+        var otherOrganizationId = Guid.CreateVersion7();
+        var seed = await database.SeedCompanyGraphAsync(organizationId);
+        var otherSeed = await database.SeedCompanyGraphAsync(otherOrganizationId);
+        var otherConversation = CreateConversation(otherOrganizationId, otherSeed.CustomerId, otherSeed.ChannelId, otherSeed.AgentProfileId);
+        var otherMessage = CreateMessage(otherOrganizationId, otherConversation.Id, null);
+        database.Context.Conversations.Add(otherConversation);
+        database.Context.Messages.Add(otherMessage);
+        await database.Context.SaveChangesAsync();
+
+        var conversation = CreateConversation(organizationId, seed.CustomerId, seed.ChannelId, seed.AgentProfileId);
+        database.Context.Conversations.Add(conversation);
+        database.Context.MessageDispatches.Add(
+            CreateMessageDispatch(organizationId, conversation.Id, otherMessage.Id, MessageDispatchOperation.InboundQueueDispatch, "cross-message"));
+
+        var exception = await Should.ThrowAsync<InvalidOperationException>(database.Context.SaveChangesAsync());
+        exception.Message.ShouldContain("cross-organization relationship");
+    }
+
     /// <summary>
     /// Verifies that a conversation cannot change its agent profile after creation.
     /// </summary>
@@ -362,6 +445,25 @@ public sealed class RelationalConstraintTests
             ToolKey = "request_human_handoff",
             IdempotencyKey = idempotencyKey,
             Status = ToolExecutionStatus.ToolExecutionWaitingToRun
+        };
+    }
+
+    private static MessageDispatch CreateMessageDispatch(
+        Guid organizationId,
+        Guid conversationId,
+        Guid messageId,
+        MessageDispatchOperation operation,
+        string idempotencyKey)
+    {
+        return new MessageDispatch
+        {
+            OrganizationId = organizationId,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            Operation = operation,
+            Provider = operation == MessageDispatchOperation.InboundQueueDispatch ? "azure_queue" : "whatsapp_cloud",
+            Status = MessageDispatchStatus.Pending,
+            IdempotencyKey = idempotencyKey,
         };
     }
 

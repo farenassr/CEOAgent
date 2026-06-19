@@ -292,6 +292,11 @@ public sealed partial class ArchitectureRulesTests
         foreach (var (relativeRoot, namespaceRoot) in namespaceRoots)
         {
             var absoluteRoot = Path.Combine(repoRoot, relativeRoot);
+            if (!Directory.Exists(absoluteRoot))
+            {
+                continue;
+            }
+
             foreach (var filePath in Directory.EnumerateFiles(absoluteRoot, "*.cs", SearchOption.AllDirectories)
                          .Where(filePath => !filePath.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                              && !filePath.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
@@ -587,7 +592,7 @@ public sealed partial class ArchitectureRulesTests
                 Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Endpoints", "SendWhatsAppMessageEndpoint.cs"),
                 Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Endpoints", "WhatsAppWebhookEndpoint.cs"),
                 Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Services", "WhatsAppWebhookIngestionService.cs"),
-                Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Services", "IncomingMessageOutboxDispatcher.cs"),
+                Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Services", "InboundMessageDispatchDispatcher.cs"),
                 Path.Combine(repoRoot, "src", "CeoAgent.Worker", "Jobs", "IncomingMessageQueueWorker.cs"),
             }
             .Concat(Directory.Exists(Path.Combine(repoRoot, "src", "CeoAgent.ApiService", "Modules", "WhatsApp", "Logging"))
@@ -609,9 +614,9 @@ public sealed partial class ArchitectureRulesTests
         sourceText.ShouldContain("EventId = 4203");
         sourceText.ShouldContain("WhatsAppWebhookMessageEnqueued");
         sourceText.ShouldContain("EventId = 2101");
-        sourceText.ShouldContain("IncomingMessageOutboxDispatchSucceeded");
+        sourceText.ShouldContain("InboundMessageDispatchSucceeded");
         sourceText.ShouldContain("EventId = 2102");
-        sourceText.ShouldContain("IncomingMessageOutboxDispatchFailed");
+        sourceText.ShouldContain("InboundMessageDispatchFailed");
         sourceText.ShouldContain("EventId = 2201");
         sourceText.ShouldContain("IncomingQueueMessageProcessed");
         sourceText.ShouldContain("EventId = 2202");

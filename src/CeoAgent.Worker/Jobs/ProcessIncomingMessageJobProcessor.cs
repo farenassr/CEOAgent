@@ -278,19 +278,18 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     {
         var company = await dbContext.Companies.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == job.OrganizationId, cancellationToken)
             ?? throw new InvalidOperationException($"Company '{job.OrganizationId}' was not found.");
-        var conversation = await dbContext.Conversations.ForOrganization(job.OrganizationId).SingleAsync(entity => entity.Id == job.ConversationId, cancellationToken);
-
-        var agentProfile = await dbContext.AgentProfiles.AsNoTracking().ForOrganization(job.OrganizationId).SingleAsync(entity => entity.Id == conversation.AgentProfileId, cancellationToken);
-        var channel = await dbContext.CompanyChannels.AsNoTracking().ForOrganization(job.OrganizationId).SingleOrDefaultAsync(entity => entity.Id == conversation.CompanyChannelId, cancellationToken)
-            ?? throw new InvalidOperationException($"Company channel '{conversation.CompanyChannelId}' was not found.");
-
-        var customer = await dbContext.Customers
-            .AsNoTracking()
+        var conversation = await dbContext.Conversations
             .ForOrganization(job.OrganizationId)
-            .SingleOrDefaultAsync(
-                entity => entity.Id == conversation.CustomerId,
-                cancellationToken)
-            ?? throw new InvalidOperationException($"Customer '{conversation.CustomerId}' was not found.");
+            .Include(entity => entity.Customer)
+            .Include(entity => entity.CompanyChannel)
+            .Include(entity => entity.AgentProfile)
+            .SingleAsync(entity => entity.Id == job.ConversationId, cancellationToken);
+        var agentProfile = conversation.AgentProfile;
+        var channel = conversation.CompanyChannel;
+        var customer = conversation.Customer;
+        DetachReadOnlyContextEntity(agentProfile);
+        DetachReadOnlyContextEntity(channel);
+        DetachReadOnlyContextEntity(customer);
 
         var inbound = await dbContext.Messages
             .AsNoTracking()
@@ -307,6 +306,12 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             channel,
             customer,
             inbound);
+    }
+
+    private void DetachReadOnlyContextEntity<TEntity>(TEntity entity)
+        where TEntity : class
+    {
+        dbContext.Entry(entity).State = EntityState.Detached;
     }
 
     private async Task<string?> RunAgentTurnAsync(
