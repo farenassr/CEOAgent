@@ -7,5 +7,5 @@ public interface IAgentRuntime
 {
     bool CanEstimateCost(LlmProvider provider, string modelName);
 
-    Task<AgentRunResult> RunAsync(AgentRunRequest request, CancellationToken cancellationToken);
+    Task<AgentTurnResult> RunTurnAsync(AgentTurnRequest request, CancellationToken cancellationToken);
 }

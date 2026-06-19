@@ -1,41 +1,29 @@
-using System.Text.Json;
 using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Shared.AI;
 
-public sealed record AgentRunRequest(
+public sealed record AgentTurnRequest(
+    Guid OrganizationId,
+    Guid ConversationId,
+    Guid InboundMessageId,
     LlmProvider Provider,
     string ModelName,
     string SystemPrompt,
-    IReadOnlyList<AgentConversationMessage> Messages,
-    IReadOnlyList<AgentToolDescriptor> Tools,
-    int? MaxOutputTokenCount = null);
+    string UserMessage,
+    int? MaxOutputTokenCount = null,
+    string? CorrelationId = null,
+    bool MutatingToolsEnabled = true,
+    string? MutatingToolsDisabledReason = null);
 
-public sealed record AgentConversationMessage(
-    string Role,
-    string? Text,
-    string? ToolCallId = null,
-    string? ToolName = null,
-    JsonElement? ToolArguments = null);
-
-public sealed record AgentRunResult(
+public sealed record AgentTurnResult(
     string? AssistantText,
-    IReadOnlyList<AgentToolCall> ToolCalls,
     string? ResponseId = null,
+    string? ProviderConversationId = null,
     string? FinishReason = null,
     int? InputTokenCount = null,
     int? OutputTokenCount = null,
     int? TotalTokenCount = null,
-    double? EstimatedCostUsd = null);
-
-public sealed record AgentToolCall(
-    string Id,
-    string Name,
-    JsonElement Arguments);
-
-public sealed record AgentToolDescriptor(
-    Guid CompanyToolId,
-    string Name,
-    string Description,
-    JsonElement ParametersSchema,
-    bool IsMutating);
+    double? EstimatedCostUsd = null,
+    int ToolInvocationCount = 0,
+    bool SessionWasReset = false,
+    string? SessionResetReason = null);

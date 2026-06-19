@@ -8,6 +8,7 @@ using CeoAgent.Application.Abstractions.Storage;
 using Azure.Storage.Blobs;
 using CeoAgent.Infrastructure.ApiClient.WhatsApp;
 using CeoAgent.Infrastructure.Implementation.Organization;
+using CeoAgent.Infrastructure.Implementation.AI;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
@@ -89,6 +90,8 @@ public static class InfrastructureRegistrations
         services.AddMemoryCache();
         services.AddOptions<OpenAIAgentRuntimeOptions>()
             .BindConfiguration(OpenAIAgentRuntimeOptions.SectionName);
+        services.AddOptions<AgentRuntimeOptions>()
+            .BindConfiguration(AgentRuntimeOptions.SectionName);
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
         services.AddOpenAIImplementation();
         services.AddGoogleCalendarImplementation();
@@ -110,15 +113,15 @@ public static class InfrastructureRegistrations
 
     private static IServiceCollection AddInfrastructureTooling(this IServiceCollection services)
     {
-        services.AddScoped<CompanyToolRegistry>();
+        services.AddScoped<AgentTurnContextAccessor>();
+        services.AddScoped<AgentFunctionCatalog>();
+        services.AddScoped<AgentToolDispatcher>();
+        services.AddScoped<AgentFunctionInvocationGuard>();
         services.AddScoped<GoogleCalendarToolExecutor>();
         services.AddScoped<HumanHandoffToolExecutor>();
-        services.AddScoped<ToolExecutionGatewayHelper>();
-        services.AddScoped<IAgentToolInvoker, AgentToolInvoker>();
         services.AddScoped<IAgentToolCatalog, CompositeAgentToolCatalog>();
         services.AddScoped<IDynamicAgentToolProvider, NoOpDynamicAgentToolProvider>();
         services.AddAgentToolsFromInfrastructureAssembly();
-        services.AddScoped<ToolExecutionGateway>();
 
         return services;
     }

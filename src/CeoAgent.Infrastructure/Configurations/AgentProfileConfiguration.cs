@@ -1,4 +1,5 @@
 using CeoAgent.Infrastructure.Entities;
+using CeoAgent.Shared.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -11,6 +12,11 @@ public sealed class AgentProfileConfiguration : IEntityTypeConfiguration<AgentPr
         builder.ToTable("agent_profile");
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.ModelName).HasMaxLength(120).IsRequired();
+        builder.Property(entity => entity.LlmProvider)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(LlmProvider.OpenAI)
+            .IsRequired();
         builder.Property(entity => entity.DisplayName).HasMaxLength(160).IsRequired();
         builder.Property(entity => entity.Language).HasMaxLength(16).IsRequired();
         builder.Property(entity => entity.MaxOutputTokenCount).HasDefaultValue(1024).IsRequired();

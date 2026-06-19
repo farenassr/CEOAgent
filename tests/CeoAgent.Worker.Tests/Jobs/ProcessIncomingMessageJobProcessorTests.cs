@@ -20,7 +20,6 @@ using CeoAgent.Shared.Constants;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Payment;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
-using CeoAgent.Shared.AITools;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
 using CeoAgent.Infrastructure.Implementation.Messaging;
@@ -111,7 +110,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         fixture.Messaging.ReadMessages.ShouldBeEmpty();
         var request = fixture.Agent.Requests.Single();
         request.MaxOutputTokenCount.ShouldBe(1024);
-        request.Messages[^1].Text.ShouldBe("Hola desde WhatsApp admin");
+        request.UserMessage.ShouldBe("Hola desde WhatsApp admin");
+        request.OrganizationId.ShouldBe(fixture.OrganizationId);
+        request.ConversationId.ShouldBe(fixture.Conversation.Id);
+        request.InboundMessageId.ShouldBe(fixture.InboundMessage.Id);
+        request.CorrelationId.ShouldBe("correlation-123");
         fixture.Messaging.TextMessages.Single().Text.ShouldBe("Claro, reviso disponibilidad.");
         fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
         var assistant = await fixture.DbContext.Messages
@@ -208,163 +211,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
-    public async Task ProcessAsync_ForTextMessageWithoutProviderMessageId_ExecutesMutatingTool()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        await fixture.AddDefaultPaymentAccountAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
-        fixture.InboundMessage.ProviderMessageId = null;
-        fixture.InboundMessage.Payload = new MessagePayload
-        {
-            ProviderType = "whatsapp_cloud",
-        };
-        await fixture.DbContext.SaveChangesAsync();
-
-        fixture.Agent.Results.Enqueue(new AgentRunResult(
-            AssistantText: null,
-            ToolCalls:
-            [
-                new AgentToolCall(
-                    "call-reservation",
-                    MvpToolKeys.CreateGoogleCalendarReservation,
-                    System.Text.Json.JsonSerializer.SerializeToElement(new
-                    {
-                        start = "2026-05-28T16:00:00-05:00",
-                        end = "2026-05-28T17:00:00-05:00",
-                        summary = "Reservation for 2",
-                        customerName = "Ada Lovelace",
-                    })),
-            ]));
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
-        fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
-        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Reserva creada.");
-        var paymentImage = fixture.Messaging.ImageMessages.Single();
-        paymentImage.Caption.ShouldContain("Banco Uno");
-        paymentImage.Caption.ShouldContain("Ahorros");
-        paymentImage.Caption.ShouldContain("0011223344");
-        paymentImage.Caption.ShouldContain("50000");
-        paymentImage.Caption.ShouldContain("COP");
-        fixture.Agent.Requests.Count.ShouldBe(2);
-        fixture.Agent.Requests[1].Messages.Any(message =>
-            message.Role == "tool"
-            && message.Text != null
-            && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)
-            && message.Text.Contains("\"eventId\":\"event-123\"", StringComparison.Ordinal)).ShouldBeTrue();
-
-        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        var execution = await fixture.DbContext.ToolExecutions.SingleAsync(entity => entity.ToolKey == MvpToolKeys.CreateGoogleCalendarReservation);
-        var paymentMessage = await fixture.DbContext.Messages.SingleAsync(message => message.ProviderMessageId == $"payment:{execution.Id}");
-        paymentMessage.Type.ShouldBe(MessageType.Image);
-        paymentMessage.Payload!.ProviderType.ShouldBe("image");
-        paymentMessage.Payload.ProviderMessageId.ShouldBe("sent-image-1");
-        var paymentOutbox = await fixture.DbContext.OutgoingMessageOutbox
-            .SingleAsync(entity => entity.IdempotencyKey == $"payment:{execution.Id}");
-        paymentOutbox.MessageId.ShouldBe(paymentMessage.Id);
-        paymentOutbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
-        paymentOutbox.ProviderMessageId.ShouldBe("sent-image-1");
-        var paymentLedger = await fixture.DbContext.ProviderSendLedger
-            .SingleAsync(entity => entity.OutgoingMessageOutboxId == paymentOutbox.Id);
-        paymentLedger.AttemptNumber.ShouldBe(1);
-        paymentLedger.Status.ShouldBe(ProviderSendLedgerStatus.ProviderAccepted);
-        paymentLedger.ProviderMessageId.ShouldBe("sent-image-1");
-        var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
-        var paymentAccountId = state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue;
-        var expectedQrReference = BlobStorageNaming.ForPaymentQr("qr.png", Guid.Parse(paymentAccountId!));
-        paymentMessage.Payload.BlobContainer.ShouldBe(BlobStorageContainerNames.Private);
-        paymentMessage.Payload.BlobName.ShouldBe(expectedQrReference.BlobName);
-
-        state.Snapshot.PendingAction.ShouldBe("awaiting_reservation_payment_confirmation");
-        state.Snapshot.Slots.Single(slot => slot.Name == "payment_account_id").TextValue.ShouldNotBeNullOrWhiteSpace();
-        state.Snapshot.Slots.Single(slot => slot.Name == "amount").NumberValue.ShouldBe(50000m);
-        state.Snapshot.Slots.Single(slot => slot.Name == "currency").TextValue.ShouldBe("COP");
-        state.Snapshot.Slots.Single(slot => slot.Name == "reservation_event_id").TextValue.ShouldBe("event-123");
-        state.Snapshot.Slots.Single(slot => slot.Name == "tool_execution_id").TextValue.ShouldBe(execution.Id.ToString("D"));
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenReservationPaymentSendIsRetried_DoesNotDuplicatePaymentMessage()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        await fixture.AddDefaultPaymentAccountAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
-        fixture.InboundMessage.ProviderMessageId = null;
-        fixture.InboundMessage.Payload = new MessagePayload
-        {
-            ProviderType = "whatsapp_cloud",
-        };
-        await fixture.DbContext.SaveChangesAsync();
-
-        fixture.Agent.Results.Enqueue(CreateReservationToolResult());
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
-        var job = new ProcessIncomingMessageJob(
-            fixture.OrganizationId,
-            fixture.Conversation.Id,
-            fixture.InboundMessage.Id,
-            "correlation-123");
-
-        await fixture.Processor.ProcessAsync(job, CancellationToken.None);
-        await fixture.Processor.ProcessAsync(job, CancellationToken.None);
-
-        fixture.Messaging.ImageMessages.Count.ShouldBe(1);
-        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        var paymentMessages = await fixture.DbContext.Messages
-            .Where(message => message.ProviderMessageId != null && message.ProviderMessageId.StartsWith("payment:"))
-            .ToListAsync();
-        paymentMessages.Count.ShouldBe(1);
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenReservationHasNoDefaultPaymentAccount_HandsOffConversation()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
-        fixture.InboundMessage.ProviderMessageId = null;
-        fixture.InboundMessage.Payload = new MessagePayload
-        {
-            ProviderType = "whatsapp_cloud",
-        };
-        await fixture.DbContext.SaveChangesAsync();
-
-        fixture.Agent.Results.Enqueue(CreateReservationToolResult());
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
-        fixture.Messaging.ImageMessages.ShouldBeEmpty();
-        fixture.Messaging.TextMessages.ShouldContain(message => message.Text == "Reserva creada.");
-        fixture.Messaging.TextMessages.ShouldContain(message =>
-            message.RecipientExternalId == fixture.Customer.ExternalCustomerId
-            && message.Text.Contains("persona", StringComparison.OrdinalIgnoreCase));
-
-        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
-        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
-        var configMissingMessage = await fixture.DbContext.Messages
-            .SingleAsync(message => message.ProviderMessageId != null && message.ProviderMessageId.StartsWith("payment-config-missing:"));
-        var configMissingOutbox = await fixture.DbContext.OutgoingMessageOutbox
-            .SingleAsync(entity => entity.MessageId == configMissingMessage.Id);
-        configMissingOutbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
-    }
-
-    [Test]
     public async Task ProcessAsync_WhenAwaitingPaymentAndInboundImageArrives_HandsOffWithoutCallingAgent()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
@@ -436,75 +282,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
-    public async Task ProcessAsync_ForTextMessageWithMutatingTool_PersistsReplyBeforeSendAndProviderReferenceAfterSend()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        await fixture.AddDefaultPaymentAccountAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Reserva para dos a las cuatro";
-        fixture.InboundMessage.ProviderMessageId = null;
-        fixture.InboundMessage.Payload = new MessagePayload
-        {
-            ProviderType = "whatsapp_cloud",
-        };
-        await fixture.DbContext.SaveChangesAsync();
-
-        fixture.Agent.Results.Enqueue(new AgentRunResult(
-            AssistantText: null,
-            ToolCalls:
-            [
-                new AgentToolCall(
-                    "call-reservation",
-                    MvpToolKeys.CreateGoogleCalendarReservation,
-                    JsonSerializer.SerializeToElement(new
-                    {
-                        start = "2026-05-28T16:00:00-05:00",
-                        end = "2026-05-28T17:00:00-05:00",
-                        summary = "Reservation for 2",
-                        customerName = "Ada Lovelace",
-                    })),
-            ]));
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Reserva creada.", []));
-
-        var saveChangesCount = 0;
-        fixture.DbContext.SavingChanges += (_, _) => saveChangesCount++;
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
-        saveChangesCount.ShouldBeGreaterThanOrEqualTo(2);
-        fixture.Calendar.ReservationRequests.Count.ShouldBe(1);
-        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        (await fixture.DbContext.ToolExecutions.CountAsync()).ShouldBe(1);
-        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.ToolResult)).ShouldBe(1);
-        (await fixture.DbContext.Messages.CountAsync(message => message.Role == MessageRole.Assistant)).ShouldBe(2);
-    }
-
-    private static AgentRunResult CreateReservationToolResult()
-    {
-        return new AgentRunResult(
-            AssistantText: null,
-            ToolCalls:
-            [
-                new AgentToolCall(
-                    "call-reservation",
-                    MvpToolKeys.CreateGoogleCalendarReservation,
-                    JsonSerializer.SerializeToElement(new
-                    {
-                        start = "2026-05-28T16:00:00-05:00",
-                        end = "2026-05-28T17:00:00-05:00",
-                        summary = "Reservation for 2",
-                        customerName = "Ada Lovelace",
-                    })),
-            ]);
-    }
-
-    [Test]
     public async Task ProcessAsync_ExcludesPersistedToolMessagesFromPromptHistory()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
@@ -542,13 +319,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             CancellationToken.None);
 
         var request = fixture.Agent.Requests.Single();
-        request.Messages.Any(message =>
-            string.Equals(message.Text, MvpToolKeys.CheckGoogleCalendarAvailability, StringComparison.Ordinal)
-            || (message.Text != null && message.Text.Contains("\"toolKey\"", StringComparison.Ordinal))).ShouldBeFalse();
+        request.UserMessage.ShouldBe("Nuevo turno");
     }
 
     [Test]
-    public async Task ProcessAsync_WhenAgentRuntimeFails_SendsFallbackReply()
+    public async Task ProcessAsync_WhenAgentRuntimeFails_SendsFallbackReplyAndHandsOff()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
         fixture.InboundMessage.Type = MessageType.Text;
@@ -565,292 +340,17 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 "correlation-123"),
             CancellationToken.None);
 
-        fixture.Messaging.TextMessages.Single().Text.ShouldBe("No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenModelRequestsCalendarTool_ExecutesToolThenSendsFinalReply()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Quiero reservar a las cuatro.";
-        fixture.InboundMessage.Payload = null;
-        await fixture.DbContext.SaveChangesAsync();
-
-        fixture.Agent.Results.Enqueue(new AgentRunResult(
-            AssistantText: null,
-            ToolCalls:
-            [
-                new AgentToolCall(
-                    "call-availability",
-                    MvpToolKeys.CheckGoogleCalendarAvailability,
-                    System.Text.Json.JsonSerializer.SerializeToElement(new
-                    {
-                        date = "2026-05-28",
-                        partySize = 2,
-                        preferredTime = "16:00",
-                    })),
-            ]));
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Si, tenemos disponibilidad a las 4:00 p.m.", []));
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
-        fixture.Agent.Requests.Count.ShouldBe(2);
-        fixture.Agent.Requests[1].Messages.Any(message =>
-            message.Role == "tool"
-            && message.ToolCallId == "call-availability"
-            && message.Text is not null
-            && message.Text.Contains("\"status\":\"succeeded\"", StringComparison.Ordinal)).ShouldBeTrue();
-        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Si, tenemos disponibilidad a las 4:00 p.m.");
-        fixture.Calendar.AvailabilityRequests.Count.ShouldBe(1);
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenModelRequestsTool_CreatesLangSmithReadableActivityTree()
-    {
-        using var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == CeoAgentTelemetry.SourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-        };
-        var activities = new List<Activity>();
-        listener.ActivityStopped = activity => activities.Add(activity);
-        ActivitySource.AddActivityListener(listener);
-        var previousCurrent = Activity.Current;
-        Activity.Current = null;
-
-        try
-        {
-            await using var fixture = await ProcessorFixture.CreateAsync();
-            fixture.InboundMessage.Type = MessageType.Text;
-            fixture.InboundMessage.MessageText = "Quiero reservar a las cuatro.";
-            fixture.InboundMessage.ProviderMessageId = null;
-            fixture.InboundMessage.Payload = null;
-            await fixture.DbContext.SaveChangesAsync();
-
-            fixture.Agent.Results.Enqueue(new AgentRunResult(
-                AssistantText: null,
-                ToolCalls:
-                [
-                    new AgentToolCall(
-                        "call-availability",
-                        MvpToolKeys.CheckGoogleCalendarAvailability,
-                        JsonSerializer.SerializeToElement(new
-                        {
-                            date = "2026-05-28",
-                            partySize = 2,
-                            preferredTime = "16:00",
-                        })),
-                ]));
-            fixture.Agent.Results.Enqueue(new AgentRunResult("Si, tenemos disponibilidad a las 4:00 p.m.", []));
-
-            const string correlationId = "activity-tree-correlation";
-            await fixture.Processor.ProcessAsync(
-                new ProcessIncomingMessageJob(
-                    fixture.OrganizationId,
-                    fixture.Conversation.Id,
-                    fixture.InboundMessage.Id,
-                    correlationId),
-                CancellationToken.None);
-
-            var root = activities.Single(activity =>
-                activity.DisplayName == "whatsapp.message.process"
-                && GetStringTag(activity, CeoAgentTelemetry.LangSmith.MetadataInboundMessageId) == fixture.InboundMessage.Id.ToString("D")
-                && GetStringTag(activity, CeoAgentTelemetry.LangSmith.MetadataCorrelationId) == correlationId);
-            var iterations = activities
-                .Where(activity => activity.DisplayName == "agent.iteration" && activity.TraceId == root.TraceId)
-                .OrderBy(activity => GetIntTag(activity, "agent.iteration"))
-                .ToArray();
-            var llmCalls = activities
-                .Where(activity => activity.DisplayName == "llm.generation" && activity.TraceId == root.TraceId)
-                .OrderBy(activity => GetIntTag(activity, "agent.iteration"))
-                .ToArray();
-            var tool = activities.Single(activity => activity.DisplayName == "tool.execution" && activity.TraceId == root.TraceId);
-
-            iterations.Length.ShouldBe(2);
-            llmCalls.Length.ShouldBe(2);
-            root.ParentId.ShouldBeNull();
-            GetStringTag(root, "messaging.system").ShouldBe("whatsapp_cloud");
-            GetStringTag(root, CeoAgentTelemetry.LangSmith.SpanKind).ShouldBe("chain");
-            GetStringTag(root, CeoAgentTelemetry.LangSmith.MetadataInboundMessageId).ShouldBe(fixture.InboundMessage.Id.ToString("D"));
-            GetStringTag(root, CeoAgentTelemetry.LangSmith.MetadataCorrelationId).ShouldBe(correlationId);
-
-            iterations[0].ParentSpanId.ShouldBe(root.SpanId);
-            iterations[1].ParentSpanId.ShouldBe(root.SpanId);
-            iterations[0].TraceId.ShouldBe(root.TraceId);
-            iterations[1].TraceId.ShouldBe(root.TraceId);
-
-            llmCalls[0].ParentSpanId.ShouldBe(iterations[0].SpanId);
-            llmCalls[1].ParentSpanId.ShouldBe(iterations[1].SpanId);
-            llmCalls[0].TraceId.ShouldBe(root.TraceId);
-            llmCalls[1].TraceId.ShouldBe(root.TraceId);
-            GetStringTag(llmCalls[0], CeoAgentTelemetry.LangSmith.SpanKind).ShouldBe("llm");
-
-            tool.ParentSpanId.ShouldBe(iterations[0].SpanId);
-            tool.TraceId.ShouldBe(root.TraceId);
-            GetStringTag(tool, CeoAgentTelemetry.LangSmith.SpanKind).ShouldBe("tool");
-        }
-        finally
-        {
-            Activity.Current = previousCurrent;
-        }
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenModelFindsReservations_IncludesReservationTimeInToolResult()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Tengo una reserva hoy?";
-        fixture.InboundMessage.Payload = null;
-        await fixture.DbContext.SaveChangesAsync();
-        fixture.Calendar.FindResult = new CalendarReservationSearchResult(
-        [
-            new CalendarReservationInfo(
-                "reservation-key",
-                "event-123",
-                new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)),
-                new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
-                "Reservation for 2",
-                "Ada Lovelace",
-                "https://calendar.google.com/event?eid=event-123"),
-        ]);
-
-        fixture.Agent.Results.Enqueue(new AgentRunResult(
-            AssistantText: null,
-            ToolCalls:
-            [
-                new AgentToolCall(
-                    "call-find",
-                    MvpToolKeys.FindGoogleCalendarReservations,
-                    JsonSerializer.SerializeToElement(new
-                    {
-                        date = "2026-05-28",
-                        includePast = false,
-                        status = (string?)null,
-                    })),
-            ]));
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Tu reserva es a las 4:00 p.m.", []));
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
-        fixture.Agent.Requests.Count.ShouldBe(2);
-        fixture.Agent.Requests[1].Messages.Any(message =>
-            message.Role == "tool"
-            && message.ToolCallId == "call-find"
-            && message.Text is not null
-            && message.Text.Contains("\"count\":1", StringComparison.Ordinal)
-            && message.Text.Contains("2026-05-28T16:00:00-05:00", StringComparison.Ordinal)).ShouldBeTrue();
-        fixture.Messaging.TextMessages.Single().Text.ShouldBe("Tu reserva es a las 4:00 p.m.");
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenModelRequestsHumanHandoff_HandsOffNotifiesStaffAndSendsConfirmation()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Quiero hablar con una persona";
-        fixture.InboundMessage.ProviderMessageId = null;
-        fixture.InboundMessage.Payload = null;
-        await fixture.DbContext.SaveChangesAsync();
-
-        fixture.Agent.Results.Enqueue(new AgentRunResult(
-            AssistantText: null,
-            ToolCalls:
-            [
-                new AgentToolCall(
-                    "call-handoff",
-                    MvpToolKeys.RequestHumanHandoff,
-                    JsonSerializer.SerializeToElement(new
-                    {
-                        reason = "customer_requested_human",
-                        notes = (string?)null,
-                    })),
-            ]));
-        fixture.Agent.Results.Enqueue(new AgentRunResult("Te conecto con una persona del equipo.", []));
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
-        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
-        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
-
-        var execution = await fixture.DbContext.ToolExecutions.SingleAsync(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff);
-        execution.Status.ShouldBe(ToolExecutionStatus.ToolExecutionSucceeded);
-        execution.Result!.RequestHumanHandoff!.HandoffRequested.ShouldBeTrue();
-        execution.Result.RequestHumanHandoff.HandoffTicketId.ShouldNotBeNullOrWhiteSpace();
-        execution.FailureReason.ShouldBeNull();
-
-        var state = await fixture.DbContext.ConversationStates.SingleAsync(entity => entity.ConversationId == fixture.Conversation.Id);
-        state.Snapshot.CurrentIntent.ShouldBe("human_handoff_request");
-        state.Snapshot.ConversationFlags.ShouldContain("human_requested");
-
-        fixture.Messaging.TextMessages.ShouldContain(message => message.RecipientExternalId == "15559998888");
-        fixture.Messaging.TextMessages.ShouldContain(message => message.Text == "Te conecto con una persona del equipo.");
-    }
-
-    [Test]
-    public async Task ProcessAsync_WhenAgentLoopIsExhausted_AutoEscalatesToHumanHandoff()
-    {
-        await using var fixture = await ProcessorFixture.CreateAsync();
-        fixture.InboundMessage.Type = MessageType.Text;
-        fixture.InboundMessage.MessageText = "Necesito ayuda";
-        fixture.InboundMessage.ProviderMessageId = null;
-        fixture.InboundMessage.Payload = null;
-        await fixture.DbContext.SaveChangesAsync();
-
-        // Force the agent to keep requesting a tool until the loop cap is reached.
-        for (var iteration = 0; iteration < 4; iteration++)
-        {
-            fixture.Agent.Results.Enqueue(new AgentRunResult(
-                AssistantText: null,
-                ToolCalls:
-                [
-                    new AgentToolCall(
-                        $"call-availability-{iteration}",
-                        MvpToolKeys.CheckGoogleCalendarAvailability,
-                        JsonSerializer.SerializeToElement(new
-                        {
-                            date = "2026-05-28",
-                            partySize = 2,
-                            preferredTime = "16:00",
-                        })),
-                ]));
-        }
-
-        await fixture.Processor.ProcessAsync(
-            new ProcessIncomingMessageJob(
-                fixture.OrganizationId,
-                fixture.Conversation.Id,
-                fixture.InboundMessage.Id,
-                "correlation-123"),
-            CancellationToken.None);
-
         fixture.Messaging.TextMessages.ShouldContain(message =>
-            message.Text == "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
-
+            message.RecipientExternalId == fixture.Customer.ExternalCustomerId
+            && message.Text == "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.");
+        fixture.Messaging.TextMessages.ShouldContain(message =>
+            message.RecipientExternalId == "15559998888"
+            && message.Text.Contains("Atencion humana requerida.", StringComparison.Ordinal));
         fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        var conversation = await fixture.DbContext.Conversations.SingleAsync(entity => entity.Id == fixture.Conversation.Id);
-        conversation.Status.ShouldBe(ConversationStatus.HandedOff);
-        (await fixture.DbContext.ToolExecutions.CountAsync(entity => entity.ToolKey == MvpToolKeys.RequestHumanHandoff)).ShouldBe(1);
+        await fixture.DbContext.Entry(fixture.Conversation).ReloadAsync();
+        fixture.Conversation.Status.ShouldBe(ConversationStatus.HandedOff);
+        (await fixture.DbContext.ToolExecutions.CountAsync(execution =>
+            execution.ToolKey == MvpToolKeys.RequestHumanHandoff)).ShouldBe(1);
     }
 
     [Test]
@@ -916,6 +416,32 @@ public sealed class ProcessIncomingMessageJobProcessorTests
     }
 
     [Test]
+    public async Task ProcessAsync_WhenProductionBudgetIsActive_DisablesMutatingToolsForAgentTurn()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync("Production");
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Cambia mi reserva a las 8";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        await fixture.DbContext.SaveChangesAsync();
+
+        await fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None);
+
+        var request = fixture.Agent.Requests.Single();
+        request.MutatingToolsEnabled.ShouldBeFalse();
+        request.MutatingToolsDisabledReason.ShouldBe("llm_budget_guard_active");
+    }
+
+    [Test]
     public async Task ProcessAsync_WhenEstimatedLlmCostExceedsProfileBudget_HandsOff()
     {
         await using var fixture = await ProcessorFixture.CreateAsync();
@@ -926,9 +452,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         {
             ProviderType = "whatsapp_cloud",
         };
-        fixture.Agent.Results.Enqueue(new AgentRunResult(
+        fixture.Agent.Results.Enqueue(new AgentTurnResult(
             "Respuesta costosa",
-            [],
             EstimatedCostUsd: 0.06d));
         await fixture.DbContext.SaveChangesAsync();
 
@@ -963,11 +488,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             PaymentQrImages = new FakePaymentQrImageProvider();
             Agent = new FakeAgentRuntime();
             Calendar = new FakeCalendarIntegration();
-            var calendarExecutor = new GoogleCalendarToolExecutor(
-                DbContext,
-                Calendar,
-                new FixedTimeProvider(new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero)));
-            var helper = new ToolExecutionGatewayHelper(DbContext);
             var handoffExecutor = new HumanHandoffToolExecutor(
                 DbContext,
                 Messaging,
@@ -978,18 +498,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Messaging,
                 TimeProvider.System,
                 NullLogger<OutboundMessageDispatcher>.Instance);
-            var catalog = new CompositeAgentToolCatalog(
-            [
-                new CheckGoogleCalendarAvailabilityTool(calendarExecutor),
-                new CreateGoogleCalendarReservationTool(calendarExecutor),
-                new FindGoogleCalendarReservationsTool(calendarExecutor),
-                new UpdateGoogleCalendarReservationTool(calendarExecutor),
-                new CancelGoogleCalendarReservationTool(calendarExecutor),
-                new RequestHumanHandoffTool(handoffExecutor),
-            ],
-            []);
-            var toolRegistry = new CompanyToolRegistry(DbContext, catalog);
-            var toolGateway = new ToolExecutionGateway(new AgentToolInvoker(catalog, DbContext, helper), helper);
             var paymentSender = new ReservationPaymentInstructionSender(
                 DbContext,
                 outboundMessageDispatcher,
@@ -1002,8 +510,6 @@ public sealed class ProcessIncomingMessageJobProcessorTests
                 Messaging,
                 outboundMessageDispatcher,
                 Agent,
-                toolRegistry,
-                toolGateway,
                 handoffExecutor,
                 paymentSender,
                 OrganizationContext,
@@ -1299,9 +805,9 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
     private sealed class FakeAgentRuntime : IAgentRuntime
     {
-        public List<AgentRunRequest> Requests { get; } = [];
+        public List<AgentTurnRequest> Requests { get; } = [];
 
-        public Queue<AgentRunResult> Results { get; } = [];
+        public Queue<AgentTurnResult> Results { get; } = [];
 
         public bool CanEstimateCosts { get; set; } = true;
 
@@ -1312,7 +818,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             return CanEstimateCosts;
         }
 
-        public Task<AgentRunResult> RunAsync(AgentRunRequest request, CancellationToken cancellationToken)
+        public Task<AgentTurnResult> RunTurnAsync(AgentTurnRequest request, CancellationToken cancellationToken)
         {
             if (ThrowOnRun is not null)
             {
@@ -1322,7 +828,7 @@ public sealed class ProcessIncomingMessageJobProcessorTests
             Requests.Add(request);
             return Task.FromResult(Results.Count > 0
                 ? Results.Dequeue()
-                : new AgentRunResult("Claro, reviso disponibilidad.", []));
+                : new AgentTurnResult("Claro, reviso disponibilidad."));
         }
     }
 

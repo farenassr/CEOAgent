@@ -1,5 +1,4 @@
 using CeoAgent.Application.Abstractions.AI;
-using CeoAgent.Shared.AI;
 
 namespace CeoAgent.Application.Agents;
 
@@ -20,6 +19,4 @@ public sealed class AgentPromptContext
     public string? PromptOverride { get; init; }
 
     public string? WorkingHoursSummary { get; init; }
-
-    public IReadOnlyList<AgentToolDescriptor> Tools { get; init; } = [];
 }

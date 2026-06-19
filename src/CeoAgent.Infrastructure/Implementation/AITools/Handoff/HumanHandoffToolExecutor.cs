@@ -104,6 +104,7 @@ public sealed partial class HumanHandoffToolExecutor(
                 config,
                 idempotencyKey,
                 cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
             return true;
         }
 
@@ -118,6 +119,7 @@ public sealed partial class HumanHandoffToolExecutor(
         var conversation = await LoadConversationAsync(organizationId, conversationId, cancellationToken);
         conversation.Status = ConversationStatus.HandedOff;
         await UpsertHandoffStateAsync(organizationId, conversationId, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 

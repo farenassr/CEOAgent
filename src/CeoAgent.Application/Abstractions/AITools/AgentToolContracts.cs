@@ -1,5 +1,3 @@
-using CeoAgent.Shared.AI;
-using CeoAgent.Shared.AITools;
 using System.Text.Json;
 
 namespace CeoAgent.Application.Abstractions.AITools;
@@ -62,14 +60,5 @@ public interface IDynamicAgentToolProvider
 {
     Task<IReadOnlyList<IAgentTool>> GetToolsAsync(
         AgentToolCatalogContext context,
-        CancellationToken cancellationToken);
-}
-
-public interface IAgentToolInvoker
-{
-    Task<ToolExecutionGatewayResult> ExecuteAsync(
-        ToolExecutionGatewayRequest request,
-        AgentToolDescriptor descriptor,
-        string idempotencyKey,
         CancellationToken cancellationToken);
 }

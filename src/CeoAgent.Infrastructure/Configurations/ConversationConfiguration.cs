@@ -11,6 +11,13 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.ToTable("conversation");
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(entity => entity.LlmProvider).HasConversion<string>().HasMaxLength(32);
+        builder.Property(entity => entity.ModelName).HasMaxLength(120);
+        builder.Property(entity => entity.ProviderConversationId).HasMaxLength(240);
+        builder.Property(entity => entity.ProviderLastResponseId).HasMaxLength(240);
+        builder.Property(entity => entity.AgentSessionJson);
+        builder.Property(entity => entity.AgentSessionResetReason).HasMaxLength(64);
+        builder.Property(entity => entity.AgentSessionTurnCount).HasDefaultValue(0).IsRequired();
         builder.HasIndex(entity => new { entity.OrganizationId, entity.CustomerId, entity.CompanyChannelId }).IsUnique()
             .HasFilter("status = 'Open'");
         builder.HasIndex(entity => new { entity.OrganizationId, entity.CreatedAt }).IsDescending(false, true);
