@@ -21,7 +21,7 @@ namespace CeoAgent.ApiService.Modules.WhatsApp;
 public sealed class ReceiveAdminWhatsAppMessageEndpoint(
     CeoAgentDbContext dbContext,
     IAdminTenantGuard tenantGuard,
-    IncomingMessageOutboxDispatcher incomingMessageOutboxDispatcher,
+    InboundMessageDispatchDispatcher inboundMessageDispatchDispatcher,
     CorrelationIdAccessor correlationIdAccessor,
     TimeProvider timeProvider) : Endpoint<ReceiveWhatsAppMessageRequest, ReceiveWhatsAppMessageResponse>
 {
@@ -74,18 +74,16 @@ public sealed class ReceiveAdminWhatsAppMessageEndpoint(
         };
 
         conversation.LastMessageAt = occurredAt;
-        var outbox = new IncomingMessageOutbox
-        {
-            OrganizationId = organizationId,
-            ConversationId = conversation.Id,
-            MessageId = inbound.Id,
-            CorrelationId = correlationIdAccessor.CorrelationId,
-        };
+        var dispatch = InboundMessageDispatchFactory.Create(
+            organizationId,
+            conversation.Id,
+            inbound.Id,
+            correlationIdAccessor.CorrelationId);
         dbContext.Messages.Add(inbound);
-        dbContext.IncomingMessageOutbox.Add(outbox);
+        dbContext.MessageDispatches.Add(dispatch);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var dispatched = await incomingMessageOutboxDispatcher.DispatchAsync(outbox.Id, cancellationToken);
+        var dispatched = await inboundMessageDispatchDispatcher.DispatchAsync(dispatch.Id, cancellationToken);
 
         await Send.OkAsync(
             new ReceiveWhatsAppMessageResponse

@@ -59,24 +59,16 @@ public sealed class WhatsAppSendMessageEndpointTests
 
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<CeoAgentDbContext>();
-        var outbox = await dbContext.OutgoingMessageOutbox
+        var dispatch = await dbContext.MessageDispatches
             .IgnoreQueryFilters()
-            .SingleAsync();
-        outbox.OrganizationId.ShouldBe(organizationId);
-        outbox.ConversationId.ShouldBe(conversationId);
-        outbox.Provider.ShouldBe("whatsapp_cloud");
-        outbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
-        outbox.IdempotencyKey.ShouldBe("manual-send-1");
-        outbox.ProviderMessageId.ShouldBe("wamid.sent-1");
-
-        var ledger = await dbContext.ProviderSendLedger
-            .IgnoreQueryFilters()
-            .SingleAsync();
-        ledger.OutgoingMessageOutboxId.ShouldBe(outbox.Id);
-        ledger.AttemptNumber.ShouldBe(1);
-        ledger.Provider.ShouldBe("whatsapp_cloud");
-        ledger.Status.ShouldBe(ProviderSendLedgerStatus.ProviderAccepted);
-        ledger.ProviderMessageId.ShouldBe("wamid.sent-1");
+            .SingleAsync(entity => entity.Operation == MessageDispatchOperation.OutboundProviderSend);
+        dispatch.OrganizationId.ShouldBe(organizationId);
+        dispatch.ConversationId.ShouldBe(conversationId);
+        dispatch.Provider.ShouldBe("whatsapp_cloud");
+        dispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
+        dispatch.IdempotencyKey.ShouldBe("manual-send-1");
+        dispatch.ProviderMessageId.ShouldBe("wamid.sent-1");
+        dispatch.AttemptCount.ShouldBe(1);
     }
 
     [Test]

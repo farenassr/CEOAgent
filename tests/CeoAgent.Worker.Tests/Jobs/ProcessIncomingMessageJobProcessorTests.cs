@@ -84,6 +84,10 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         var assistantCount = await fixture.DbContext.Messages
             .CountAsync(message => message.Role == MessageRole.Assistant);
         assistantCount.ShouldBe(1);
+        var dispatch = await fixture.DbContext.MessageDispatches.SingleAsync();
+        dispatch.Operation.ShouldBe(MessageDispatchOperation.OutboundProviderSend);
+        dispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
+        dispatch.AttemptCount.ShouldBe(1);
     }
 
     [Test]
@@ -161,23 +165,51 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         assistant.Payload!.ProviderMessageId.ShouldBe("sent-text-1");
 
         fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
-        var outbound = await fixture.DbContext.OutgoingMessageOutbox.SingleAsync();
-        outbound.OrganizationId.ShouldBe(fixture.OrganizationId);
-        outbound.ConversationId.ShouldBe(fixture.Conversation.Id);
-        outbound.MessageId.ShouldBe(assistant.Id);
-        outbound.Provider.ShouldBe("whatsapp_cloud");
-        outbound.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
-        outbound.IdempotencyKey.ShouldBe($"reply:{fixture.InboundMessage.Id}");
-        outbound.ProviderMessageId.ShouldBe("sent-text-1");
-        outbound.CorrelationId.ShouldBe("correlation-123");
+        var dispatch = await fixture.DbContext.MessageDispatches.SingleAsync();
+        dispatch.OrganizationId.ShouldBe(fixture.OrganizationId);
+        dispatch.ConversationId.ShouldBe(fixture.Conversation.Id);
+        dispatch.MessageId.ShouldBe(assistant.Id);
+        dispatch.Operation.ShouldBe(MessageDispatchOperation.OutboundProviderSend);
+        dispatch.Provider.ShouldBe("whatsapp_cloud");
+        dispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
+        dispatch.IdempotencyKey.ShouldBe($"reply:{fixture.InboundMessage.Id}");
+        dispatch.ProviderMessageId.ShouldBe("sent-text-1");
+        dispatch.CorrelationId.ShouldBe("correlation-123");
+        dispatch.AttemptCount.ShouldBe(1);
+    }
 
-        var ledger = await fixture.DbContext.ProviderSendLedger.SingleAsync();
-        ledger.OutgoingMessageOutboxId.ShouldBe(outbound.Id);
-        ledger.AttemptNumber.ShouldBe(1);
-        ledger.Provider.ShouldBe("whatsapp_cloud");
-        ledger.Status.ShouldBe(ProviderSendLedgerStatus.ProviderAccepted);
-        ledger.ProviderMessageId.ShouldBe("sent-text-1");
-        ledger.CorrelationId.ShouldBe("correlation-123");
+    [Test]
+    public async Task ProcessAsync_WhenProviderSendFails_LeavesOutboundDispatchRetryScheduled()
+    {
+        await using var fixture = await ProcessorFixture.CreateAsync();
+        fixture.InboundMessage.Type = MessageType.Text;
+        fixture.InboundMessage.MessageText = "Hola desde WhatsApp admin";
+        fixture.InboundMessage.ProviderMessageId = null;
+        fixture.InboundMessage.Payload = new MessagePayload
+        {
+            ProviderType = "whatsapp_cloud",
+        };
+        fixture.Messaging.ThrowOnSendText = new InvalidOperationException("provider unavailable");
+        await fixture.DbContext.SaveChangesAsync();
+
+        await Should.ThrowAsync<InvalidOperationException>(() => fixture.Processor.ProcessAsync(
+            new ProcessIncomingMessageJob(
+                fixture.OrganizationId,
+                fixture.Conversation.Id,
+                fixture.InboundMessage.Id,
+                "correlation-123"),
+            CancellationToken.None));
+
+        fixture.OrganizationContext.SetOrganization(fixture.OrganizationId);
+        var assistant = await fixture.DbContext.Messages.SingleAsync(message => message.Role == MessageRole.Assistant);
+        assistant.Payload!.ProviderMessageId.ShouldBeNull();
+        var dispatch = await fixture.DbContext.MessageDispatches.SingleAsync();
+        dispatch.Operation.ShouldBe(MessageDispatchOperation.OutboundProviderSend);
+        dispatch.Status.ShouldBe(MessageDispatchStatus.RetryScheduled);
+        dispatch.AttemptCount.ShouldBe(1);
+        dispatch.LastError.ShouldBe("provider unavailable");
+        dispatch.ProviderMessageId.ShouldBeNull();
+        dispatch.CorrelationId.ShouldBe("correlation-123");
     }
 
     [Test]
@@ -247,9 +279,10 @@ public sealed class ProcessIncomingMessageJobProcessorTests
         state.Snapshot.ConversationFlags.ShouldContain("reservation_payment_receipt_received");
         var receiptMessage = await fixture.DbContext.Messages
             .SingleAsync(message => message.ProviderMessageId == $"payment-receipt:{fixture.InboundMessage.Id:N}");
-        var receiptOutbox = await fixture.DbContext.OutgoingMessageOutbox
+        var receiptDispatch = await fixture.DbContext.MessageDispatches
             .SingleAsync(entity => entity.MessageId == receiptMessage.Id);
-        receiptOutbox.Status.ShouldBe(OutgoingMessageOutboxStatus.SentToProvider);
+        receiptDispatch.Operation.ShouldBe(MessageDispatchOperation.OutboundProviderSend);
+        receiptDispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
     }
 
     [Test]
@@ -770,6 +803,8 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public List<ChannelImageMessage> ImageMessages { get; } = [];
 
+        public Exception? ThrowOnSendText { get; set; }
+
         public Task MarkMessageReadAsync(ChannelMessageReference message, CancellationToken cancellationToken)
         {
             ReadMessages.Add(message);
@@ -778,6 +813,11 @@ public sealed class ProcessIncomingMessageJobProcessorTests
 
         public Task<SentMessageReference> SendTextAsync(ChannelTextMessage message, CancellationToken cancellationToken)
         {
+            if (ThrowOnSendText is not null)
+            {
+                throw ThrowOnSendText;
+            }
+
             TextMessages.Add(message);
             return Task.FromResult(new SentMessageReference($"sent-text-{TextMessages.Count}"));
         }

@@ -81,7 +81,7 @@ public sealed partial class WhatsAppWebhookIngestionService
     [LoggerMessage(
         EventId = 4202,
         Level = LogLevel.Information,
-        Message = "WhatsAppWebhookMessagePersisted CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} ProviderMessageId={ProviderMessageId} TextLength={TextLength}")]
+        Message = "WhatsAppWebhookMessagePersisted CorrelationId={CorrelationId} OrganizationId={OrganizationId} CompanyChannelId={CompanyChannelId} ConversationId={ConversationId} MessageId={MessageId} DispatchId={DispatchId} ProviderMessageId={ProviderMessageId} TextLength={TextLength}")]
     private static partial void WhatsAppWebhookMessagePersisted(
         ILogger logger,
         string? correlationId,
@@ -89,7 +89,7 @@ public sealed partial class WhatsAppWebhookIngestionService
         Guid companyChannelId,
         Guid conversationId,
         Guid messageId,
-        Guid outboxId,
+        Guid dispatchId,
         string providerMessageId,
         int textLength);
 

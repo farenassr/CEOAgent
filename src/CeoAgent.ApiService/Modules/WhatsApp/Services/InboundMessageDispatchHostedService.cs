@@ -1,8 +1,8 @@
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
-public sealed partial class IncomingMessageOutboxHostedService(
+public sealed partial class InboundMessageDispatchHostedService(
     IServiceScopeFactory scopeFactory,
-    ILogger<IncomingMessageOutboxHostedService> logger) : BackgroundService
+    ILogger<InboundMessageDispatchHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan DispatchInterval = TimeSpan.FromSeconds(5);
     private const int BatchSize = 25;
@@ -31,13 +31,12 @@ public sealed partial class IncomingMessageOutboxHostedService(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var dispatcher = scope.ServiceProvider.GetRequiredService<IncomingMessageOutboxDispatcher>();
+            var dispatcher = scope.ServiceProvider.GetRequiredService<InboundMessageDispatchDispatcher>();
             await dispatcher.DispatchPendingAsync(BatchSize, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            IncomingMessageOutboxHostedDispatchFailed(logger, exception);
+            InboundMessageDispatchHostedDispatchFailed(logger, exception);
         }
     }
-
 }

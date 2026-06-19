@@ -18,7 +18,7 @@ public sealed partial class OutboundMessageDispatcher(
     private const string WhatsAppProvider = "whatsapp_cloud";
     private const string ClaimOwner = "outbound-dispatcher";
     private const int MaxProviderErrorLength = 500;
-    private const int MaxRequestHashLength = 96;
+    private static readonly TimeSpan ClaimLeaseDuration = TimeSpan.FromMinutes(5);
 
     public Task<OutboundMessageDispatchResult> SendTextAsync(
         OutboundTextDispatchRequest request,
@@ -81,98 +81,122 @@ public sealed partial class OutboundMessageDispatcher(
         var message = await dbContext.FindTrackedOrPersistedMessageAsync(organizationId, messageId, cancellationToken)
             ?? throw new InvalidOperationException($"Outbound message '{messageId}' was not found.");
 
-        var existingOutbox = await dbContext.OutgoingMessageOutbox
+        var existingDispatch = await dbContext.MessageDispatches
             .IgnoreQueryFilters()
             .SingleOrDefaultAsync(
                 entity => entity.OrganizationId == organizationId
+                    && entity.Operation == MessageDispatchOperation.OutboundProviderSend
                     && entity.IdempotencyKey == idempotencyKey,
                 cancellationToken);
-        if (existingOutbox?.Status == OutgoingMessageOutboxStatus.SentToProvider
-            && !string.IsNullOrWhiteSpace(existingOutbox.ProviderMessageId))
+        if (existingDispatch?.Status == MessageDispatchStatus.Succeeded
+            && !string.IsNullOrWhiteSpace(existingDispatch.ProviderMessageId))
         {
-            MarkMessageSent(message, new SentMessageReference(existingOutbox.ProviderMessageId));
+            MarkMessageSent(message, new SentMessageReference(existingDispatch.ProviderMessageId));
             await dbContext.SaveChangesAsync(cancellationToken);
-            return new OutboundMessageDispatchResult(existingOutbox.ProviderMessageId, WasAlreadySent: true);
+            return new OutboundMessageDispatchResult(existingDispatch.ProviderMessageId, WasAlreadySent: true);
         }
 
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        var outbox = existingOutbox ?? new OutgoingMessageOutbox
+        var dispatch = existingDispatch ?? new MessageDispatch
         {
             OrganizationId = organizationId,
             ConversationId = conversationId,
             MessageId = messageId,
+            Operation = MessageDispatchOperation.OutboundProviderSend,
             Provider = WhatsAppProvider,
-            Status = OutgoingMessageOutboxStatus.SendingToProvider,
+            Status = MessageDispatchStatus.Pending,
             IdempotencyKey = idempotencyKey,
             CorrelationId = correlationId,
-            ClaimedAt = now,
-            ClaimedBy = ClaimOwner,
             AttemptCount = 0,
         };
 
-        outbox.Status = OutgoingMessageOutboxStatus.SendingToProvider;
-        outbox.ConversationId = conversationId;
-        outbox.MessageId = messageId;
-        outbox.AttemptCount++;
-        outbox.ClaimedAt = now;
-        outbox.ClaimedBy = ClaimOwner;
-        outbox.CorrelationId ??= correlationId;
-        outbox.NextAttemptAt = null;
-        outbox.LastError = null;
-
-        if (existingOutbox is null)
+        if (existingDispatch is null)
         {
-            dbContext.OutgoingMessageOutbox.Add(outbox);
+            dbContext.MessageDispatches.Add(dispatch);
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        var ledger = new ProviderSendLedger
-        {
-            OrganizationId = organizationId,
-            OutgoingMessageOutboxId = outbox.Id,
-            AttemptNumber = outbox.AttemptCount,
-            Provider = WhatsAppProvider,
-            Status = ProviderSendLedgerStatus.SendAttemptStarted,
-            RequestHash = Bound(idempotencyKey, MaxRequestHashLength),
-            StartedAt = now,
-            CorrelationId = correlationId,
-        };
-        dbContext.ProviderSendLedger.Add(ledger);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        dispatch = await ClaimDispatchAsync(dispatch.Id, conversationId, messageId, correlationId, cancellationToken)
+            ?? throw new InvalidOperationException($"Outbound message dispatch '{dispatch.Id}' is not dispatchable.");
 
         try
         {
             var sent = await sendProviderAsync();
             MarkMessageSent(message, sent);
             var completedAt = timeProvider.GetUtcNow().UtcDateTime;
-            outbox.Status = OutgoingMessageOutboxStatus.SentToProvider;
-            outbox.ProviderMessageId = sent.ProviderMessageId;
-            outbox.SentAt = completedAt;
-            outbox.CompletedAt = completedAt;
-            outbox.LastError = null;
-            ledger.Status = ProviderSendLedgerStatus.ProviderAccepted;
-            ledger.ProviderMessageId = sent.ProviderMessageId;
-            ledger.FinishedAt = completedAt;
+            dispatch.Status = MessageDispatchStatus.Succeeded;
+            dispatch.ProviderMessageId = sent.ProviderMessageId;
+            dispatch.SucceededAt = completedAt;
+            dispatch.NextAttemptAt = null;
+            dispatch.LastError = null;
             await dbContext.SaveChangesAsync(cancellationToken);
             return new OutboundMessageDispatchResult(sent.ProviderMessageId, WasAlreadySent: false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             var failedAt = timeProvider.GetUtcNow().UtcDateTime;
-            outbox.Status = outbox.AttemptCount >= outbox.MaxAttempts
-                ? OutgoingMessageOutboxStatus.ProviderSendFailed
-                : OutgoingMessageOutboxStatus.ProviderSendRetryScheduled;
-            outbox.NextAttemptAt = outbox.Status == OutgoingMessageOutboxStatus.ProviderSendRetryScheduled
+            dispatch.Status = dispatch.AttemptCount >= dispatch.MaxAttempts
+                ? MessageDispatchStatus.Failed
+                : MessageDispatchStatus.RetryScheduled;
+            dispatch.NextAttemptAt = dispatch.Status == MessageDispatchStatus.RetryScheduled
                 ? failedAt
                 : null;
-            outbox.LastError = Bound(exception.Message, MaxProviderErrorLength);
-            ledger.Status = ProviderSendLedgerStatus.ProviderUnavailable;
-            ledger.ErrorCode = exception.GetType().Name;
-            ledger.ErrorMessage = Bound(exception.Message, MaxProviderErrorLength);
-            ledger.FinishedAt = failedAt;
+            dispatch.LastError = Bound(exception.Message, MaxProviderErrorLength);
             await dbContext.SaveChangesAsync(cancellationToken);
-            OutboundProviderSendFailed(logger, exception, organizationId, conversationId, messageId, outbox.Id, outbox.AttemptCount);
+            OutboundProviderSendFailed(logger, exception, organizationId, conversationId, messageId, dispatch.Id, dispatch.AttemptCount);
             throw;
         }
+    }
+
+    private async Task<MessageDispatch?> ClaimDispatchAsync(
+        Guid dispatchId,
+        Guid conversationId,
+        Guid messageId,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var claimOwner = $"{ClaimOwner}:{Environment.MachineName}:{Guid.CreateVersion7():N}";
+        var claimed = await dbContext.MessageDispatches
+            .IgnoreQueryFilters()
+            .Where(entity => entity.Id == dispatchId)
+            .DispatchableAt(MessageDispatchOperation.OutboundProviderSend, now, ClaimLeaseDuration)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(entity => entity.Status, MessageDispatchStatus.InProgress)
+                    .SetProperty(entity => entity.ConversationId, conversationId)
+                    .SetProperty(entity => entity.MessageId, messageId)
+                    .SetProperty(entity => entity.Provider, WhatsAppProvider)
+                    .SetProperty(entity => entity.AttemptCount, entity => entity.AttemptCount + 1)
+                    .SetProperty(entity => entity.LastAttemptAt, now)
+                    .SetProperty(entity => entity.ClaimedAt, now)
+                    .SetProperty(entity => entity.ClaimedBy, claimOwner)
+                    .SetProperty(entity => entity.CorrelationId, entity => entity.CorrelationId ?? correlationId)
+                    .SetProperty(entity => entity.NextAttemptAt, (DateTime?)null)
+                    .SetProperty(entity => entity.LastError, (string?)null),
+                cancellationToken);
+        if (claimed == 0)
+        {
+            return null;
+        }
+
+        var claimedDispatch = await dbContext.MessageDispatches
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .SingleAsync(entity => entity.ClaimedBy == claimOwner, cancellationToken);
+
+        var trackedEntry = dbContext.ChangeTracker
+            .Entries<MessageDispatch>()
+            .SingleOrDefault(entry =>
+                entry.State != EntityState.Deleted
+                && entry.Entity.Id == claimedDispatch.Id);
+        if (trackedEntry is not null)
+        {
+            trackedEntry.CurrentValues.SetValues(claimedDispatch);
+            return trackedEntry.Entity;
+        }
+
+        dbContext.MessageDispatches.Attach(claimedDispatch);
+        return claimedDispatch;
     }
 
     private static void MarkMessageSent(Message message, SentMessageReference sent)
@@ -189,13 +213,13 @@ public sealed partial class OutboundMessageDispatcher(
     [LoggerMessage(
         EventId = 3101,
         Level = LogLevel.Warning,
-        Message = "OutboundProviderSendFailed OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} OutboxId={OutboxId} AttemptCount={AttemptCount}")]
+        Message = "OutboundProviderSendFailed OrganizationId={OrganizationId} ConversationId={ConversationId} MessageId={MessageId} DispatchId={DispatchId} AttemptCount={AttemptCount}")]
     private static partial void OutboundProviderSendFailed(
         ILogger logger,
         Exception exception,
         Guid organizationId,
         Guid conversationId,
         Guid messageId,
-        Guid outboxId,
+        Guid dispatchId,
         int attemptCount);
 }

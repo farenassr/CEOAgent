@@ -2,13 +2,13 @@ using Microsoft.Extensions.Logging;
 
 namespace CeoAgent.ApiService.Modules.WhatsApp;
 
-public sealed partial class IncomingMessageOutboxHostedService
+public sealed partial class InboundMessageDispatchHostedService
 {
     [LoggerMessage(
         EventId = 2103,
         Level = LogLevel.Warning,
-        Message = "IncomingMessageOutboxHostedDispatchFailed")]
-    private static partial void IncomingMessageOutboxHostedDispatchFailed(
+        Message = "InboundMessageDispatchHostedDispatchFailed")]
+    private static partial void InboundMessageDispatchHostedDispatchFailed(
         ILogger logger,
         Exception exception);
 }

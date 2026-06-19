@@ -15,15 +15,15 @@ namespace CeoAgent.ApiService.Tests;
 public sealed class WhatsAppWebhookIngestionServiceTests
 {
     [Test]
-    public async Task IngestAsync_WhenInitialQueueEnqueueFails_PersistsOutboxAndDispatchesLater()
+    public async Task IngestAsync_WhenInitialQueueEnqueueFails_PersistsDispatchAndDispatchesLater()
     {
         var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
         var dbContext = database.Context;
         var queue = new FakeIncomingMessageQueue { FailNextEnqueue = true };
         var logger = new RecordingLogger<WhatsAppWebhookIngestionService>();
-        var dispatcherLogger = new RecordingLogger<IncomingMessageOutboxDispatcher>();
-        var dispatcher = new IncomingMessageOutboxDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
+        var dispatcherLogger = new RecordingLogger<InboundMessageDispatchDispatcher>();
+        var dispatcher = new InboundMessageDispatchDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
         var service = new WhatsAppWebhookIngestionService(dbContext, dispatcher, TimeProvider.System, logger);
         await SeedCompanyAsync(dbContext, organizationId);
 
@@ -65,14 +65,15 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         result.Enqueued.ShouldBeFalse();
         result.MessageId.ShouldNotBeNull();
         queue.Jobs.ShouldBeEmpty();
-        var pendingOutbox = await dbContext.IncomingMessageOutbox
+        var pendingDispatch = await dbContext.MessageDispatches
             .IgnoreQueryFilters()
             .SingleAsync(row => row.MessageId == result.MessageId.Value);
-        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueueDispatchRetryScheduled);
-        pendingOutbox.AttemptCount.ShouldBe(1);
+        pendingDispatch.Operation.ShouldBe(MessageDispatchOperation.InboundQueueDispatch);
+        pendingDispatch.Status.ShouldBe(MessageDispatchStatus.RetryScheduled);
+        pendingDispatch.AttemptCount.ShouldBe(1);
         dispatcherLogger.Entries.ShouldContain(entry =>
             entry.EventId.Id == 2102
-            && entry.EventId.Name == "IncomingMessageOutboxDispatchFailed"
+            && entry.EventId.Name == "InboundMessageDispatchFailed"
             && entry.Message.Contains("AttemptCount=1", StringComparison.Ordinal));
 
         var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
@@ -80,11 +81,11 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         dispatched.ShouldBe(1);
         queue.Jobs.Count.ShouldBe(1);
         queue.Jobs[0].MessageId.ShouldBe(result.MessageId.Value);
-        pendingOutbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueuedForWorkerProcessing);
-        pendingOutbox.AttemptCount.ShouldBe(2);
+        pendingDispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
+        pendingDispatch.AttemptCount.ShouldBe(2);
         dispatcherLogger.Entries.ShouldContain(entry =>
             entry.EventId.Id == 2101
-            && entry.EventId.Name == "IncomingMessageOutboxDispatchSucceeded"
+            && entry.EventId.Name == "InboundMessageDispatchSucceeded"
             && entry.Message.Contains("AttemptCount=2", StringComparison.Ordinal));
     }
 
@@ -99,35 +100,38 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         var message = await SeedConversationMessageAsync(dbContext, organizationId);
         var clock = new FixedTimeProvider(new DateTimeOffset(2026, 6, 18, 12, 0, 0, TimeSpan.Zero));
         var staleClaimedAt = clock.GetUtcNow().AddMinutes(-10).UtcDateTime;
-        var outbox = new IncomingMessageOutbox
+        var dispatch = new MessageDispatch
         {
             OrganizationId = organizationId,
             ConversationId = message.ConversationId,
             MessageId = message.Id,
-            Status = IncomingMessageOutboxStatus.QueueDispatchInProgress,
+            Operation = MessageDispatchOperation.InboundQueueDispatch,
+            Provider = "azure_queue",
+            Status = MessageDispatchStatus.InProgress,
+            IdempotencyKey = $"inbound-queue:{message.Id:N}",
             AttemptCount = 1,
             LastAttemptAt = staleClaimedAt,
             ClaimedAt = staleClaimedAt,
             ClaimedBy = "dead-dispatcher",
             MaxAttempts = 5,
         };
-        dbContext.IncomingMessageOutbox.Add(outbox);
+        dbContext.MessageDispatches.Add(dispatch);
         await dbContext.SaveChangesAsync();
         var queue = new FakeIncomingMessageQueue();
-        var dispatcher = new IncomingMessageOutboxDispatcher(
+        var dispatcher = new InboundMessageDispatchDispatcher(
             dbContext,
             queue,
             clock,
-            new RecordingLogger<IncomingMessageOutboxDispatcher>());
+            new RecordingLogger<InboundMessageDispatchDispatcher>());
 
         var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
 
         dispatched.ShouldBe(1);
         queue.Jobs.Count.ShouldBe(1);
         queue.Jobs[0].MessageId.ShouldBe(message.Id);
-        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueuedForWorkerProcessing);
-        outbox.AttemptCount.ShouldBe(2);
-        outbox.ClaimedBy.ShouldNotBe("dead-dispatcher");
+        dispatch.Status.ShouldBe(MessageDispatchStatus.Succeeded);
+        dispatch.AttemptCount.ShouldBe(2);
+        dispatch.ClaimedBy.ShouldNotBe("dead-dispatcher");
     }
 
     [Test]
@@ -140,38 +144,41 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         await SeedCompanyAsync(dbContext, organizationId);
         var message = await SeedConversationMessageAsync(dbContext, organizationId);
         var clock = new FixedTimeProvider(new DateTimeOffset(2026, 6, 18, 12, 0, 0, TimeSpan.Zero));
-        var outbox = new IncomingMessageOutbox
+        var dispatch = new MessageDispatch
         {
             OrganizationId = organizationId,
             ConversationId = message.ConversationId,
             MessageId = message.Id,
-            Status = IncomingMessageOutboxStatus.QueueDispatchInProgress,
+            Operation = MessageDispatchOperation.InboundQueueDispatch,
+            Provider = "azure_queue",
+            Status = MessageDispatchStatus.InProgress,
+            IdempotencyKey = $"inbound-queue:{message.Id:N}",
             AttemptCount = 1,
             LastAttemptAt = clock.GetUtcNow().AddMinutes(-1).UtcDateTime,
             ClaimedAt = clock.GetUtcNow().AddMinutes(-1).UtcDateTime,
             ClaimedBy = "active-dispatcher",
             MaxAttempts = 5,
         };
-        dbContext.IncomingMessageOutbox.Add(outbox);
+        dbContext.MessageDispatches.Add(dispatch);
         await dbContext.SaveChangesAsync();
         var queue = new FakeIncomingMessageQueue();
-        var dispatcher = new IncomingMessageOutboxDispatcher(
+        var dispatcher = new InboundMessageDispatchDispatcher(
             dbContext,
             queue,
             clock,
-            new RecordingLogger<IncomingMessageOutboxDispatcher>());
+            new RecordingLogger<InboundMessageDispatchDispatcher>());
 
         var dispatched = await dispatcher.DispatchPendingAsync(10, CancellationToken.None);
 
         dispatched.ShouldBe(0);
         queue.Jobs.ShouldBeEmpty();
-        outbox.Status.ShouldBe(IncomingMessageOutboxStatus.QueueDispatchInProgress);
-        outbox.AttemptCount.ShouldBe(1);
-        outbox.ClaimedBy.ShouldBe("active-dispatcher");
+        dispatch.Status.ShouldBe(MessageDispatchStatus.InProgress);
+        dispatch.AttemptCount.ShouldBe(1);
+        dispatch.ClaimedBy.ShouldBe("active-dispatcher");
     }
 
     [Test]
-    public async Task IngestAsync_WhenDuplicateMessageHasNoReplyAndOutboxAlreadyDispatched_DoesNotReenqueueExistingMessage()
+    public async Task IngestAsync_WhenDuplicateMessageHasNoReplyAndDispatchAlreadySucceeded_DoesNotReenqueueExistingMessage()
     {
         var organizationId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b30");
         await using var database = await PostgresApiDatabase.CreateAsync();
@@ -479,8 +486,8 @@ public sealed class WhatsAppWebhookIngestionServiceTests
         FakeIncomingMessageQueue queue,
         RecordingLogger<WhatsAppWebhookIngestionService> logger)
     {
-        var dispatcherLogger = new RecordingLogger<IncomingMessageOutboxDispatcher>();
-        var dispatcher = new IncomingMessageOutboxDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
+        var dispatcherLogger = new RecordingLogger<InboundMessageDispatchDispatcher>();
+        var dispatcher = new InboundMessageDispatchDispatcher(dbContext, queue, TimeProvider.System, dispatcherLogger);
         return new WhatsAppWebhookIngestionService(dbContext, dispatcher, TimeProvider.System, logger);
     }
 
