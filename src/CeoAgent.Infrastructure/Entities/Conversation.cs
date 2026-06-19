@@ -25,6 +25,56 @@ public sealed class Conversation : AuditableOrganizationOwnedEntity
     public Guid AgentProfileId { get; set; }
 
     /// <summary>
+    /// LLM provider captured for this conversation. Example: OpenAI.
+    /// </summary>
+    public LlmProvider? LlmProvider { get; set; }
+
+    /// <summary>
+    /// Model captured for this conversation. Example: gpt-4.1-mini.
+    /// </summary>
+    public string? ModelName { get; set; }
+
+    /// <summary>
+    /// Provider-managed conversation or latest response identifier. Example: resp_123.
+    /// </summary>
+    public string? ProviderConversationId { get; set; }
+
+    /// <summary>
+    /// Latest provider response identifier. Example: resp_456.
+    /// </summary>
+    public string? ProviderLastResponseId { get; set; }
+
+    /// <summary>
+    /// Serialized Microsoft Agent Framework session state.
+    /// </summary>
+    public string? AgentSessionJson { get; set; }
+
+    /// <summary>
+    /// UTC timestamp when the active agent session started.
+    /// </summary>
+    public DateTime? AgentSessionStartedAt { get; set; }
+
+    /// <summary>
+    /// UTC timestamp when the active agent session was last used.
+    /// </summary>
+    public DateTime? AgentSessionLastUsedAt { get; set; }
+
+    /// <summary>
+    /// UTC timestamp when the active agent session should be discarded.
+    /// </summary>
+    public DateTime? AgentSessionExpiresAt { get; set; }
+
+    /// <summary>
+    /// Number of user turns processed through the active agent session.
+    /// </summary>
+    public int AgentSessionTurnCount { get; set; }
+
+    /// <summary>
+    /// Reason the provider session was last reset. Example: idle_expired.
+    /// </summary>
+    public string? AgentSessionResetReason { get; set; }
+
+    /// <summary>
     /// Current conversation status. Example: Open.
     /// </summary>
     public ConversationStatus Status { get; set; } = ConversationStatus.Open;

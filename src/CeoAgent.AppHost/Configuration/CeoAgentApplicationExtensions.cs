@@ -8,15 +8,16 @@ internal static class CeoAgentApplicationExtensions
 {
     private const string LocalPostgresDefaultPassword = "postgres";
     private const string PostgresPasswordParameterName = "postgres-password";
+    private const string OpenAIApiKeyParameterName = "openai-api-key";
 
     public static void AddCeoAgentApplication(this IDistributedApplicationBuilder builder, AppHostOptions options)
     {
-        var openAIApiKey = builder.Configuration.GetConnectionString("openai");
         var deploymentEnvironmentName = builder.ResolveDeploymentEnvironmentName();
         var postgresPassword = builder.AddParameter(
             PostgresPasswordParameterName,
             LocalPostgresDefaultPassword,
             secret: true);
+        var openAIApiKey = builder.AddParameter(OpenAIApiKeyParameterName, secret: true);
         var keyVault = builder.ExecutionContext.IsPublishMode
             ? builder.AddAzureKeyVault("keyvault")
             : null;
@@ -73,22 +74,25 @@ internal static class CeoAgentApplicationExtensions
         {
             var publishKeyVault = keyVault ?? throw new InvalidOperationException("Key Vault is required for publish mode.");
             publishKeyVault.AddSecret(options.Postgres.PasswordSecretName!, postgresPassword);
+            publishKeyVault.AddSecret("OpenAIApiKey", openAIApiKey);
             AddPostgresConnectionEnvironment(apiService, publishKeyVault, options.Postgres);
             AddPostgresConnectionEnvironment(worker, publishKeyVault, options.Postgres);
+            worker
+                .WithEnvironment("Secrets__llm__openai__api-key", publishKeyVault.GetSecret("OpenAIApiKey"))
+                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key");
             apiService.WaitFor(postgresDatabase);
             worker.WaitFor(postgresDatabase);
         }
         else
         {
-            apiService.WithReference(postgresDatabase);
-            worker.WithReference(postgresDatabase);
-        }
-
-        if (!string.IsNullOrWhiteSpace(openAIApiKey))
-        {
+            apiService
+                .WithReference(postgresDatabase)
+                .WaitFor(postgresDatabase);
             worker
-                .WithEnvironment("OpenAI__ApiKey", openAIApiKey)
-                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "config://OpenAI:ApiKey");
+                .WithReference(postgresDatabase)
+                .WaitFor(postgresDatabase)
+                .WithEnvironment("Secrets__llm__openai__api-key", openAIApiKey)
+                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key");
         }
 
         builder.AddProviderEnvironment(apiService, worker, keyVault, deploymentEnvironmentName);

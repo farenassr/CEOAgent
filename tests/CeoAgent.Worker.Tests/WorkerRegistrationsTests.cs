@@ -3,6 +3,7 @@ using CeoAgent.Infrastructure.DependencyInjection;
 using CeoAgent.Worker.Jobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,6 +26,7 @@ public sealed class WorkerRegistrationsTests
         var services = new ServiceCollection();
 
         services.AddLogging(builder => builder.AddDebug());
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment());
         services.AddSingleton(new QueueServiceClient("UseDevelopmentStorage=true"));
         services.AddInfrastructure(configuration);
         services.AddWorkerRuntime();
@@ -94,5 +96,16 @@ public sealed class WorkerRegistrationsTests
         {
             utcNow += duration;
         }
+    }
+
+    private sealed class FakeHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = "Testing";
+
+        public string ApplicationName { get; set; } = "CeoAgent.Worker.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

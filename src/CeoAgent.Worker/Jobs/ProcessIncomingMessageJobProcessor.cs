@@ -3,8 +3,8 @@ using CeoAgent.Application.Abstractions.Organization;
 using CeoAgent.Infrastructure;
 using CeoAgent.Infrastructure.Entities;
 using CeoAgent.Infrastructure.Entities.JsonDocuments;
-using CeoAgent.Infrastructure.Persistence.Extensions;
 using CeoAgent.Application.Abstractions.AI;
+using CeoAgent.Infrastructure.Persistence.Extensions;
 using CeoAgent.Shared.AI;
 using CeoAgent.Application.Abstractions.Jobs;
 using CeoAgent.Shared.Jobs;
@@ -12,9 +12,7 @@ using CeoAgent.Application.Abstractions.Messaging;
 using CeoAgent.Shared.Messaging;
 using CeoAgent.Shared.Enums;
 using CeoAgent.Shared.Prompt;
-using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
-using CeoAgent.Shared.AITools;
 using CeoAgent.Worker.Jobs.Telemetry;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -30,8 +28,6 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     IMessageChannelIntegration messaging,
     IOutboundMessageDispatcher outboundMessageDispatcher,
     IAgentRuntime agentRuntime,
-    CompanyToolRegistry toolRegistry,
-    ToolExecutionGateway toolGateway,
     HumanHandoffToolExecutor handoffExecutor,
     ReservationPaymentInstructionSender paymentInstructionSender,
     IOrganizationContextAccessor companyContextAccessor,
@@ -41,8 +37,8 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
 {
     private const string WhatsAppProvider = "whatsapp_cloud";
     private const string UnsupportedMessageText = "Por ahora solo puedo procesar mensajes de texto.";
-    private const int MaxToolLoopIterations = 4;
     private const string LoopCapFallbackText = "No pude completar la accion automatica. Te pondre en contacto con una persona del equipo.";
+    private const string LlmBudgetGuardActiveFailureReason = "llm_budget_guard_active";
 
     /// <summary>
     /// Runs the inbound message workflow, including read receipts, prompt creation, and outbound response delivery.
@@ -144,7 +140,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             }
 
             var prompt = BuildPrompt(context);
-            var agentText = await RunAgentLoopAsync(context, prompt, cancellationToken);
+            var agentText = await RunAgentTurnAsync(context, prompt, job.CorrelationId, cancellationToken);
             var assistantText = string.IsNullOrWhiteSpace(agentText)
                 ? string.Empty
                 : agentText.Trim();
@@ -273,9 +269,9 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             context.Conversation.Id,
             context.AgentProfile.Id,
             context.Channel.Provider.ToString(),
-            context.AgentProfile.LlmProvider.ToString(),
-            context.AgentProfile.ModelName,
-            context.Tools.Count);
+            EffectiveProvider(context).ToString(),
+            EffectiveModelName(context),
+            ToolCount: 0);
     }
 
     private async Task<ProcessorContext> LoadContextAsync(ProcessIncomingMessageJob job, CancellationToken cancellationToken)
@@ -304,188 +300,110 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                 cancellationToken)
             ?? throw new InvalidOperationException($"Message '{job.MessageId}' was not found.");
 
-        var messageHistory = await dbContext.Messages
-            .AsNoTracking()
-            .AgentEligibleHistory(dbContext.ToolExecutions, job.OrganizationId, job.ConversationId, 8)
-            .Select(entity => new MessageHistoryItem(entity.Role, entity.MessageText))
-            .ToArrayAsync(cancellationToken);
-
-        Array.Reverse(messageHistory);
-
-        var tools = await toolRegistry.GetEnabledToolsAsync(job.OrganizationId, cancellationToken);
-
         return new ProcessorContext(
             company,
             agentProfile,
             conversation,
             channel,
             customer,
-            inbound,
-            messageHistory.Select(entity => entity.ToAgentMessage()).ToArray(),
-            tools);
+            inbound);
     }
 
-    private async Task<string?> RunAgentLoopAsync(
+    private async Task<string?> RunAgentTurnAsync(
         ProcessorContext context,
         string prompt,
+        string? correlationId,
         CancellationToken cancellationToken)
     {
-        var messages = context.Messages.ToList();
         var telemetryContext = CreateTelemetryContext(context);
-        const bool sideEffectsEnabled = true;
         var maxEstimatedCostUsd = context.AgentProfile.MaxEstimatedCostUsdPerJob;
-        var accumulatedEstimatedCostUsd = 0d;
+        var provider = EffectiveProvider(context);
+        var modelName = EffectiveModelName(context);
+        var mutatingToolsEnabled = AreMutatingToolsEnabledForTurn(maxEstimatedCostUsd);
+        var mutatingToolsDisabledReason = mutatingToolsEnabled ? null : LlmBudgetGuardActiveFailureReason;
 
         if (maxEstimatedCostUsd > 0
             && !IsLocalDevelopmentOrTesting()
-            && !agentRuntime.CanEstimateCost(context.AgentProfile.LlmProvider, context.AgentProfile.ModelName))
+            && !agentRuntime.CanEstimateCost(provider, modelName))
         {
             ProcessIncomingMessageJobTelemetry.RecordLlmCostEstimationMissing();
             LlmCostPricingMissing(
                 logger,
                 context.Company.Id,
                 context.AgentProfile.Id,
-                context.AgentProfile.ModelName,
+                modelName,
                 hostEnvironment.EnvironmentName);
             await EscalateToHumanAsync(context, cancellationToken);
             return LoopCapFallbackText;
         }
 
-        for (var iteration = 0; iteration < MaxToolLoopIterations; iteration++)
+        AgentTurnResult agentResult;
+        using var iterationActivity = ProcessIncomingMessageJobTelemetry.StartAgentIteration(telemetryContext, 0);
+        using (var activity = ProcessIncomingMessageJobTelemetry.StartLlmGeneration(telemetryContext, 0))
         {
-            if (IsLlmBudgetExceeded(maxEstimatedCostUsd, accumulatedEstimatedCostUsd))
+            var stopwatch = Stopwatch.StartNew();
+            try
             {
-                ProcessIncomingMessageJobTelemetry.RecordLlmBudgetExceeded();
-                LlmBudgetExceeded(
-                    logger,
-                    context.Company.Id,
-                    context.AgentProfile.Id,
-                    context.AgentProfile.ModelName,
-                    accumulatedEstimatedCostUsd,
-                    maxEstimatedCostUsd);
-                await EscalateToHumanAsync(context, cancellationToken);
-                return LoopCapFallbackText;
-            }
-
-            AgentRunResult agentResult;
-            using var iterationActivity = ProcessIncomingMessageJobTelemetry.StartAgentIteration(telemetryContext, iteration);
-            using (var activity = ProcessIncomingMessageJobTelemetry.StartLlmGeneration(telemetryContext, iteration))
-            {
-                var stopwatch = Stopwatch.StartNew();
-                try
-                {
-                    agentResult = await agentRuntime.RunAsync(
-                        new AgentRunRequest(
-                            context.AgentProfile.LlmProvider,
-                            context.AgentProfile.ModelName,
-                            prompt,
-                            [.. messages],
-                            context.Tools,
-                            context.AgentProfile.MaxOutputTokenCount),
-                        cancellationToken);
-                    stopwatch.Stop();
-                    ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
-                    ProcessIncomingMessageJobTelemetry.RecordTokenUsage(agentResult);
-                    if (agentResult.EstimatedCostUsd is { } estimatedCost)
-                    {
-                        accumulatedEstimatedCostUsd += estimatedCost;
-                    }
-                    else if (maxEstimatedCostUsd > 0)
-                    {
-                        ProcessIncomingMessageJobTelemetry.RecordLlmCostEstimationMissing();
-                    }
-
-                    ProcessIncomingMessageJobTelemetry.EnrichLlmGenerationResult(
-                        activity,
-                        agentResult,
-                        context.AgentProfile.ModelName);
-                    ProcessIncomingMessageJobTelemetry.MarkOk(activity);
-                }
-                catch (Exception exception) when (exception is not OperationCanceledException)
-                {
-                    stopwatch.Stop();
-                    ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
-                    ProcessIncomingMessageJobTelemetry.MarkError(activity, exception);
-                    ProcessIncomingMessageJobTelemetry.MarkError(iterationActivity, exception);
-                    AgentRuntimeFailed(
-                        logger,
-                        exception,
-                        iteration);
-                    return LoopCapFallbackText;
-                }
-            }
-
-            if (IsLlmBudgetExceeded(maxEstimatedCostUsd, accumulatedEstimatedCostUsd))
-            {
-                ProcessIncomingMessageJobTelemetry.RecordLlmBudgetExceeded();
-                LlmBudgetExceeded(
-                    logger,
-                    context.Company.Id,
-                    context.AgentProfile.Id,
-                    context.AgentProfile.ModelName,
-                    accumulatedEstimatedCostUsd,
-                    maxEstimatedCostUsd);
-                await EscalateToHumanAsync(context, cancellationToken);
-                return LoopCapFallbackText;
-            }
-
-            if (agentResult.ToolCalls.Count == 0)
-            {
-                ProcessIncomingMessageJobTelemetry.MarkOk(iterationActivity);
-                return agentResult.AssistantText;
-            }
-
-            foreach (var toolCall in agentResult.ToolCalls)
-            {
-                var triggerMessage = new Message
-                {
-                    OrganizationId = context.Company.Id,
-                    ConversationId = context.Conversation.Id,
-                    Role = MessageRole.ToolCall,
-                    Type = MessageType.Text,
-                    MessageText = toolCall.Name,
-                    OccurredAt = timeProvider.GetUtcNow().UtcDateTime,
-                };
-                dbContext.Messages.Add(triggerMessage);
-                ToolCallRequested(
-                    logger,
-                    toolCall.Name,
-                    iteration,
-                    sideEffectsEnabled);
-
-                messages.Add(new AgentConversationMessage(
-                    "assistant",
-                    toolCall.Name,
-                    toolCall.Id,
-                    toolCall.Name,
-                    toolCall.Arguments));
-
-                var toolResult = await toolGateway.ExecuteAsync(
-                    new ToolExecutionGatewayRequest(
+                agentResult = await agentRuntime.RunTurnAsync(
+                    new AgentTurnRequest(
                         context.Company.Id,
                         context.Conversation.Id,
-                        triggerMessage.Id,
                         context.Inbound.Id,
-                        toolCall,
-                        context.Tools,
-                        sideEffectsEnabled),
+                        provider,
+                        modelName,
+                        prompt,
+                        context.Inbound.MessageText ?? string.Empty,
+                        context.AgentProfile.MaxOutputTokenCount,
+                        correlationId,
+                        mutatingToolsEnabled,
+                        mutatingToolsDisabledReason),
                     cancellationToken);
+                stopwatch.Stop();
+                ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
+                ProcessIncomingMessageJobTelemetry.RecordTokenUsage(agentResult);
+                if (agentResult.EstimatedCostUsd is null && maxEstimatedCostUsd > 0)
+                {
+                    ProcessIncomingMessageJobTelemetry.RecordLlmCostEstimationMissing();
+                }
 
-                messages.Add(new AgentConversationMessage(
-                    "tool",
-                    toolResult.Content,
-                    toolResult.ToolCallId,
-                    toolResult.ToolName));
+                ProcessIncomingMessageJobTelemetry.EnrichLlmGenerationResult(
+                    activity,
+                    agentResult,
+                    modelName);
+                ProcessIncomingMessageJobTelemetry.MarkOk(activity);
+                ProcessIncomingMessageJobTelemetry.MarkOk(iterationActivity);
             }
-
-            ProcessIncomingMessageJobTelemetry.MarkOk(iterationActivity);
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                stopwatch.Stop();
+                ProcessIncomingMessageJobTelemetry.RecordLlmDuration(stopwatch.Elapsed);
+                ProcessIncomingMessageJobTelemetry.MarkError(activity, exception);
+                ProcessIncomingMessageJobTelemetry.MarkError(iterationActivity, exception);
+                AgentRuntimeFailed(
+                    logger,
+                    exception,
+                    0);
+                await EscalateToHumanAsync(context, cancellationToken);
+                return LoopCapFallbackText;
+            }
         }
 
-        AgentLoopCapReached(
-            logger,
-            MaxToolLoopIterations);
-        await EscalateToHumanAsync(context, cancellationToken);
-        return LoopCapFallbackText;
+        if (agentResult.EstimatedCostUsd is { } estimatedCost
+            && IsLlmBudgetExceeded(maxEstimatedCostUsd, estimatedCost))
+        {
+            ProcessIncomingMessageJobTelemetry.RecordLlmBudgetExceeded();
+            LlmBudgetExceeded(
+                logger,
+                context.Company.Id,
+                context.AgentProfile.Id,
+                modelName,
+                estimatedCost,
+                maxEstimatedCostUsd);
+            await EscalateToHumanAsync(context, cancellationToken);
+            return LoopCapFallbackText;
+        }
+
+        return agentResult.AssistantText;
     }
 
     /// <summary>
@@ -524,6 +442,11 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             || string.Equals(hostEnvironment.EnvironmentName, "Testing", StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool AreMutatingToolsEnabledForTurn(double maxEstimatedCostUsd)
+    {
+        return maxEstimatedCostUsd <= 0 || IsLocalDevelopmentOrTesting();
+    }
+
     private static bool IsLlmBudgetExceeded(double maxEstimatedCostUsd, double accumulatedEstimatedCostUsd)
     {
         return maxEstimatedCostUsd > 0 && accumulatedEstimatedCostUsd >= maxEstimatedCostUsd;
@@ -535,20 +458,7 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
         Conversation Conversation,
         CompanyChannel Channel,
         Customer Customer,
-        Message Inbound,
-        IReadOnlyList<AgentConversationMessage> Messages,
-        IReadOnlyList<AgentToolDescriptor> Tools);
-
-    private sealed record MessageHistoryItem(MessageRole Role, string? MessageText)
-    {
-        /// <summary>
-        /// Converts persisted message history into the role/text shape consumed by the agent runtime.
-        /// </summary>
-        public AgentConversationMessage ToAgentMessage()
-        {
-            return new AgentConversationMessage(Role.ToString(), MessageText);
-        }
-    }
+        Message Inbound);
 
     private string BuildPrompt(ProcessorContext context)
     {
@@ -559,11 +469,22 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             LocalNow = ToCompanyLocalNow(context.Company.TimeZoneId),
             AgentDisplayName = context.AgentProfile.DisplayName,
             Language = context.AgentProfile.Language,
-            ModelName = context.AgentProfile.ModelName,
+            ModelName = EffectiveModelName(context),
             PromptOverride = context.AgentProfile.PromptOverride,
             WorkingHoursSummary = WorkingHoursPromptFormatter.Format(WorkingHoursSharedAdapter.ToShared(context.Company.WorkingHours)),
-            Tools = context.Tools,
         });
+    }
+
+    private static LlmProvider EffectiveProvider(ProcessorContext context)
+    {
+        return context.Conversation.LlmProvider ?? context.AgentProfile.LlmProvider;
+    }
+
+    private static string EffectiveModelName(ProcessorContext context)
+    {
+        return string.IsNullOrWhiteSpace(context.Conversation.ModelName)
+            ? context.AgentProfile.ModelName
+            : context.Conversation.ModelName;
     }
 
 }

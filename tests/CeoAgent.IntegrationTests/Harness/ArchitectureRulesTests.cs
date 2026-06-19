@@ -357,6 +357,26 @@ public sealed partial class ArchitectureRulesTests
     }
 
     [Test]
+    public void AppHost_LlmSecrets_OnlyRequireImplementedOpenAiProvider()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+
+        ceoAgentApplication.ShouldContain("openai-api-key");
+        ceoAgentApplication.ShouldContain("Secrets__llm__openai__api-key");
+        ceoAgentApplication.ShouldContain("LlmProviders__OpenAI__ApiKeyReference");
+        ceoAgentApplication.ShouldNotContain("anthropic-api-key");
+        ceoAgentApplication.ShouldNotContain("deepseek-api-key");
+        ceoAgentApplication.ShouldNotContain("Secrets__llm__anthropic__api-key");
+        ceoAgentApplication.ShouldNotContain("Secrets__llm__deepseek__api-key");
+    }
+
+    [Test]
     public void AppHost_RuntimePortsAndPostgresSettings_ComeFromAppSettings()
     {
         var repoRoot = FindRepositoryRoot();
@@ -418,6 +438,16 @@ public sealed partial class ArchitectureRulesTests
         ceoAgentApplication.ShouldContain("AddPostgresConnectionEnvironment(worker, publishKeyVault, options.Postgres)");
         ceoAgentApplication.ShouldContain("apiService.WaitFor(postgresDatabase)");
         ceoAgentApplication.ShouldContain("worker.WaitFor(postgresDatabase)");
+        Regex.IsMatch(
+            ceoAgentApplication,
+            @"apiService\s*\.WithReference\(postgresDatabase\)\s*\.WaitFor\(postgresDatabase\);",
+            RegexOptions.Multiline,
+            TimeSpan.FromSeconds(1)).ShouldBeTrue();
+        Regex.IsMatch(
+            ceoAgentApplication,
+            @"worker\s*\.WithReference\(postgresDatabase\)\s*\.WaitFor\(postgresDatabase\)",
+            RegexOptions.Multiline,
+            TimeSpan.FromSeconds(1)).ShouldBeTrue();
         providerEnvironment.ShouldContain("var applyApiMigrationsOnStartup = ShouldApplyApiMigrationsOnStartup(deploymentEnvironmentName) ? \"true\" : \"false\";");
         providerEnvironment.ShouldContain(".WithEnvironment(\"Persistence__ApplyMigrationsOnStartup\", applyApiMigrationsOnStartup)");
         providerEnvironment.ShouldContain("string.Equals(deploymentEnvironmentName, \"Dev\", StringComparison.OrdinalIgnoreCase)");

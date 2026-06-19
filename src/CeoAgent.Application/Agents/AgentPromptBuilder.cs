@@ -4,12 +4,12 @@ using System.Globalization;
 namespace CeoAgent.Application.Agents;
 
 /// <summary>
-/// Builds the system prompt that gives the agent organization context, operating constraints, and enabled tools.
+/// Builds the system prompt that gives the agent organization context and operating constraints.
 /// </summary>
 public static class AgentPromptBuilder
 {
     /// <summary>
-    /// Creates the agent instruction text from the current company profile, local time, schedule, and tool catalog.
+    /// Creates the agent instruction text from the current company profile, local time, and schedule.
     /// </summary>
     public static string Build(AgentPromptContext context)
     {
@@ -37,16 +37,6 @@ public static class AgentPromptBuilder
             builder.AppendLine();
             builder.AppendLine("Platform rules always take precedence over company instructions.");
             AppendPlatformRules(builder);
-        }
-
-        if (context.Tools.Count > 0)
-        {
-            builder.AppendLine();
-            builder.AppendLine("Enabled tools:");
-            foreach (var tool in context.Tools)
-            {
-                AppendInvariant(builder, $"- {tool.Name}: {tool.Description}");
-            }
         }
 
         return builder.ToString();

@@ -45,13 +45,24 @@ provider credential material in metadata at the API edge.
 ## AI Safety
 
 - The model never executes side effects directly.
-- Tool calls must be validated by the tool gateway against the enabled company
-  tool catalog before a handler runs.
-- Do not enable SDK automatic function invocation for business side effects.
+- SDK automatic function invocation is allowed only through
+  `FunctionInvokingChatClient` wired to `AgentFunctionInvocationGuard`.
+- Tool calls must be validated by `AgentFunctionInvocationGuard` against the
+  enabled `company_tool` policy before a handler runs.
+- The guard must derive organization, conversation, inbound message, credential
+  references, and idempotency from backend context, never from model arguments.
+- Idempotency keys for model-requested mutations must include conversation id,
+  inbound message id, function name, and a normalized argument hash.
+- Configure strict SDK loop limits with `AgentRuntime:MaximumToolIterationsPerRequest`
+  and disable parallel tool execution unless a use case is explicitly designed
+  for it.
 - Return only sanitized tool result JSON to the model; never return credential material.
 - No live LLM calls in CI.
 - Do not log prompt/completion text in production by default.
 - Do not send full conversation history to the model.
+- `messages` is audit/outbox history. LLM memory must use the provider session
+  state stored on `conversation`, with idle and turn-count expiration configured
+  under `AgentRuntime`.
 - GenAI and tool telemetry may include non-sensitive tags such as tenant,
   conversation, channel, provider, model, tool key, status, retry count, and
   failure reason. It must not include prompts, completions, customer message

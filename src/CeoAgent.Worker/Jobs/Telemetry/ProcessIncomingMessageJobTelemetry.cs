@@ -88,7 +88,7 @@ internal static class ProcessIncomingMessageJobTelemetry
         CeoAgentTelemetry.LlmCallDuration.Record(elapsed.TotalMilliseconds);
     }
 
-    public static void RecordTokenUsage(AgentRunResult agentResult)
+    public static void RecordTokenUsage(AgentTurnResult agentResult)
     {
         if (agentResult.TotalTokenCount is { } totalTokens)
         {
@@ -113,7 +113,7 @@ internal static class ProcessIncomingMessageJobTelemetry
 
     public static void EnrichLlmGenerationResult(
         Activity? activity,
-        AgentRunResult agentResult,
+        AgentTurnResult agentResult,
         string modelName)
     {
         if (activity is null)
@@ -123,7 +123,7 @@ internal static class ProcessIncomingMessageJobTelemetry
 
         activity.SetTag("llm.response.id", agentResult.ResponseId);
         activity.SetTag("llm.finish_reason", agentResult.FinishReason);
-        activity.SetTag("llm.tool_call_count", agentResult.ToolCalls.Count);
+        activity.SetTag("llm.tool_call_count", agentResult.ToolInvocationCount);
         SetLangfuseUsageTags(activity, agentResult);
         SetLangSmithUsageTags(activity, agentResult, modelName);
     }
@@ -156,7 +156,7 @@ internal static class ProcessIncomingMessageJobTelemetry
         activity?.SetTag(CeoAgentTelemetry.LangSmith.MetadataChannel, context.Channel);
     }
 
-    private static void SetLangfuseUsageTags(Activity activity, AgentRunResult agentResult)
+    private static void SetLangfuseUsageTags(Activity activity, AgentTurnResult agentResult)
     {
         var usage = new Dictionary<string, int>(capacity: 3);
         if (agentResult.InputTokenCount is { } inputTokens)
@@ -180,7 +180,7 @@ internal static class ProcessIncomingMessageJobTelemetry
         }
     }
 
-    private static void SetLangSmithUsageTags(Activity activity, AgentRunResult agentResult, string modelName)
+    private static void SetLangSmithUsageTags(Activity activity, AgentTurnResult agentResult, string modelName)
     {
         activity.SetTag(CeoAgentTelemetry.LangSmith.GenAiResponseModel, modelName);
 

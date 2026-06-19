@@ -1,5 +1,6 @@
 using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Application.Abstractions.OpenAI;
+using CeoAgent.Infrastructure.Implementation.AI;
 using Microsoft.Extensions.DependencyInjection;
 using OpenAI.Responses;
 
@@ -12,7 +13,7 @@ internal static class OpenAIImplementationRegistrations
     public static IServiceCollection AddOpenAIImplementation(this IServiceCollection services)
     {
         services.AddSingleton<IOpenAIResponsesClientFactory<ResponsesClient>, OpenAIResponsesClientFactory>();
-        services.AddScoped<IAgentRuntime, OpenAIAgentRuntime>();
+        services.AddScoped<IAgentRuntime, MicrosoftAgentRuntime>();
         return services;
     }
 }

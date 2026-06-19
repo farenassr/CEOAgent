@@ -7,8 +7,8 @@ implementation.
 ## Boundary
 
 ```text
-Model tool call or Worker workflow
-  -> CeoAgent.Infrastructure ToolExecutionGateway
+Microsoft Agent SDK function call or Worker workflow
+  -> AgentFunctionInvocationGuard
   -> CeoAgent.Infrastructure AITools/GoogleCalendar executor
   -> IGoogleCalendarIntegration
   -> GoogleCalendarIntegration
@@ -100,8 +100,8 @@ mutating.
   by the availability tool when any are present.
 - HTTP admin endpoints for Google Calendar are operational/admin surfaces under
   `/v1/admin`. Mutating business tool paths must remain auditable through
-  `ToolExecutionGateway` or provide equivalent `ToolExecution` persistence
-  before they are exposed beyond admin diagnostics.
+  `AgentFunctionInvocationGuard` and persisted `ToolExecution` rows before they
+  are exposed beyond admin diagnostics.
 - Map provider failures to recoverable integration errors where possible.
 - Provider failures returned from the Google Calendar integration must use
   stable failure reasons before reaching the model or persisted tool result:

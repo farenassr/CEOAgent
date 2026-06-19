@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations.Schema;
 using CeoAgent.Shared.Enums;
 
 namespace CeoAgent.Infrastructure.Entities;
@@ -16,9 +15,8 @@ public sealed class AgentProfile : AuditableOrganizationOwnedEntity
     public required string ModelName { get; set; }
 
     /// <summary>
-    /// Company-selected LLM provider. Not persisted until the operator adds the provider migration.
+    /// Company-selected LLM provider. Example: OpenAI.
     /// </summary>
-    [NotMapped]
     public LlmProvider LlmProvider { get; set; } = LlmProvider.OpenAI;
 
     /// <summary>

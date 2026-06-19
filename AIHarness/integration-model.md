@@ -51,13 +51,31 @@ abstractions inside Infrastructure implementation folders.
 - Polly is allowed inside implementation-owned HTTP stacks.
 - Do not add Polly to Aspire-wired clients.
 - Keep one implementation per port until a second provider requires keyed DI.
-- The LLM runtime implementation must not execute business side effects automatically.
-  Model-requested tools are routed by Worker orchestration into the
-  the Infrastructure tool gateway.
-- The OpenAI MVP runtime currently uses the OpenAI Responses SDK surface. Keep
-  that experimental SDK usage isolated behind `IAgentRuntime`, and reuse
-  implementation-owned client instances instead of constructing SDK clients
-  inside each agent loop iteration.
+- The Worker must not build LLM history arrays from `messages` or run a manual
+  tool loop. It calls `IAgentRuntime.RunTurnAsync(...)` once per inbound text
+  message.
+- The LLM runtime owns model sessions and tool-loop orchestration through
+  Microsoft Agent Framework, but business side effects still run only after the
+  backend guard validates company policy and idempotency.
+- The SDK-first runtime flow is:
+
+```text
+Microsoft Agent SDK
+  -> FunctionInvokingChatClient
+      -> AgentFunctionInvocationGuard
+          -> AIFunction
+              -> Application service / use case
+```
+
+- `messages` remains local audit/outbox state, not the LLM memory source.
+  Conversation memory is represented by provider/session fields on
+  `conversation` such as `provider_conversation_id`, `provider_last_response_id`,
+  `agent_session_json`, and session timestamps.
+- `agent_profile` stores company-level model policy. A new `conversation`
+  snapshots the effective provider/model so later company config changes apply
+  to future conversations, not active sessions.
+- OpenAI Responses is the MVP runtime provider. Foundry, Claude, and DeepSeek
+  may be added behind `IAgentRuntime` without changing Worker orchestration.
 
 ## Credential Rules
 
@@ -65,6 +83,12 @@ abstractions inside Infrastructure implementation folders.
 - Accepted reference style: `kv://company/provider/purpose`.
 - Local development uses user-secrets or Aspire parameters.
 - Deployed/shared secrets belong in Azure Key Vault.
+- LLM provider API keys are exposed to the app as stable secret references such
+  as `kv://llm/openai/api-key`; raw keys must not be stored in appsettings,
+  database rows, messages, prompts, traces, or migrations.
+- Aspire AppHost should define LLM keys with `AddParameter(..., secret: true)`
+  for local/user-secret input and copy published values to Key Vault with
+  `AddSecret(...)`.
 
 ## Contract Test Template
 
