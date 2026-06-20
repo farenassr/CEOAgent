@@ -7,5 +7,6 @@ public sealed record CalendarReservationInfo(
     DateTimeOffset End,
     string? Summary,
     string? CustomerName,
-    string? EventUrl);
+    string? EventUrl,
+    string? CustomerPhoneNumber = null);
 

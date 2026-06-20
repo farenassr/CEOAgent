@@ -29,7 +29,6 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
     IOutboundMessageDispatcher outboundMessageDispatcher,
     IAgentRuntime agentRuntime,
     HumanHandoffToolExecutor handoffExecutor,
-    ReservationPaymentInstructionSender paymentInstructionSender,
     IOrganizationContextAccessor companyContextAccessor,
     TimeProvider timeProvider,
     IHostEnvironment hostEnvironment,
@@ -88,24 +87,10 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             {
                 if (!string.IsNullOrEmpty(existingReply.Payload?.ProviderMessageId))
                 {
-                    await paymentInstructionSender.SendForSuccessfulReservationsAsync(
-                        context.Company.Id,
-                        context.Conversation.Id,
-                        context.Inbound.Id,
-                        context.Channel.Id,
-                        context.Customer.ExternalCustomerId,
-                        cancellationToken);
                     return;
                 }
 
                 await SendExistingReplyAsync(context, existingReply, replyClientMessageId, job.CorrelationId, cancellationToken);
-                await paymentInstructionSender.SendForSuccessfulReservationsAsync(
-                    context.Company.Id,
-                    context.Conversation.Id,
-                    context.Inbound.Id,
-                    context.Channel.Id,
-                    context.Customer.ExternalCustomerId,
-                    cancellationToken);
                 return;
             }
 
@@ -120,19 +105,6 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                     cancellationToken);
             }
 
-            if (await paymentInstructionSender.TryHandlePaymentReceiptAsync(
-                context.Company.Id,
-                context.Conversation.Id,
-                context.Inbound.Id,
-                context.Channel.Id,
-                context.Customer.ExternalCustomerId,
-                context.Inbound.Type,
-                context.Inbound.MessageText,
-                cancellationToken))
-            {
-                return;
-            }
-
             if (context.Inbound.Type != MessageType.Text)
             {
                 await SendTextReplyAsync(context, UnsupportedMessageText, replyClientMessageId, job, cancellationToken);
@@ -144,6 +116,16 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
             var assistantText = string.IsNullOrWhiteSpace(agentText)
                 ? string.Empty
                 : agentText.Trim();
+
+            await dbContext.Entry(context.Conversation).ReloadAsync(cancellationToken);
+            if (context.Conversation.Status == ConversationStatus.HandedOff
+                && !string.Equals(assistantText, LoopCapFallbackText, StringComparison.Ordinal))
+            {
+                InboundSuppressedDuringHandoff(
+                    logger,
+                    context.Inbound.Id);
+                return;
+            }
 
             var assistant = new Message
             {
@@ -173,13 +155,6 @@ public sealed partial class ProcessIncomingMessageJobProcessor(
                     assistantText,
                     replyClientMessageId,
                     job.CorrelationId),
-                cancellationToken);
-            await paymentInstructionSender.SendForSuccessfulReservationsAsync(
-                context.Company.Id,
-                context.Conversation.Id,
-                context.Inbound.Id,
-                context.Channel.Id,
-                context.Customer.ExternalCustomerId,
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

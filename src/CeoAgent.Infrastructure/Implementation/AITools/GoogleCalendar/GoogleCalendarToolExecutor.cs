@@ -283,7 +283,9 @@ public sealed class GoogleCalendarToolExecutor(
                     OrganizationId: context.Company.Id.ToString("D"),
                     ConversationId: context.Conversation.Id.ToString("D"),
                     CustomerExternalId: context.Customer.ExternalCustomerId,
-                    ReservationId: executionContext.IdempotencyKey),
+                    ReservationId: executionContext.IdempotencyKey,
+                    CustomerName: request.CustomerName.Trim(),
+                    CustomerPhoneNumber: context.Customer.ExternalCustomerId),
                 cancellationToken: cancellationToken);
         }
         catch (IntegrationException exception)
@@ -629,6 +631,7 @@ public sealed class GoogleCalendarToolExecutor(
             End = reservation.End,
             Summary = reservation.Summary,
             CustomerName = reservation.CustomerName,
+            CustomerPhoneNumber = reservation.CustomerPhoneNumber,
             EventUrl = reservation.EventUrl,
         };
     }

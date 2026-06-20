@@ -37,7 +37,7 @@
         <mxCell id="CompanyTool" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="CompanyTool" vertex="1">
           <mxGeometry height="250" width="280" x="1220" y="350" as="geometry" />
         </mxCell>
-        <mxCell id="CompanyTool_Props" parent="CompanyTool" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&#xa;OrganizationId : Guid [FK]&#xa;ToolKey : string&#xa;IsEnabled : bool&#xa;CredentialReferenceId : Guid [FK]&#xa;Configuration : ToolConfiguration (JSONB)&#xa;CreatedAt : DateTime&#xa;UpdatedAt : DateTime" vertex="1">
+        <mxCell id="CompanyTool_Props" parent="CompanyTool" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&#xa;OrganizationId : Guid [FK]&#xa;ToolKey : string&#xa;Examples: send_payment_instructions&#xa;IsEnabled : bool&#xa;CredentialReferenceId : Guid [FK]&#xa;ParametersSchema : JSONB&#xa;Configuration : ToolConfiguration (JSONB)&#xa;CreatedAt : DateTime&#xa;UpdatedAt : DateTime" vertex="1">
           <mxGeometry height="210" width="280" y="38" as="geometry" />
         </mxCell>
         <mxCell id="IntegrationCredentialReference" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="IntegrationCredentialReference" vertex="1">
@@ -85,7 +85,7 @@
         <mxCell id="ToolExecution" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;rounded=1;arcSize=8;startSize=34;fillColor=#ffffff;swimlaneFillColor=#fde68a;strokeColor=#ca8a04;strokeWidth=2;fontColor=#0f172a;shadow=1;" value="ToolExecution" vertex="1">
           <mxGeometry height="300" width="330" x="1248" y="1140" as="geometry" />
         </mxCell>
-        <mxCell id="ToolExecution_Props" parent="ToolExecution" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&#xa;OrganizationId : Guid [FK]&#xa;ConversationId : Guid [FK]&#xa;CompanyToolId : Guid [FK]&#xa;TriggerMessageId : Guid [FK]&#xa;ResultMessageId : Guid [FK]&#xa;ToolKey : string&#xa;IdempotencyKey : string&#xa;Status : ToolExecutionStatus&#xa;Request : ToolExecutionRequest (JSONB)&#xa;Result : ToolExecutionResult (JSONB)&#xa;FailureReason : string&#xa;CreatedAt : DateTime&#xa;UpdatedAt : DateTime" vertex="1">
+        <mxCell id="ToolExecution_Props" parent="ToolExecution" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;overflow=hidden;spacing=10;fontFamily=Consolas;fontSize=12;fontColor=#334155;" value="Id : Guid [PK]&#xa;OrganizationId : Guid [FK]&#xa;ConversationId : Guid [FK]&#xa;CompanyToolId : Guid [FK]&#xa;TriggerMessageId : Guid [FK]&#xa;ResultMessageId : Guid [FK]&#xa;ToolKey : string&#xa;IdempotencyKey : string&#xa;Status : ToolExecutionStatus&#xa;Request : ToolExecutionRequest (JSONB)&#xa;Result : ToolExecutionResult (JSONB)&#xa;send_payment_instructions: sent, visible, handoff&#xa;FailureReason : string&#xa;CreatedAt : DateTime&#xa;UpdatedAt : DateTime" vertex="1">
           <mxGeometry height="260" width="330" y="38" as="geometry" />
         </mxCell>
         <mxCell id="E1" edge="1" parent="1" source="Company" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=ERmany;startArrow=ERone;strokeColor=#475569;strokeWidth=2;fontColor=#334155;labelBackgroundColor=#f8fafc;" target="CompanyChannel" value="has">
@@ -179,7 +179,7 @@
         <mxCell id="E18" edge="1" parent="1" source="Bank" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=ERmany;startArrow=ERone;strokeColor=#64748b;strokeWidth=2;fontColor=#334155;labelBackgroundColor=#f8fafc;" target="CompanyPaymentAccount" value="backs">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="E19" edge="1" parent="1" source="CompanyPaymentAccount" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=none;startArrow=none;strokeColor=#0ea5e9;strokeWidth=2;fontColor=#075985;labelBackgroundColor=#f8fafc;dashed=1;" value="QR blob: private/filename-guid.ext + full URI">
+        <mxCell id="E19" edge="1" parent="1" source="CompanyPaymentAccount" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=none;startArrow=none;strokeColor=#0ea5e9;strokeWidth=2;fontColor=#075985;labelBackgroundColor=#f8fafc;dashed=1;" value="QR blob used by send_payment_instructions">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="2670" y="560" as="targetPoint" />
           </mxGeometry>

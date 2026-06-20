@@ -12,6 +12,11 @@ No new columns or entities were added. `HandoffTicketId` and `EstimatedPickupAt`
 
 ## Flow
 
+Payment review also uses handoff. After `send_payment_instructions` sends or
+idempotently confirms the customer-visible QR image, it calls
+`HumanHandoffToolExecutor.AutoEscalateAsync`. Staff then handles payment receipt
+review and final confirmation from the handed-off conversation.
+
 1. **Trigger (tool).** The model calls `request_human_handoff` with `reason` (and optional
    `notes`). It runs inside `RunAgentLoopAsync → ToolExecutionGateway.ExecuteAsync` like every
    other tool. `RequestHumanHandoffExecutor : IToolExecutor` delegates to

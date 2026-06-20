@@ -68,6 +68,21 @@ Outbound sends must not rely on provider retries for idempotency. The Worker
 uses deterministic client message ids, but a durable outbound-send ledger or
 outbox is still required before claiming exactly-once customer-visible sends.
 
+Payment instructions are a special tool-visible outbound path:
+
+```text
+create_google_calendar_reservation succeeds
+  -> model calls send_payment_instructions with no arguments
+  -> payment tool finds latest successful reservation and default active account
+  -> sends one WhatsApp image message with QR and full caption
+  -> payment tool calls request_human_handoff automatically
+  -> Worker suppresses the final assistant text because the conversation is HandedOff
+```
+
+The Worker must not auto-send payment instructions after a reservation tool
+execution. Payment follow-up and receipt review happen in the handed-off
+conversation handled by staff.
+
 ## Admin WhatsApp Entry Flow
 
 Admin WhatsApp entry messages use the normal Worker prompt and tool-loop path

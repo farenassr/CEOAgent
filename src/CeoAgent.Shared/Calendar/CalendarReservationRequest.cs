@@ -12,4 +12,6 @@ public sealed record CalendarReservationRequest(
     string? OrganizationId = null,
     string? ConversationId = null,
     string? CustomerExternalId = null,
-    string? ReservationId = null);
+    string? ReservationId = null,
+    string? CustomerName = null,
+    string? CustomerPhoneNumber = null);

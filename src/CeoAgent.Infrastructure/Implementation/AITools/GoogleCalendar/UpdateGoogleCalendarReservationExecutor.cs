@@ -13,7 +13,7 @@ public sealed class UpdateGoogleCalendarReservationTool(
 
     public override bool IsMutating => true;
 
-    public override string Description => "Update an existing Google Calendar reservation owned by the current customer.";
+    public override string Description => "Reschedule an existing Google Calendar reservation owned by the current customer; conflict checks ignore the reservation being moved.";
 
     public override bool Validate(UpdateGoogleCalendarReservationRequest request)
     {
