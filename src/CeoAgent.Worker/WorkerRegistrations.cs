@@ -25,7 +25,6 @@ public static class WorkerRegistrations
             .ValidateOnStart();
 
         services.TryAddSingleton(TimeProvider.System);
-        services.AddScoped<ReservationPaymentInstructionSender>();
         services.AddScoped<ProcessIncomingMessageJobProcessor>();
 
         services.AddSingleton<WorkerHealthTracker>();

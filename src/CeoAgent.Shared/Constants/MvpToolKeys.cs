@@ -12,5 +12,7 @@ public static class MvpToolKeys
 
     public const string CancelGoogleCalendarReservation = "cancel_google_calendar_reservation";
 
+    public const string SendPaymentInstructions = "send_payment_instructions";
+
     public const string RequestHumanHandoff = "request_human_handoff";
 }

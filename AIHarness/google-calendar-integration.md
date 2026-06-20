@@ -34,6 +34,11 @@ tool-specific helpers belong under
 - Use company tool configuration for calendar ID, time zone, slot duration,
   reservation duration, buffer, and advance booking rules.
 
+Payment instructions are not sent by the calendar executor. After
+`create_google_calendar_reservation` succeeds, the model must call the separate
+`send_payment_instructions` tool. That tool is owned by the payment/WhatsApp
+boundary and uses the latest successful reservation in the current conversation.
+
 ## Availability Search
 
 When a customer requests a specific reservation time, the availability tool
@@ -90,6 +95,8 @@ mutating.
 - Validate model-requested tool names against enabled `company_tool` rows before execution.
 - Validate working hours and advance booking windows before provider calls.
 - Store idempotency keys so retries do not duplicate reservations.
+- Do not rely on post-reservation Worker side effects for payment messages;
+  payment instructions must be an explicit tool execution.
 - Do not use customer phone numbers from model arguments. Customer reservation
   ownership must come from the current company conversation and customer rows.
 - Do not confirm update or cancellation to the customer until the corresponding

@@ -13,7 +13,7 @@ public sealed class CheckGoogleCalendarAvailabilityTool(
 
     public override bool IsMutating => false;
 
-    public override string Description => "Check Google Calendar availability before offering or confirming reservation times.";
+    public override string Description => "Check Google Calendar availability only for new reservation offers or new reservation confirmation.";
 
     public override bool Validate(CheckAvailabilityRequest request)
     {

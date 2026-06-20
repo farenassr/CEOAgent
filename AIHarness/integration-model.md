@@ -35,6 +35,7 @@ abstractions inside Infrastructure implementation folders.
 | `IMessageChannelIntegration` | `CeoAgent.Application/Abstractions/Messaging` | Send and receive channel messages. WhatsApp Cloud is the MVP provider. |
 | `IWhatsAppChannelCredentialResolver` | `CeoAgent.Application/Abstractions/Messaging` | Resolve WhatsApp credential references for a company channel. |
 | `IGoogleCalendarIntegration` | `CeoAgent.Application/Abstractions/AITools/GoogleCalendar` | Calendar availability and reservation operations. Google Calendar is the MVP provider. |
+| `IPaymentQrImageProvider` | `CeoAgent.Application/Abstractions/Payments` | Reads backend-owned QR image bytes for reservation payment instructions. |
 | `IAgentRuntime` | `CeoAgent.Application/Abstractions/AI` | Provider-neutral model runtime. OpenAI is the MVP LLM provider and is implemented in Infrastructure. |
 | Job constants/retry contracts | `CeoAgent.Application/Abstractions/Jobs` | Queue names and retry policy shared by API and Worker. |
 | Job payloads | `CeoAgent.Shared/Jobs` | Queue payload models shared by API and Worker. |
@@ -57,6 +58,11 @@ abstractions inside Infrastructure implementation folders.
 - The LLM runtime owns model sessions and tool-loop orchestration through
   Microsoft Agent Framework, but business side effects still run only after the
   backend guard validates company policy and idempotency.
+- `send_payment_instructions` is an internal AI tool under
+  `CeoAgent.Infrastructure/Implementation/AITools/Payments`. It has no model
+  arguments; it derives the current conversation, latest successful reservation,
+  default active payment account, QR blob reference, and WhatsApp recipient from
+  backend state.
 - The SDK-first runtime flow is:
 
 ```text

@@ -22,7 +22,10 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
     private const string CompanyPropertyName = "ceoagent_organization_id";
     private const string ConversationPropertyName = "ceoagent_conversation_id";
     private const string CustomerExternalIdPropertyName = "ceoagent_customer_external_id";
+    private const string CustomerPhonePropertyName = "ceoagent_customer_phone";
+    private const string CustomerNamePropertyName = "ceoagent_customer_name";
     private const string ReservationIdPropertyName = "ceoagent_reservation_id";
+    private const string PaymentPendingDescriptionMarker = "[PAGO_PENDIENTE]";
 
     /// <summary>
     /// Checks whether the requested interval is free and returns configured nearby alternatives when it is busy.
@@ -142,7 +145,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         {
             var service = await googleCalendarServiceFactory.CreateAsync(request.CredentialReference, cancellationToken);
             var eventsRequest = service.Events.List(request.CalendarId);
-            eventsRequest.PrivateExtendedProperty = $"{CustomerExternalIdPropertyName}={request.CustomerExternalId}";
+            eventsRequest.PrivateExtendedProperty = $"{CustomerPhonePropertyName}={request.CustomerExternalId}";
             eventsRequest.TimeMinDateTimeOffset = request.TimeMin;
             eventsRequest.TimeMaxDateTimeOffset = request.TimeMax;
             eventsRequest.SingleEvents = true;
@@ -151,6 +154,19 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
             eventsRequest.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
 
             var events = await ListEventsAsync(eventsRequest, cancellationToken);
+            if (events.Count == 0)
+            {
+                var legacyEventsRequest = service.Events.List(request.CalendarId);
+                legacyEventsRequest.PrivateExtendedProperty = $"{CustomerExternalIdPropertyName}={request.CustomerExternalId}";
+                legacyEventsRequest.TimeMinDateTimeOffset = request.TimeMin;
+                legacyEventsRequest.TimeMaxDateTimeOffset = request.TimeMax;
+                legacyEventsRequest.SingleEvents = true;
+                legacyEventsRequest.ShowDeleted = false;
+                legacyEventsRequest.MaxResults = 50;
+                legacyEventsRequest.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
+                events = await ListEventsAsync(legacyEventsRequest, cancellationToken);
+            }
+
             var reservations = events
                 .Where(item => IsOwnedBy(item, request.OrganizationId, request.CustomerExternalId))
                 .Select(ToReservationInfo)
@@ -216,7 +232,8 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
 
             if (!string.IsNullOrWhiteSpace(request.CustomerName))
             {
-                existing.Description = $"Customer: {request.CustomerName.Trim()}";
+                existing.Description = BuildDescription(request.CustomerName, request.CustomerExternalId);
+                AddOrUpdateCustomerMetadata(existing, request.CustomerName, request.CustomerExternalId);
             }
 
             var updated = await service.Events.Update(existing, request.CalendarId, existing.Id)
@@ -306,7 +323,10 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         {
             Id = BuildDeterministicEventId(request.IdempotencyKey),
             Summary = request.Summary,
-            Description = request.Description,
+            Description = BuildDescription(
+                request.CustomerName ?? ParseCustomerName(request.Description),
+                request.CustomerPhoneNumber ?? request.CustomerExternalId,
+                request.Description),
             Start = new EventDateTime
             {
                 DateTimeDateTimeOffset = request.Start,
@@ -326,14 +346,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
                 ],
             ExtendedProperties = new Event.ExtendedPropertiesData
             {
-                Private__ = new Dictionary<string, string>
-                {
-                    [IdempotencyPropertyName] = request.IdempotencyKey,
-                    [CompanyPropertyName] = request.OrganizationId ?? string.Empty,
-                    [ConversationPropertyName] = request.ConversationId ?? string.Empty,
-                    [CustomerExternalIdPropertyName] = request.CustomerExternalId ?? string.Empty,
-                    [ReservationIdPropertyName] = request.ReservationId ?? request.IdempotencyKey,
-                },
+                Private__ = BuildPrivateProperties(request),
             },
         };
     }
@@ -456,8 +469,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         return privateProperties is not null
             && privateProperties.TryGetValue(CompanyPropertyName, out var eventOrganizationId)
             && string.Equals(eventOrganizationId, organizationId, StringComparison.Ordinal)
-            && privateProperties.TryGetValue(CustomerExternalIdPropertyName, out var eventCustomerExternalId)
-            && string.Equals(eventCustomerExternalId, customerExternalId, StringComparison.Ordinal);
+            && IsCurrentCustomer(privateProperties, customerExternalId);
     }
 
     private static CalendarReservationInfo? ToReservationInfo(Event calendarEvent)
@@ -475,8 +487,116 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
             calendarEvent.Start.DateTimeDateTimeOffset.Value,
             calendarEvent.End.DateTimeDateTimeOffset.Value,
             calendarEvent.Summary,
-            ParseCustomerName(calendarEvent.Description),
-            calendarEvent.HtmlLink);
+            CustomerName(calendarEvent),
+            calendarEvent.HtmlLink,
+            CustomerPhoneNumber(calendarEvent));
+    }
+
+    private static Dictionary<string, string> BuildPrivateProperties(CalendarReservationRequest request)
+    {
+        var properties = new Dictionary<string, string>
+        {
+            [IdempotencyPropertyName] = request.IdempotencyKey,
+            [CompanyPropertyName] = request.OrganizationId ?? string.Empty,
+            [ConversationPropertyName] = request.ConversationId ?? string.Empty,
+            [CustomerExternalIdPropertyName] = request.CustomerExternalId ?? string.Empty,
+            [ReservationIdPropertyName] = request.ReservationId ?? request.IdempotencyKey,
+        };
+
+        var customerPhoneNumber = request.CustomerPhoneNumber ?? request.CustomerExternalId;
+        if (!string.IsNullOrWhiteSpace(customerPhoneNumber))
+        {
+            properties[CustomerPhonePropertyName] = customerPhoneNumber.Trim();
+        }
+
+        var customerName = request.CustomerName ?? ParseCustomerName(request.Description);
+        if (!string.IsNullOrWhiteSpace(customerName))
+        {
+            properties[CustomerNamePropertyName] = customerName.Trim();
+        }
+
+        return properties;
+    }
+
+    private static void AddOrUpdateCustomerMetadata(Event calendarEvent, string? customerName, string? customerPhoneNumber)
+    {
+        calendarEvent.ExtendedProperties ??= new Event.ExtendedPropertiesData();
+        calendarEvent.ExtendedProperties.Private__ ??= new Dictionary<string, string>();
+
+        if (!string.IsNullOrWhiteSpace(customerPhoneNumber))
+        {
+            calendarEvent.ExtendedProperties.Private__[CustomerPhonePropertyName] = customerPhoneNumber.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(customerName))
+        {
+            calendarEvent.ExtendedProperties.Private__[CustomerNamePropertyName] = customerName.Trim();
+        }
+    }
+
+    private static bool IsCurrentCustomer(IDictionary<string, string> privateProperties, string customerExternalId)
+    {
+        return privateProperties.TryGetValue(CustomerPhonePropertyName, out var eventCustomerPhone)
+                && string.Equals(eventCustomerPhone, customerExternalId, StringComparison.Ordinal)
+            || privateProperties.TryGetValue(CustomerExternalIdPropertyName, out var eventCustomerExternalId)
+                && string.Equals(eventCustomerExternalId, customerExternalId, StringComparison.Ordinal);
+    }
+
+    private static string? CustomerName(Event calendarEvent)
+    {
+        return calendarEvent.ExtendedProperties?.Private__ is { } privateProperties
+            && privateProperties.TryGetValue(CustomerNamePropertyName, out var customerName)
+            && !string.IsNullOrWhiteSpace(customerName)
+            ? customerName
+            : ParseCustomerName(calendarEvent.Description);
+    }
+
+    private static string? CustomerPhoneNumber(Event calendarEvent)
+    {
+        var privateProperties = calendarEvent.ExtendedProperties?.Private__;
+        if (privateProperties is null)
+        {
+            return null;
+        }
+
+        if (privateProperties.TryGetValue(CustomerPhonePropertyName, out var customerPhoneNumber)
+            && !string.IsNullOrWhiteSpace(customerPhoneNumber))
+        {
+            return customerPhoneNumber;
+        }
+
+        return privateProperties.TryGetValue(CustomerExternalIdPropertyName, out var customerExternalId)
+            && !string.IsNullOrWhiteSpace(customerExternalId)
+            ? customerExternalId
+            : null;
+    }
+
+    private static string? BuildDescription(string? customerName, string? customerPhoneNumber, string? fallbackDescription = null)
+    {
+        var lines = new List<string>(capacity: 4)
+        {
+            PaymentPendingDescriptionMarker,
+        };
+        var hasCustomerDetails = false;
+
+        if (!string.IsNullOrWhiteSpace(customerName))
+        {
+            lines.Add($"Customer: {customerName.Trim()}");
+            hasCustomerDetails = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(customerPhoneNumber))
+        {
+            lines.Add($"Phone: {customerPhoneNumber.Trim()}");
+            hasCustomerDetails = true;
+        }
+
+        if (!hasCustomerDetails && !string.IsNullOrWhiteSpace(fallbackDescription))
+        {
+            lines.Add(fallbackDescription.Trim());
+        }
+
+        return string.Join('\n', lines);
     }
 
     private static string ReservationId(Event calendarEvent)

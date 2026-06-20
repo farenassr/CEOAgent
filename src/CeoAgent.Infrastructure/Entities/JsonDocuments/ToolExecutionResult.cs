@@ -46,6 +46,12 @@ public sealed class ToolExecutionResult
     [JsonPropertyName("cancel_google_calendar_reservation")]
     public CancelGoogleCalendarReservationResult? CancelGoogleCalendarReservation { get; set; }
 
+    /// <summary>
+    /// Result payload for sending reservation payment instructions.
+    /// </summary>
+    [JsonPropertyName("send_payment_instructions")]
+    public SendPaymentInstructionsResult? SendPaymentInstructions { get; set; }
+
     public static ToolExecutionResult ForCheckAvailability(CheckAvailabilityResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -131,6 +137,17 @@ public sealed class ToolExecutionResult
         {
             ToolKey = MvpToolKeys.CancelGoogleCalendarReservation,
             CancelGoogleCalendarReservation = result,
+        };
+    }
+
+    public static ToolExecutionResult ForSendPaymentInstructions(SendPaymentInstructionsResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new ToolExecutionResult
+        {
+            ToolKey = MvpToolKeys.SendPaymentInstructions,
+            SendPaymentInstructions = result,
         };
     }
 }
@@ -228,6 +245,34 @@ public sealed class CancelGoogleCalendarReservationResult
     public string? EventId { get; set; }
 }
 
+public sealed class SendPaymentInstructionsResult
+{
+    /// <summary>
+    /// Whether the payment QR instructions were delivered.
+    /// </summary>
+    public bool PaymentInstructionsSent { get; set; }
+
+    /// <summary>
+    /// Whether this tool execution already sent a customer-visible message.
+    /// </summary>
+    public bool CustomerVisibleMessageSent { get; set; }
+
+    /// <summary>
+    /// Whether this execution requested human handoff after confirming a visible payment message.
+    /// </summary>
+    public bool HandoffRequested { get; set; }
+
+    /// <summary>
+    /// External reservation event identifier used for the payment instructions.
+    /// </summary>
+    public string? ReservationEventId { get; set; }
+
+    /// <summary>
+    /// Local payment instruction message identifier when a message was created.
+    /// </summary>
+    public Guid? PaymentMessageId { get; set; }
+}
+
 public sealed class GoogleCalendarReservationResultItem
 {
     /// <summary>
@@ -259,6 +304,11 @@ public sealed class GoogleCalendarReservationResultItem
     /// Customer name when available from event data.
     /// </summary>
     public string? CustomerName { get; set; }
+
+    /// <summary>
+    /// Customer phone number when available from backend-owned event metadata.
+    /// </summary>
+    public string? CustomerPhoneNumber { get; set; }
 
     /// <summary>
     /// Calendar event URL when safe to return.

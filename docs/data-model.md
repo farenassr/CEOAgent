@@ -302,6 +302,7 @@ El modelo nunca ejecuta efectos secundarios directamente. Cuando quiere realizar
 - Herramientas con sistemas externos, como Google Calendar, enlazan su credencial mediante `CredentialReferenceId`.
 - La configuracion se deja en JSON porque cada herramienta puede necesitar parametros diferentes.
 - Las herramientas de reserva de Google Calendar incluyen consultar, crear, actualizar y cancelar reservas. Para buscar, actualizar o cancelar, el backend resuelve el cliente actual desde la conversacion y no acepta telefonos enviados por el modelo.
+- `send_payment_instructions` es una herramienta interna sin argumentos. Debe estar habilitada en `company_tool` con un schema vacio y no usa `CredentialReferenceId`; toma la ultima reserva exitosa de la conversacion y la cuenta de pago default activa desde datos backend.
 
 ---
 
@@ -410,6 +411,7 @@ Representa una cuenta bancaria de una compania para recibir pagos de reservas. I
 - El QR de `PUT /v1/admin/payment-accounts/{paymentAccountId}` es opcional; si se envia, reemplaza `QrBlobName` y `QrBlobUri`.
 - El nombre del blob se deriva del archivo subido como `filename-guid.extension`, con el nombre normalizado a slug y el `Id` de la cuenta como GUID.
 - Los tags canonicos de Blob Storage para QR de pago incluyen `organization_id`, `visibility=private`, `category=payment_qr`, `status=active`, `content_kind=image`, `payment_account_id` y `retention=permanent`.
+- La cuenta default activa es la fuente usada por `send_payment_instructions`. El tool envia un unico mensaje de imagen por WhatsApp con el QR y un caption completo: reserva creada, datos de reserva, cuenta, monto, que el dinero de reserva es consumible y que la confirmacion final depende de recibir el pago. Despues solicita handoff humano para que el equipo revise el pago.
 
 ---
 ## 👤 `customer`
@@ -586,6 +588,13 @@ Las ejecuciones de Google Calendar pueden usar claves como `find_google_calendar
 incluyen identificadores de reserva/evento, horarios locales, resumen, nombre si esta disponible,
 URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 
+La ejecucion `send_payment_instructions` no acepta argumentos. Su `Request` guarda el `toolKey`
+y su `Result` registra si se envio el QR, si la ejecucion produjo un mensaje visible al cliente,
+si solicito handoff, el `ReservationEventId` usado y el `PaymentMessageId` local. Si no existe
+una reserva exitosa previa en la conversacion, la ejecucion queda denegada con
+`reservation_not_found`. Si no hay cuenta de pago default activa y configurada, envia un texto
+fallback, solicita handoff humano y queda fallida con `payment_account_not_configured`.
+
 ### Estados posibles
 
 | Estado      | Significado                                                                                         |
@@ -609,6 +618,17 @@ URL del evento si es seguro devolverla, conteo y si hace falta desambiguar.
 4. El API valida banco activo, tipo de cuenta, moneda, monto, estado default/active y tipo de archivo PNG/JPEG.
 5. El API genera la referencia del blob como `filename-guid.extension`, sube el archivo al contenedor `private` y guarda `QrBlobName` y `QrBlobUri`.
 6. Si la cuenta queda default y activa, el API limpia otras cuentas default activas de la misma organizacion y moneda.
+
+---
+
+# Flujo De Pago De Reserva
+
+1. El agente crea la reserva con `create_google_calendar_reservation`.
+2. Si la ejecucion termina exitosamente, el agente debe llamar `send_payment_instructions` sin argumentos.
+3. El tool busca la ultima reserva exitosa de la conversacion actual y la cuenta `company_payment_account` default activa.
+4. El tool descarga el QR desde Blob Storage y envia un WhatsApp image message con caption completo.
+5. Si el mensaje visible fue enviado o ya estaba enviado idempotentemente, el tool llama `HumanHandoffToolExecutor.AutoEscalateAsync`.
+6. El Worker no envia instrucciones de pago automaticamente despues de crear la reserva. Tambien omite la respuesta final de texto porque la conversacion queda `HandedOff`.
 
 ---
 # Flujo De Datos Ejemplo 🌊

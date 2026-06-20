@@ -12,6 +12,7 @@ using CeoAgent.Infrastructure.Implementation.AI;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar;
 using CeoAgent.Infrastructure.Implementation.AITools.Execution;
 using CeoAgent.Infrastructure.Implementation.AITools.Handoff;
+using CeoAgent.Infrastructure.Implementation.AITools.Payments;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
 using CeoAgent.Infrastructure.Implementation.Messaging;
 using CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
@@ -119,6 +120,9 @@ public static class InfrastructureRegistrations
         services.AddScoped<AgentFunctionInvocationGuard>();
         services.AddScoped<GoogleCalendarToolExecutor>();
         services.AddScoped<HumanHandoffToolExecutor>();
+        services.AddScoped<PaymentInstructionDataReader>();
+        services.AddScoped<PaymentInstructionDispatchService>();
+        services.AddScoped<ReservationPaymentInstructionSender>();
         services.AddScoped<IAgentToolCatalog, CompositeAgentToolCatalog>();
         services.AddScoped<IDynamicAgentToolProvider, NoOpDynamicAgentToolProvider>();
         services.AddAgentToolsFromInfrastructureAssembly();

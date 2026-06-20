@@ -185,6 +185,8 @@ public sealed class GoogleCalendarToolExecutorTests
         request.OrganizationId.ShouldBe(fixture.OrganizationId.ToString("D"));
         request.ConversationId.ShouldBe(fixture.Conversation.Id.ToString("D"));
         request.CustomerExternalId.ShouldBe("15551234567");
+        request.CustomerName.ShouldBe("Ada Lovelace");
+        request.CustomerPhoneNumber.ShouldBe("15551234567");
         request.ReservationId.ShouldBe("reservation-key");
     }
 
@@ -201,7 +203,8 @@ public sealed class GoogleCalendarToolExecutorTests
                 new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
                 "Reservation for 2",
                 "Ada Lovelace",
-                "https://calendar.google.com/event?eid=event-123"),
+                "https://calendar.google.com/event?eid=event-123",
+                "15551234567"),
         ]);
 
         var execution = await fixture.Executor.FindReservationsAsync(
@@ -579,7 +582,8 @@ public sealed class GoogleCalendarToolExecutorTests
                 new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
                 "Reservation for 2",
                 "Ada Lovelace",
-                "https://calendar.google.com/event?eid=event-123"));
+                "https://calendar.google.com/event?eid=event-123",
+                "15551234567"));
 
         public CalendarReservationCancellationResult CancelResult { get; set; } =
             CalendarReservationCancellationResult.Cancelled("event-123", "event-123");

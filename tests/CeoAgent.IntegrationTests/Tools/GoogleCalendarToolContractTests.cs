@@ -45,6 +45,9 @@ public sealed class GoogleCalendarToolContractTests
             ReservationId = "event-123",
             Reason = null,
         }).ToolKey.ShouldBe(MvpToolKeys.CancelGoogleCalendarReservation);
+
+        ToolExecutionRequest.ForSendPaymentInstructions(new SendPaymentInstructionsRequest())
+            .ToolKey.ShouldBe(MvpToolKeys.SendPaymentInstructions);
     }
 
     [Test]
@@ -77,6 +80,7 @@ public sealed class GoogleCalendarToolContractTests
                     End = new DateTimeOffset(2026, 5, 28, 17, 0, 0, TimeSpan.FromHours(-5)),
                     Summary = "Reservation for 4",
                     CustomerName = "Ada Lovelace",
+                    CustomerPhoneNumber = "15551234567",
                     EventUrl = "https://calendar.google.com/event?eid=event-123",
                 },
             ],
@@ -90,6 +94,7 @@ public sealed class GoogleCalendarToolContractTests
                 EventId = "event-123",
                 Start = new DateTimeOffset(2026, 5, 28, 20, 0, 0, TimeSpan.FromHours(-5)),
                 End = new DateTimeOffset(2026, 5, 28, 21, 0, 0, TimeSpan.FromHours(-5)),
+                CustomerPhoneNumber = "15551234567",
             },
         }).ToolKey.ShouldBe(MvpToolKeys.UpdateGoogleCalendarReservation);
 
@@ -99,5 +104,14 @@ public sealed class GoogleCalendarToolContractTests
             EventId = "event-123",
             Cancelled = true,
         }).ToolKey.ShouldBe(MvpToolKeys.CancelGoogleCalendarReservation);
+
+        ToolExecutionResult.ForSendPaymentInstructions(new SendPaymentInstructionsResult
+        {
+            PaymentInstructionsSent = true,
+            CustomerVisibleMessageSent = true,
+            HandoffRequested = true,
+            ReservationEventId = "event-123",
+            PaymentMessageId = Guid.Parse("018f4f70-8b5f-7b4c-9d1a-0f6c1d7a2b99"),
+        }).ToolKey.ShouldBe(MvpToolKeys.SendPaymentInstructions);
     }
 }

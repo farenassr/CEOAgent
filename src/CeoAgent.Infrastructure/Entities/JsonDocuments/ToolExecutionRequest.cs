@@ -46,6 +46,12 @@ public sealed class ToolExecutionRequest
     [JsonPropertyName("cancel_google_calendar_reservation")]
     public CancelGoogleCalendarReservationRequest? CancelGoogleCalendarReservation { get; set; }
 
+    /// <summary>
+    /// Request payload for sending payment instructions for the latest successful reservation.
+    /// </summary>
+    [JsonPropertyName("send_payment_instructions")]
+    public SendPaymentInstructionsRequest? SendPaymentInstructions { get; set; }
+
     public static ToolExecutionRequest ForCheckAvailability(CheckAvailabilityRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -131,6 +137,17 @@ public sealed class ToolExecutionRequest
         {
             ToolKey = MvpToolKeys.CancelGoogleCalendarReservation,
             CancelGoogleCalendarReservation = request,
+        };
+    }
+
+    public static ToolExecutionRequest ForSendPaymentInstructions(SendPaymentInstructionsRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return new ToolExecutionRequest
+        {
+            ToolKey = MvpToolKeys.SendPaymentInstructions,
+            SendPaymentInstructions = request,
         };
     }
 }
@@ -246,4 +263,8 @@ public sealed class CancelGoogleCalendarReservationRequest
     /// Optional cancellation reason.
     /// </summary>
     public string? Reason { get; set; }
+}
+
+public sealed class SendPaymentInstructionsRequest
+{
 }
