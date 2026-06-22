@@ -13,6 +13,10 @@ internal sealed class AppHostOptions
     public ApiServiceOptions ApiService { get; set; } = new();
 
     public AzuriteOptions Azurite { get; set; } = new();
+
+    public OllamaOptions Ollama { get; set; } = new();
+
+    public KeycloakAppHostOptions Keycloak { get; set; } = new();
 }
 
 internal sealed class ResourceNameOptions
@@ -68,6 +72,42 @@ internal sealed class AzuriteOptions
     public int TablePort { get; set; }
 }
 
+internal sealed class OllamaOptions
+{
+    public string? ResourceName { get; set; }
+
+    public string? ImageTag { get; set; }
+
+    public string? ModelResourceName { get; set; }
+
+    public string? ModelName { get; set; }
+
+    public string? DataVolumeName { get; set; }
+}
+
+internal sealed class KeycloakAppHostOptions
+{
+    public string? ResourceName { get; set; }
+
+    public string? Realm { get; set; }
+
+    public int HostPort { get; set; }
+
+    public string? DataVolumeName { get; set; }
+
+    public string? RealmImportPath { get; set; }
+
+    public string? ClientId { get; set; }
+
+    public string? ServiceClientId { get; set; }
+
+    public string? Issuer { get; set; }
+
+    public string? RedirectUri { get; set; }
+
+    public string[] AuthorizationScopes { get; set; } = [];
+}
+
 internal static class AppHostOptionsExtensions
 {
     public static AppHostOptions GetRequiredAppHostOptions(this IConfiguration configuration)
@@ -104,6 +144,21 @@ internal static class AppHostOptionsExtensions
         yield return RequirePositive(options.Azurite.BlobPort, "Azurite:BlobPort");
         yield return RequirePositive(options.Azurite.QueuePort, "Azurite:QueuePort");
         yield return RequirePositive(options.Azurite.TablePort, "Azurite:TablePort");
+        yield return Require(options.Ollama.ResourceName, "Ollama:ResourceName");
+        yield return Require(options.Ollama.ImageTag, "Ollama:ImageTag");
+        yield return Require(options.Ollama.ModelResourceName, "Ollama:ModelResourceName");
+        yield return Require(options.Ollama.ModelName, "Ollama:ModelName");
+        yield return Require(options.Ollama.DataVolumeName, "Ollama:DataVolumeName");
+        yield return Require(options.Keycloak.ResourceName, "Keycloak:ResourceName");
+        yield return Require(options.Keycloak.Realm, "Keycloak:Realm");
+        yield return RequirePositive(options.Keycloak.HostPort, "Keycloak:HostPort");
+        yield return Require(options.Keycloak.DataVolumeName, "Keycloak:DataVolumeName");
+        yield return Require(options.Keycloak.RealmImportPath, "Keycloak:RealmImportPath");
+        yield return Require(options.Keycloak.ClientId, "Keycloak:ClientId");
+        yield return Require(options.Keycloak.ServiceClientId, "Keycloak:ServiceClientId");
+        yield return Require(options.Keycloak.Issuer, "Keycloak:Issuer");
+        yield return Require(options.Keycloak.RedirectUri, "Keycloak:RedirectUri");
+        yield return RequireAuthorizationScopes(options.Keycloak.AuthorizationScopes, "Keycloak:AuthorizationScopes");
     }
 
     private static string Require(string? value, string key)
@@ -118,5 +173,12 @@ internal static class AppHostOptionsExtensions
         return value > 0
             ? string.Empty
             : $"{key} must be greater than 0";
+    }
+
+    private static string RequireAuthorizationScopes(string[] scopes, string key)
+    {
+        return scopes.Length > 0 && scopes.All(scope => !string.IsNullOrWhiteSpace(scope))
+            ? string.Empty
+            : $"{key} must include at least one non-empty scope";
     }
 }

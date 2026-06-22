@@ -95,6 +95,12 @@ public static class InfrastructureRegistrations
             .BindConfiguration(AgentRuntimeOptions.SectionName);
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
         services.AddOpenAIImplementation();
+        if (configuration.GetConnectionString(OllamaAgentRuntime.ConnectionName) is { Length: > 0 })
+        {
+            services.AddScoped<IAgentRuntimeProvider, OllamaAgentRuntime>();
+        }
+
+        services.AddScoped<IAgentRuntime, ProviderDispatchingAgentRuntime>();
         services.AddGoogleCalendarImplementation();
         services.AddScoped<IBlobStorageService>(provider =>
             provider.GetService<BlobServiceClient>() is { } blobServiceClient

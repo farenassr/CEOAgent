@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
-using CeoAgent.Application.Abstractions.AI;
 using CeoAgent.Application.Abstractions.OpenAI;
 using CeoAgent.Infrastructure.Implementation.OpenAI;
 using CeoAgent.Infrastructure.Persistence.Extensions;
@@ -12,13 +9,12 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI.Responses;
-using ConversationEntity = CeoAgent.Infrastructure.Entities.Conversation;
 
 namespace CeoAgent.Infrastructure.Implementation.AI;
 
 #pragma warning disable OPENAI001
 
-internal sealed class MicrosoftAgentRuntime(
+internal sealed class OpenAIAgentRuntime(
     CeoAgentDbContext dbContext,
     IOpenAIResponsesClientFactory<ResponsesClient> clientFactory,
     AgentFunctionCatalog functionCatalog,
@@ -28,18 +24,16 @@ internal sealed class MicrosoftAgentRuntime(
     IServiceProvider serviceProvider,
     ILoggerFactory loggerFactory,
     IOptions<AgentRuntimeOptions> options,
-    IOptions<OpenAIAgentRuntimeOptions> openAiOptions) : IAgentRuntime
+    IOptions<OpenAIAgentRuntimeOptions> openAiOptions) : IAgentRuntimeProvider
 {
-    private static readonly JsonSerializerOptions SessionJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
-    };
     private readonly AgentRuntimeOptions runtimeOptions = options.Value;
     private readonly OpenAIAgentRuntimeOptions openAiRuntimeOptions = openAiOptions.Value;
 
-    public bool CanEstimateCost(LlmProvider provider, string modelName)
+    public LlmProvider Provider => LlmProvider.OpenAI;
+
+    public bool CanEstimateCost(string modelName)
     {
-        return provider == LlmProvider.OpenAI && openAiRuntimeOptions.TryGetPricing(modelName, out _);
+        return openAiRuntimeOptions.TryGetPricing(modelName, out _);
     }
 
     public async Task<AgentTurnResult> RunTurnAsync(
@@ -48,7 +42,7 @@ internal sealed class MicrosoftAgentRuntime(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.Provider != LlmProvider.OpenAI)
+        if (request.Provider != Provider)
         {
             throw new NotSupportedException($"LLM provider '{request.Provider}' is not supported.");
         }
@@ -58,8 +52,12 @@ internal sealed class MicrosoftAgentRuntime(
             .SingleAsync(entity => entity.Id == request.ConversationId, cancellationToken);
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var resetReason = ResolveSessionResetReason(conversation, request, now);
-        ApplyConversationSnapshot(conversation, request);
+        var resetReason = AgentRuntimeSessionState.ResolveSessionResetReason(
+            conversation,
+            request,
+            now,
+            runtimeOptions);
+        AgentRuntimeSessionState.ApplyConversationSnapshot(conversation, request);
 
         var client = await clientFactory.GetClientAsync(cancellationToken);
         var tools = await functionCatalog.GetEnabledFunctionsAsync(
@@ -81,7 +79,11 @@ internal sealed class MicrosoftAgentRuntime(
             loggerFactory: loggerFactory,
             services: serviceProvider);
 
-        var session = await CreateSessionAsync(agent, conversation, resetReason, cancellationToken);
+        var session = await AgentRuntimeSessionState.CreateSessionAsync(
+            agent,
+            conversation,
+            resetReason,
+            cancellationToken);
         var turnContext = new AgentTurnContext
         {
             OrganizationId = request.OrganizationId,
@@ -118,21 +120,16 @@ internal sealed class MicrosoftAgentRuntime(
         var providerConversationId = session.ConversationId;
         var sessionJson = (await agent.SerializeSessionAsync(
             session,
-            SessionJsonOptions,
+            AgentRuntimeSessionState.SessionJsonOptions,
             cancellationToken)).GetRawText();
-
-        conversation.ProviderConversationId = providerConversationId;
-        conversation.ProviderLastResponseId = nativeResponse.Id;
-        conversation.AgentSessionJson = sessionJson;
-        conversation.AgentSessionStartedAt = resetReason is null && conversation.AgentSessionStartedAt is not null
-            ? conversation.AgentSessionStartedAt
-            : now;
-        conversation.AgentSessionLastUsedAt = now;
-        conversation.AgentSessionExpiresAt = now.AddHours(runtimeOptions.SessionIdleExpirationHours);
-        conversation.AgentSessionTurnCount = resetReason is null
-            ? conversation.AgentSessionTurnCount + 1
-            : 1;
-        conversation.AgentSessionResetReason = resetReason;
+        AgentRuntimeSessionState.ApplyConversationSession(
+            conversation,
+            providerConversationId,
+            nativeResponse.Id,
+            sessionJson,
+            resetReason,
+            now,
+            runtimeOptions);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -148,88 +145,6 @@ internal sealed class MicrosoftAgentRuntime(
             turnContext.ToolInvocationCount,
             resetReason is not null,
             resetReason);
-    }
-
-    private static async Task<ChatClientAgentSession> CreateSessionAsync(
-        ChatClientAgent agent,
-        ConversationEntity conversation,
-        string? resetReason,
-        CancellationToken cancellationToken)
-    {
-        if (resetReason is not null)
-        {
-            return (ChatClientAgentSession)await agent.CreateSessionAsync(cancellationToken);
-        }
-
-        if (!string.IsNullOrWhiteSpace(conversation.AgentSessionJson))
-        {
-            using var document = JsonDocument.Parse(conversation.AgentSessionJson);
-            return (ChatClientAgentSession)await agent.DeserializeSessionAsync(
-                document.RootElement,
-                SessionJsonOptions,
-                cancellationToken);
-        }
-
-        if (!string.IsNullOrWhiteSpace(conversation.ProviderConversationId))
-        {
-            var session = await agent.CreateSessionAsync(
-                conversation.ProviderConversationId,
-                cancellationToken);
-            return (ChatClientAgentSession)session;
-        }
-
-        return (ChatClientAgentSession)await agent.CreateSessionAsync(cancellationToken);
-    }
-
-    private string? ResolveSessionResetReason(
-        ConversationEntity conversation,
-        AgentTurnRequest request,
-        DateTime now)
-    {
-        if (conversation.LlmProvider is not null && conversation.LlmProvider != request.Provider)
-        {
-            return "provider_changed";
-        }
-
-        if (!string.IsNullOrWhiteSpace(conversation.ModelName)
-            && !string.Equals(conversation.ModelName, request.ModelName, StringComparison.Ordinal))
-        {
-            return "model_changed";
-        }
-
-        if (conversation.AgentSessionTurnCount <= 0
-            || string.IsNullOrWhiteSpace(conversation.AgentSessionJson)
-                && string.IsNullOrWhiteSpace(conversation.ProviderConversationId))
-        {
-            return "new_session";
-        }
-
-        if (conversation.AgentSessionExpiresAt is { } expiresAt && expiresAt <= now)
-        {
-            return "idle_expired";
-        }
-
-        if (conversation.AgentSessionLastUsedAt is { } lastUsed
-            && lastUsed.AddHours(runtimeOptions.SessionIdleExpirationHours) <= now)
-        {
-            return "idle_expired";
-        }
-
-        if (runtimeOptions.MaxSessionTurns > 0
-            && conversation.AgentSessionTurnCount >= runtimeOptions.MaxSessionTurns)
-        {
-            return "max_turns";
-        }
-
-        return null;
-    }
-
-    private static void ApplyConversationSnapshot(
-        ConversationEntity conversation,
-        AgentTurnRequest request)
-    {
-        conversation.LlmProvider ??= request.Provider;
-        conversation.ModelName ??= request.ModelName;
     }
 
     private static double? EstimatedCostUsd(

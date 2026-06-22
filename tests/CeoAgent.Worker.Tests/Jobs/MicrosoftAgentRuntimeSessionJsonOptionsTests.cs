@@ -12,7 +12,7 @@ public sealed class MicrosoftAgentRuntimeSessionJsonOptionsTests
     public void SessionJsonOptions_CanResolveChatClientAgentSessionMetadata()
     {
         var runtimeType = typeof(AgentFunctionInvocationGuard).Assembly.GetType(
-            "CeoAgent.Infrastructure.Implementation.AI.MicrosoftAgentRuntime",
+            "CeoAgent.Infrastructure.Implementation.AI.AgentRuntimeSessionState",
             throwOnError: true)!;
         var optionsField = runtimeType.GetField(
             "SessionJsonOptions",

@@ -7,4 +7,7 @@ public enum LlmProvider
 {
     [JsonStringEnumMemberName("openai")]
     OpenAI = 1,
+
+    [JsonStringEnumMemberName("ollama")]
+    Ollama = 2,
 }

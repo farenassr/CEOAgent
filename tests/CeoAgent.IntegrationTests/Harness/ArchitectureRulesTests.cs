@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Xml.Linq;
 using Shouldly;
 
@@ -108,6 +109,7 @@ public sealed partial class ArchitectureRulesTests
         {
             "Azure.Security.KeyVault.Secrets",
             "Google.Apis",
+            "OllamaSharp",
             "OpenAI.Responses",
             "Microsoft.Agents.AI.OpenAI",
             "Refit",
@@ -129,12 +131,21 @@ public sealed partial class ArchitectureRulesTests
                     "src",
                     "CeoAgent.Infrastructure",
                     "CEOAgent.Infrastructure.csproj");
+                var isWorkerCompositionRoot = relativePath == Path.Combine(
+                        "src",
+                        "CeoAgent.Worker",
+                        "Program.cs")
+                    || relativePath == Path.Combine(
+                        "src",
+                        "CeoAgent.Worker",
+                        "CEOAgent.Worker.csproj");
                 var text = File.ReadAllText(filePath);
                 foreach (var marker in providerMarkers)
                 {
                     if (!isInfrastructureImplementation
                         && !isInfrastructureApiClient
                         && !isInfrastructureProjectFile
+                        && !(marker == "OllamaSharp" && isWorkerCompositionRoot)
                         && text.Contains(marker, StringComparison.Ordinal))
                     {
                         violations.Add($"{relativePath} contains {marker}");
@@ -382,6 +393,80 @@ public sealed partial class ArchitectureRulesTests
     }
 
     [Test]
+    public void AppHost_Ollama_IsLocalOnlyAndPinsGemmaModel()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var appHostOptions = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "AppHostOptions.cs"));
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+        var appHostProject = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "CEOAgent.AppHost.csproj"));
+        var workerProject = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.Worker",
+            "CEOAgent.Worker.csproj"));
+        var workerProgram = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.Worker",
+            "Program.cs"));
+        var ollamaRuntime = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.Infrastructure",
+            "Implementation",
+            "AI",
+            "OllamaAgentRuntime.cs"));
+        var appHostSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "appsettings.json"));
+
+        appHostProject.ShouldContain("CommunityToolkit.Aspire.Hosting.Ollama");
+        workerProject.ShouldContain("CommunityToolkit.Aspire.OllamaSharp");
+        appHostOptions.ShouldContain("public OllamaOptions Ollama");
+        appHostOptions.ShouldContain("public string? ImageTag");
+        appHostOptions.ShouldContain("Require(options.Ollama.ImageTag, \"Ollama:ImageTag\")");
+        appHostOptions.ShouldContain("Require(options.Ollama.ModelName, \"Ollama:ModelName\")");
+        appHostSettings.ShouldContain("\"ImageTag\": \"0.30.10\"");
+        appHostSettings.ShouldContain("\"ModelName\": \"hf.co/unsloth/gemma-4-E2B-it-GGUF:Q4_K_M\"");
+        appHostSettings.ShouldContain("\"ModelResourceName\": \"ollama-gemma-4-e2b-it-q4-k-m\"");
+        ceoAgentApplication.ShouldContain("!builder.ExecutionContext.IsPublishMode");
+        ceoAgentApplication.ShouldContain("builder.AddOllama(options.Ollama.ResourceName!)");
+        ceoAgentApplication.ShouldContain(".WithImageTag(options.Ollama.ImageTag!)");
+        ceoAgentApplication.ShouldContain("ollama.WithOpenWebUI(webui =>");
+        ceoAgentApplication.ShouldContain("webui.WithDataVolume(\"ceoagent-openwebui-data\")");
+        ceoAgentApplication.ShouldContain(".WithUrlForEndpoint(\"http\", url =>");
+        ceoAgentApplication.ShouldContain("url.DisplayText = \"Open WebUI Chat\";");
+        ceoAgentApplication.ShouldContain("url.Url = \"/\";");
+        ceoAgentApplication.ShouldContain("ollama.AddModel(options.Ollama.ModelResourceName!, options.Ollama.ModelName!)");
+        ceoAgentApplication.ShouldContain("worker.WithReference(ollamaModel)");
+        workerProgram.ShouldContain("AddOllamaApiClient(\"ollama-gemma-4-e2b-it-q4-k-m\")");
+        workerProgram.ShouldContain("AddHttpClient(\"ollama-gemma-4-e2b-it-q4-k-m_httpClient\")");
+        workerProgram.ShouldContain("RemoveAllResilienceHandlers()");
+        ollamaRuntime.ShouldContain("new ChatClientAgent(");
+        ollamaRuntime.ShouldContain("FunctionInvoker = invocationGuard.InvokeAsync");
+        ollamaRuntime.ShouldContain("MaxOutputTokens = request.MaxOutputTokenCount");
+        ollamaRuntime.ShouldContain("chatOptions.AdditionalProperties[\"think\"] = false;");
+
+        ceoAgentApplication.ShouldNotContain("LlmProviders__Ollama");
+        ceoAgentApplication.ShouldNotContain("Secrets__llm__ollama");
+        ceoAgentApplication.ShouldNotContain("options.Ollama.Port");
+        appHostOptions.ShouldNotContain("Ollama:Port");
+        appHostSettings.ShouldNotContain("\"Port\": 11434");
+    }
+
+    [Test]
     public void AppHost_RuntimePortsAndPostgresSettings_ComeFromAppSettings()
     {
         var repoRoot = FindRepositoryRoot();
@@ -498,14 +583,94 @@ public sealed partial class ArchitectureRulesTests
 
         appHostSettings.ShouldContain("\"ClientId\": \"ceo-agent-api\"");
         appHostSettings.ShouldContain("\"ServiceClientId\": \"ceo-agent-service\"");
+        appHostSettings.ShouldContain("\"ResourceName\": \"keycloak\"");
+        appHostSettings.ShouldContain("\"Realm\": \"ceo-agent\"");
+        appHostSettings.ShouldContain("\"HostPort\": 8082");
         appHostSettings.ShouldContain("\"AuthorizationScopes\"");
         appHostSettings.ShouldContain("\"organization\"");
         apiFactory.ShouldContain("builder.UseSetting(\"Keycloak:ClientId\", \"ceo-agent-api\")");
-        ceoAgentApplication.ShouldContain("builder.AddKeycloakEnvironment(apiService, keyVault);");
+        ceoAgentApplication.ShouldContain("builder.AddKeycloakEnvironment(apiService, keyVault, options.Keycloak, options.ApiService);");
+        keycloakEnvironment.ShouldContain("builder.AddKeycloak(options.ResourceName!, options.HostPort)");
+        keycloakEnvironment.ShouldContain(".WithEndpointProxySupport(false)");
+        keycloakEnvironment.ShouldContain(".WithDataVolume(options.DataVolumeName!)");
+        keycloakEnvironment.ShouldContain(".WithRealmImport(options.RealmImportPath!)");
+        keycloakEnvironment.ShouldContain("BuildLocalIssuer(options)");
+        keycloakEnvironment.ShouldContain("https://localhost:{options.HostPort}/realms/{options.Realm}");
         keycloakEnvironment.ShouldContain(".WithEnvironment(\"Keycloak__ServiceClientId\"");
+        keycloakEnvironment.ShouldContain("builder.AddParameter(");
         keycloakEnvironment.ShouldContain("keycloak-service-client-secret");
+        keycloakEnvironment.ShouldContain("local-dev-only-service-secret");
 
         FindMatchingSourceLines("ceo-agent-web").ShouldBeEmpty();
+    }
+
+    [Test]
+    public void KeycloakRealmImport_ConfiguresScalarClientServiceClientAndLocalUsers()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var realmImportPath = Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "Keycloak",
+            "Realms",
+            "ceo-agent-realm.json");
+
+        using var realmDocument = JsonDocument.Parse(File.ReadAllText(realmImportPath));
+        var realm = realmDocument.RootElement;
+        realm.GetProperty("realm").GetString().ShouldBe("ceo-agent");
+        realm.GetProperty("enabled").GetBoolean().ShouldBeTrue();
+
+        var apiClient = FindObjectByStringProperty(realm.GetProperty("clients"), "clientId", "ceo-agent-api");
+        apiClient.GetProperty("publicClient").GetBoolean().ShouldBeTrue();
+        apiClient.GetProperty("standardFlowEnabled").GetBoolean().ShouldBeTrue();
+        apiClient.GetProperty("directAccessGrantsEnabled").GetBoolean().ShouldBeFalse();
+        apiClient.GetProperty("attributes").GetProperty("pkce.code.challenge.method").GetString().ShouldBe("S256");
+        var postLogoutRedirectUris = apiClient.GetProperty("attributes").GetProperty("post.logout.redirect.uris").GetString();
+        postLogoutRedirectUris.ShouldNotBeNull();
+        postLogoutRedirectUris.ShouldContain("http://localhost:5481/scalar/");
+        JsonArrayContainsString(apiClient.GetProperty("redirectUris"), "http://localhost:*/scalar/*").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("redirectUris"), "https://localhost:*/scalar/*").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("redirectUris"), "http://localhost:5481/scalar/").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("redirectUris"), "https://localhost:7584/scalar/*").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("webOrigins"), "http://localhost:5481").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("webOrigins"), "https://localhost:7584").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("webOrigins"), "http://localhost:*").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("webOrigins"), "https://localhost:*").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("defaultClientScopes"), "profile").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("defaultClientScopes"), "email").ShouldBeTrue();
+        JsonArrayContainsString(apiClient.GetProperty("defaultClientScopes"), "organization").ShouldBeTrue();
+        var audienceMapper = FindObjectByStringProperty(
+            apiClient.GetProperty("protocolMappers"),
+            "name",
+            "ceo-agent-api audience");
+        audienceMapper.GetProperty("protocolMapper").GetString().ShouldBe("oidc-audience-mapper");
+        audienceMapper.GetProperty("config").GetProperty("included.client.audience").GetString().ShouldBe("ceo-agent-api");
+        audienceMapper.GetProperty("config").GetProperty("access.token.claim").GetString().ShouldBe("true");
+
+        var clientScopes = realm.GetProperty("clientScopes");
+        FindObjectByStringProperty(clientScopes, "name", "profile").GetProperty("protocol").GetString().ShouldBe("openid-connect");
+        FindObjectByStringProperty(clientScopes, "name", "email").GetProperty("protocol").GetString().ShouldBe("openid-connect");
+        FindObjectByStringProperty(clientScopes, "name", "organization").GetProperty("protocol").GetString().ShouldBe("openid-connect");
+
+        var serviceClient = FindObjectByStringProperty(realm.GetProperty("clients"), "clientId", "ceo-agent-service");
+        serviceClient.GetProperty("publicClient").GetBoolean().ShouldBeFalse();
+        serviceClient.GetProperty("serviceAccountsEnabled").GetBoolean().ShouldBeTrue();
+        serviceClient.GetProperty("secret").GetString().ShouldBe("local-dev-only-service-secret");
+
+        var users = realm.GetProperty("users");
+        var admin = FindObjectByStringProperty(users, "username", "admin");
+        var laTerrazaAdmin = FindObjectByStringProperty(users, "username", "admin-la-terraza");
+        var operatorUser = FindObjectByStringProperty(users, "username", "operator@ceoagent.dev");
+        UserHasOrganizationAttribute(admin).ShouldBeTrue();
+        UserHasOrganizationAttribute(laTerrazaAdmin).ShouldBeTrue();
+        UserHasOrganizationAttribute(operatorUser).ShouldBeTrue();
+        UserHasPassword(admin, "Globant1").ShouldBeTrue();
+        UserHasPassword(laTerrazaAdmin, "admin").ShouldBeTrue();
+        UserHasTemporaryPasswordDisabled(admin).ShouldBeTrue();
+        UserHasTemporaryPasswordDisabled(laTerrazaAdmin).ShouldBeTrue();
+        UserHasTemporaryPasswordDisabled(operatorUser).ShouldBeTrue();
     }
 
     [Test]
@@ -696,6 +861,73 @@ public sealed partial class ArchitectureRulesTests
         remainingApiServiceContractFiles.ShouldNotContain("QueueMessageEnqueuedResponse.cs");
         remainingApiServiceContractFiles.ShouldNotContain("QueueMessagesResponse.cs");
         remainingApiServiceContractFiles.ShouldNotContain("QueuesDiagnosticsResponse.cs");
+    }
+
+    private static JsonElement FindObjectByStringProperty(JsonElement array, string propertyName, string expectedValue)
+    {
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.TryGetProperty(propertyName, out var property)
+                && string.Equals(property.GetString(), expectedValue, StringComparison.Ordinal))
+            {
+                return item;
+            }
+        }
+
+        throw new InvalidOperationException($"Could not find object with {propertyName}='{expectedValue}'.");
+    }
+
+    private static bool JsonArrayContainsString(JsonElement array, string expectedValue)
+    {
+        return array.EnumerateArray()
+            .Any(item => string.Equals(item.GetString(), expectedValue, StringComparison.Ordinal));
+    }
+
+    private static bool UserHasOrganizationAttribute(JsonElement user)
+    {
+        if (!user.TryGetProperty("attributes", out var attributes)
+            || !attributes.TryGetProperty("organization", out var organizationValues))
+        {
+            return false;
+        }
+
+        return organizationValues
+            .EnumerateArray()
+            .Select(value => value.GetString())
+            .Any(value => string.Equals(
+                value,
+                """{"la-terraza-org":{"id":"b36cfb51-83bd-4376-b7d7-0502141ff6ae"}}""",
+                StringComparison.Ordinal));
+    }
+
+    private static bool UserHasTemporaryPasswordDisabled(JsonElement user)
+    {
+        if (!user.TryGetProperty("credentials", out var credentials))
+        {
+            return false;
+        }
+
+        return credentials
+            .EnumerateArray()
+            .Any(credential => credential.TryGetProperty("type", out var type)
+                && string.Equals(type.GetString(), "password", StringComparison.Ordinal)
+                && credential.TryGetProperty("temporary", out var temporary)
+                && !temporary.GetBoolean());
+    }
+
+    private static bool UserHasPassword(JsonElement user, string expectedPassword)
+    {
+        if (!user.TryGetProperty("credentials", out var credentials))
+        {
+            return false;
+        }
+
+        return credentials
+            .EnumerateArray()
+            .Any(credential => credential.TryGetProperty("type", out var type)
+                && string.Equals(type.GetString(), "password", StringComparison.Ordinal)
+                && credential.TryGetProperty("value", out var value)
+                && string.Equals(value.GetString(), expectedPassword, StringComparison.Ordinal));
     }
 
     private static string[] FindMatchingSourceLines(string marker)
