@@ -29,6 +29,9 @@ public sealed class RuntimeShellTests
         html.ShouldContain("\"forceDarkModeState\":\"light\"");
         html.ShouldContain("ceo-agent-api");
         html.ShouldContain("\"selectedScopes\":[\"openid\",\"profile\",\"email\",\"organization\"]");
+        html.ShouldContain("Log out");
+        html.ShouldContain("protocol/openid-connect/logout?client_id=ceo-agent-api");
+        html.ShouldContain("post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A5481%2Fscalar%2F");
     }
 
     [Test]
@@ -42,7 +45,14 @@ public sealed class RuntimeShellTests
         var securitySchemes = document.RootElement
             .GetProperty("components")
             .GetProperty("securitySchemes");
-        securitySchemes.TryGetProperty("KeycloakOAuth", out _).ShouldBeTrue();
+        securitySchemes.TryGetProperty("KeycloakOAuth", out var keycloakSecurityScheme).ShouldBeTrue();
+        var authorizationCodeFlow = keycloakSecurityScheme
+            .GetProperty("flows")
+            .GetProperty("authorizationCode");
+        authorizationCodeFlow.GetProperty("authorizationUrl").GetString()
+            .ShouldBe("https://keycloak.test/realms/ceo-agent/protocol/openid-connect/auth");
+        authorizationCodeFlow.GetProperty("tokenUrl").GetString()
+            .ShouldBe("https://keycloak.test/realms/ceo-agent/protocol/openid-connect/token");
 
         var protectedOperation = GetOperation(document, "/v1/admin/companies", "post");
         OperationHasSecurityScheme(protectedOperation, "KeycloakOAuth").ShouldBeTrue();

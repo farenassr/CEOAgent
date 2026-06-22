@@ -2,6 +2,7 @@ using CeoAgent.Application.Abstractions.AITools;
 using CeoAgent.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using System.Text.Json;
 
 namespace CeoAgent.Infrastructure.Implementation.AI;
 
@@ -11,7 +12,8 @@ internal sealed class AgentFunctionCatalog(
 {
     public async Task<IList<AITool>> GetEnabledFunctionsAsync(
         Guid organizationId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<JsonElement, JsonElement>? schemaTransform = null)
     {
         var tools = await toolCatalog.GetToolsAsync(
             new AgentToolCatalogContext(organizationId),
@@ -33,12 +35,22 @@ internal sealed class AgentFunctionCatalog(
 
         return [.. enabledTools
             .Where(entity => toolsByKey.ContainsKey(entity.ToolKey))
-            .Select(entity => (AITool)new AgentToolAIFunction(
-                toolsByKey[entity.ToolKey],
-                entity.Id,
-                entity.ToolKey,
-                entity.Description ?? toolsByKey[entity.ToolKey].Description,
-                (entity.ParametersSchema ?? toolsByKey[entity.ToolKey].ParametersSchema).Clone(),
-                toolsByKey[entity.ToolKey].IsMutating))];
+            .Select(entity =>
+            {
+                var tool = toolsByKey[entity.ToolKey];
+                var schema = (entity.ParametersSchema ?? tool.ParametersSchema).Clone();
+                if (schemaTransform is not null)
+                {
+                    schema = schemaTransform(schema);
+                }
+
+                return (AITool)new AgentToolAIFunction(
+                    tool,
+                    entity.Id,
+                    entity.ToolKey,
+                    entity.Description ?? tool.Description,
+                    schema,
+                    tool.IsMutating);
+            })];
     }
 }

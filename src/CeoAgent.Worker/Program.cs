@@ -32,6 +32,16 @@ if (builder.Configuration.GetConnectionString("blobs") is { Length: > 0 })
     builder.Services.AddAzureBlobServiceMetadataHealthCheck();
 }
 
+if (builder.Configuration.GetConnectionString("ollama-gemma-4-e2b-it-q4-k-m") is { Length: > 0 })
+{
+    var ollamaClientBuilder = builder.AddOllamaApiClient("ollama-gemma-4-e2b-it-q4-k-m");
+    builder.Services
+        .AddHttpClient("ollama-gemma-4-e2b-it-q4-k-m_httpClient")
+        .RemoveAllResilienceHandlers()
+        .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan);
+    ollamaClientBuilder.AddChatClient();
+}
+
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddWorkerRuntime();
 

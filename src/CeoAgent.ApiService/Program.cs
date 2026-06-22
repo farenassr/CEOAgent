@@ -87,6 +87,7 @@ builder.Services
         options.Authority = keycloakOptions.Issuer;
         options.Audience = keycloakOptions.ClientId;
         options.MapInboundClaims = false;
+        options.RequireHttpsMetadata = !IsLocalDevelopmentOrTesting(builder.Environment);
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -160,6 +161,7 @@ if (ShouldExposeApiReference(app.Environment))
                 flow.CredentialsLocation = CredentialsLocation.Body;
                 flow.SelectedScopes = keycloakOptions.AuthorizationScopes;
             })
+            .AddHeaderContent(BuildScalarLogoutHeader(keycloakOptions))
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
             .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl);
     });
@@ -181,10 +183,16 @@ await app.RunAsync();
 
 static bool ShouldExposeApiReference(IHostEnvironment environment)
 {
-    return environment.IsDevelopment()
-        || environment.IsEnvironment("Local")
+    return IsLocalDevelopmentOrTesting(environment)
         || environment.IsEnvironment("Dev")
         || environment.IsEnvironment("Tst");
+}
+
+static bool IsLocalDevelopmentOrTesting(IHostEnvironment environment)
+{
+    return environment.IsDevelopment()
+        || environment.IsEnvironment("Local")
+        || environment.IsEnvironment("Testing");
 }
 
 static string ResolveScalarRedirectUri(string configuredRedirectUri)
@@ -192,4 +200,18 @@ static string ResolveScalarRedirectUri(string configuredRedirectUri)
     return string.IsNullOrWhiteSpace(configuredRedirectUri)
         ? "http://localhost:5481/scalar/"
         : configuredRedirectUri;
+}
+
+static string BuildScalarLogoutHeader(KeycloakOptions keycloakOptions)
+{
+    var redirectUri = ResolveScalarRedirectUri(keycloakOptions.RedirectUri);
+    var logoutUrl = $"{keycloakOptions.Issuer.TrimEnd('/')}/protocol/openid-connect/logout"
+        + $"?client_id={Uri.EscapeDataString(keycloakOptions.ClientId)}"
+        + $"&post_logout_redirect_uri={Uri.EscapeDataString(redirectUri)}";
+
+    return $$"""
+        <header style="display:flex;justify-content:flex-end;padding:12px 24px;border-bottom:1px solid #e7e7e7;background:#fff;">
+          <a href="{{logoutUrl}}" style="font:500 14px system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1f2937;text-decoration:none;border:1px solid #d1d5db;border-radius:6px;padding:8px 12px;background:#f9fafb;">Log out</a>
+        </header>
+        """;
 }

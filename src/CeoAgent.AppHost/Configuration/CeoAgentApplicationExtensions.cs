@@ -32,6 +32,24 @@ internal static class CeoAgentApplicationExtensions
         var queues = storage.AddQueues(options.Resources.Queues!);
         var blobs = storage.AddBlobs(options.Resources.Blobs!);
 
+        IResourceBuilder<OllamaModelResource>? ollamaModel = null;
+        if (!builder.ExecutionContext.IsPublishMode)
+        {
+            var ollama = builder.AddOllama(options.Ollama.ResourceName!)
+                .WithImageTag(options.Ollama.ImageTag!)
+                .WithDataVolume(options.Ollama.DataVolumeName!);
+            ollama.WithOpenWebUI(webui =>
+            {
+                webui.WithDataVolume("ceoagent-openwebui-data")
+                    .WithUrlForEndpoint("http", url =>
+                    {
+                        url.DisplayText = "Open WebUI Chat";
+                        url.Url = "/";
+                    });
+            });
+            ollamaModel = ollama.AddModel(options.Ollama.ModelResourceName!, options.Ollama.ModelName!);
+        }
+
         var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
             .WithReference(queues)
             .WithReference(blobs)
@@ -93,10 +111,16 @@ internal static class CeoAgentApplicationExtensions
                 .WaitFor(postgresDatabase)
                 .WithEnvironment("Secrets__llm__openai__api-key", openAIApiKey)
                 .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key");
+
+            if (ollamaModel is not null)
+            {
+                worker.WithReference(ollamaModel)
+                    .WaitFor(ollamaModel);
+            }
         }
 
         builder.AddProviderEnvironment(apiService, worker, keyVault, deploymentEnvironmentName);
-        builder.AddKeycloakEnvironment(apiService, keyVault);
+        builder.AddKeycloakEnvironment(apiService, keyVault, options.Keycloak, options.ApiService);
         builder.AddLangfuseEnvironment(apiService, worker, keyVault);
         builder.AddLangSmithEnvironment(apiService, worker, keyVault);
     }

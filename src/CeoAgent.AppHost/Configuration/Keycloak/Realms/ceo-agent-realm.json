@@ -1,0 +1,265 @@
+{
+  "realm": "ceo-agent",
+  "displayName": "CeoAgent Local",
+  "enabled": true,
+  "sslRequired": "external",
+  "bruteForceProtected": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "clients": [
+    {
+      "clientId": "ceo-agent-api",
+      "name": "CeoAgent API",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:5481",
+      "baseUrl": "/scalar/",
+      "redirectUris": [
+        "http://localhost:*/scalar/*",
+        "https://localhost:*/scalar/*",
+        "http://localhost:5481/scalar/",
+        "https://localhost:7584/scalar/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5481",
+        "https://localhost:7584",
+        "http://localhost:*",
+        "https://localhost:*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5481/scalar/##https://localhost:7584/scalar/##http://localhost:*/*##https://localhost:*/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "ceo-agent-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ceo-agent-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email",
+        "organization"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "ceo-agent-service",
+      "name": "CeoAgent Service Client",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "secret": "local-dev-only-service-secret"
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "profile",
+      "description": "User profile claims used by Scalar and local login.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "given name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "firstName",
+            "claim.name": "given_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "family name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "lastName",
+            "claim.name": "family_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "email",
+      "description": "User email claim used by Scalar and local login.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "email",
+            "claim.name": "email",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "email verified",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "emailVerified",
+            "claim.name": "email_verified",
+            "jsonType.label": "boolean",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "description": "Organization identifier claim used by CeoAgent tenancy.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "organization",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "organization",
+            "claim.name": "organization",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@ceoagent.dev",
+      "firstName": "CeoAgent",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": {
+        "organization": [
+          "{\"la-terraza-org\":{\"id\":\"b36cfb51-83bd-4376-b7d7-0502141ff6ae\"}}"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Globant1",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "admin-la-terraza",
+      "email": "admin-la-terraza@ceoagent.dev",
+      "firstName": "La Terraza",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": {
+        "organization": [
+          "{\"la-terraza-org\":{\"id\":\"b36cfb51-83bd-4376-b7d7-0502141ff6ae\"}}"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "operator@ceoagent.dev",
+      "email": "operator@ceoagent.dev",
+      "firstName": "CeoAgent",
+      "lastName": "Operator",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": {
+        "organization": [
+          "{\"la-terraza-org\":{\"id\":\"b36cfb51-83bd-4376-b7d7-0502141ff6ae\"}}"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "CeoAgent.Local123!",
+          "temporary": false
+        }
+      ],
+      "requiredActions": []
+    }
+  ]
+}

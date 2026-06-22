@@ -16,7 +16,8 @@ namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 /// </summary>
 public sealed class ConfigureAgentProfileEndpoint(
     CeoAgentDbContext dbContext,
-    IAdminTenantGuard tenantGuard) : Endpoint<AgentProfileRequest, AgentProfileResponse>
+    IAdminTenantGuard tenantGuard,
+    IHostEnvironment hostEnvironment) : Endpoint<AgentProfileRequest, AgentProfileResponse>
 {
     public override void Configure()
     {
@@ -34,6 +35,8 @@ public sealed class ConfigureAgentProfileEndpoint(
 
     public override async Task HandleAsync(AgentProfileRequest request, CancellationToken cancellationToken)
     {
+        AgentProfileProviderPolicy.Validate(request, hostEnvironment);
+
         var company = await tenantGuard.GetAuthenticatedCompanyAsync(trackChanges: true, cancellationToken);
         var organizationId = company.Id;
 
