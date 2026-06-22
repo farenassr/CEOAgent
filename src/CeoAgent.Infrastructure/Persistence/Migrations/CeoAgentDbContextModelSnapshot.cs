@@ -1074,6 +1074,9 @@ namespace CeoAgent.Infrastructure.Persistence.Migrations
                             b1.Property<string>("BlobName")
                                 .HasJsonPropertyName("blobName");
 
+                            b1.Property<string>("BlobUri")
+                                .HasJsonPropertyName("blobUri");
+
                             b1.Property<string>("MimeType")
                                 .HasJsonPropertyName("mimeType");
 

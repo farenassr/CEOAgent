@@ -46,18 +46,21 @@ public sealed class SendPaymentInstructionsToolTests
 
         var image = fixture.Messaging.ImageMessages.Single();
         image.IdempotencyKey.ShouldBe($"payment:{reservation.Id}");
-        image.Caption.ShouldContain("La reserva fue creada");
+        image.Caption.ShouldContain("¡Tu reserva ha sido creada!");
         image.Caption.ShouldContain("Reservation for 4");
         image.Caption.ShouldContain("Ada Lovelace");
-        image.Caption.ShouldContain("Numero de cuenta: 0011223344");
+        image.Caption.ShouldContain("2026-05-28 4:00 pm -05:00");
+        image.Caption.ShouldContain("0011223344");
         image.Caption.ShouldContain("QR");
-        image.Caption.ShouldContain("Monto: 50000 COP");
+        image.Caption.ShouldContain("50000 COP");
         image.Caption.ShouldContain("consumible");
-        image.Caption.ShouldContain("confirmada cuando recibamos el pago");
+        image.Caption.ShouldContain("confirmada al recibir el pago");
 
         var paymentMessage = await fixture.DbContext.Messages.SingleAsync(message =>
             message.ProviderMessageId == $"payment:{reservation.Id}");
         execution.Result.SendPaymentInstructions.PaymentMessageId.ShouldBe(paymentMessage.Id);
+        paymentMessage.Payload.ShouldNotBeNull();
+        paymentMessage.Payload.BlobUri.ShouldBe(fixture.PaymentAccountBlobUri);
 
         await fixture.DbContext.Entry(fixture.Conversation).ReloadAsync();
         fixture.Conversation.Status.ShouldBe(ConversationStatus.HandedOff);
@@ -347,6 +350,9 @@ public sealed class SendPaymentInstructionsToolTests
 
         public OrganizationContextAccessor OrganizationContext { get; }
 
+        public string PaymentAccountBlobUri { get; } =
+            "https://storage.test/private/organizations/contoso-bistro/payments/payment-accounts/default/qr.png";
+
         public ToolExecutionContext CreatePaymentExecutionContext(string idempotencyKey)
         {
             return new ToolExecutionContext(
@@ -411,6 +417,7 @@ public sealed class SendPaymentInstructionsToolTests
             var qrReference = BlobStorageNaming.ForPaymentQr("qr.png", account.Id);
             account.QrBlobContainer = qrReference.ContainerName;
             account.QrBlobName = qrReference.BlobName;
+            account.QrBlobUri = PaymentAccountBlobUri;
             DbContext.AddRange(bank, account);
             await DbContext.SaveChangesAsync();
         }

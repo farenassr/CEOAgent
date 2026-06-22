@@ -24,6 +24,7 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
             payload.Property(entity => entity.Sha256).HasJsonPropertyName("sha256");
             payload.Property(entity => entity.BlobContainer).HasJsonPropertyName("blobContainer");
             payload.Property(entity => entity.BlobName).HasJsonPropertyName("blobName");
+            payload.Property(entity => entity.BlobUri).HasJsonPropertyName("blobUri");
         });
         builder.HasIndex(entity => new { entity.OrganizationId, entity.ProviderMessageId }).IsUnique()
             .HasFilter("provider_message_id IS NOT NULL");

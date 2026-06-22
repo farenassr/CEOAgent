@@ -36,7 +36,7 @@ abstractions inside Infrastructure implementation folders.
 | `IWhatsAppChannelCredentialResolver` | `CeoAgent.Application/Abstractions/Messaging` | Resolve WhatsApp credential references for a company channel. |
 | `IGoogleCalendarIntegration` | `CeoAgent.Application/Abstractions/AITools/GoogleCalendar` | Calendar availability and reservation operations. Google Calendar is the MVP provider. |
 | `IPaymentQrImageProvider` | `CeoAgent.Application/Abstractions/Payments` | Reads backend-owned QR image bytes for reservation payment instructions. |
-| `IAgentRuntime` | `CeoAgent.Application/Abstractions/AI` | Provider-neutral model runtime. OpenAI is the MVP LLM provider and is implemented in Infrastructure. |
+| `IAgentRuntime` | `CeoAgent.Application/Abstractions/AI` | Provider-neutral model runtime. OpenAI, Gemini, and local Ollama implementations live in Infrastructure. |
 | Job constants/retry contracts | `CeoAgent.Application/Abstractions/Jobs` | Queue names and retry policy shared by API and Worker. |
 | Job payloads | `CeoAgent.Shared/Jobs` | Queue payload models shared by API and Worker. |
 
@@ -80,8 +80,9 @@ Microsoft Agent SDK
 - `agent_profile` stores company-level model policy. A new `conversation`
   snapshots the effective provider/model so later company config changes apply
   to future conversations, not active sessions.
-- OpenAI Responses is the MVP runtime provider. Foundry, Claude, and DeepSeek
-  may be added behind `IAgentRuntime` without changing Worker orchestration.
+- OpenAI Responses and Gemini Developer API run behind `IAgentRuntime`.
+  Foundry, Claude, and DeepSeek may be added behind the same boundary without
+  changing Worker orchestration.
 
 ## Credential Rules
 

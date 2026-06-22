@@ -109,6 +109,7 @@ public sealed partial class ArchitectureRulesTests
         {
             "Azure.Security.KeyVault.Secrets",
             "Google.Apis",
+            "Google.GenAI",
             "OllamaSharp",
             "OpenAI.Responses",
             "Microsoft.Agents.AI.OpenAI",
@@ -248,6 +249,7 @@ public sealed partial class ArchitectureRulesTests
             "AI",
             "AITools",
             "Company",
+            "Gemini",
             "Organization",
             "GoogleCalendar",
             "Messaging",
@@ -353,6 +355,33 @@ public sealed partial class ArchitectureRulesTests
     }
 
     /// <summary>
+    /// Verifies that local Azurite blobs survive AppHost restarts.
+    /// </summary>
+    [Test]
+    public void AppHost_Azurite_UsesStableDataVolume()
+    {
+        var repoRoot = FindRepositoryRoot();
+        var appHostOptions = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "AppHostOptions.cs"));
+        var ceoAgentApplication = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "CeoAgent.AppHost",
+            "Configuration",
+            "CeoAgentApplicationExtensions.cs"));
+        var appHostSettings = File.ReadAllText(Path.Combine(repoRoot, "src", "CeoAgent.AppHost", "appsettings.json"));
+
+        appHostOptions.ShouldContain("public string? DataVolumeName");
+        appHostOptions.ShouldContain("Require(options.Azurite.DataVolumeName, \"Azurite:DataVolumeName\")");
+        ceoAgentApplication.ShouldContain(".WithDataVolume(options.Azurite.DataVolumeName!)");
+        appHostSettings.ShouldContain("\"DataVolumeName\": \"ceoagent-azurite-data\"");
+    }
+
+    /// <summary>
     /// Verifies that Aspire dashboard resource links for the API open the Scalar reference directly.
     /// </summary>
     [Test]
@@ -384,8 +413,12 @@ public sealed partial class ArchitectureRulesTests
             "CeoAgentApplicationExtensions.cs"));
 
         ceoAgentApplication.ShouldContain("openai-api-key");
+        ceoAgentApplication.ShouldContain("gemini-api-key");
         ceoAgentApplication.ShouldContain("Secrets__llm__openai__api-key");
+        ceoAgentApplication.ShouldContain("Secrets__llm__gemini__api-key");
         ceoAgentApplication.ShouldContain("LlmProviders__OpenAI__ApiKeyReference");
+        ceoAgentApplication.ShouldContain("LlmProviders__Gemini__ApiKeyReference");
+        ceoAgentApplication.ShouldContain("publishKeyVault.AddSecret(\"GeminiApiKey\", geminiApiKey)");
         ceoAgentApplication.ShouldNotContain("anthropic-api-key");
         ceoAgentApplication.ShouldNotContain("deepseek-api-key");
         ceoAgentApplication.ShouldNotContain("Secrets__llm__anthropic__api-key");
@@ -524,6 +557,7 @@ public sealed partial class ArchitectureRulesTests
         ceoAgentApplication.ShouldContain("options.Azurite.BlobPort");
         ceoAgentApplication.ShouldContain("options.Azurite.QueuePort");
         ceoAgentApplication.ShouldContain("options.Azurite.TablePort");
+        ceoAgentApplication.ShouldContain("options.Azurite.DataVolumeName");
         ceoAgentApplication.ShouldContain("AddPostgresConnectionEnvironment(apiService, publishKeyVault, options.Postgres)");
         ceoAgentApplication.ShouldContain("AddPostgresConnectionEnvironment(worker, publishKeyVault, options.Postgres)");
         ceoAgentApplication.ShouldContain("apiService.WaitFor(postgresDatabase)");
@@ -560,6 +594,7 @@ public sealed partial class ArchitectureRulesTests
         appHostSettings.ShouldContain("\"BlobPort\": 10000");
         appHostSettings.ShouldContain("\"QueuePort\": 10001");
         appHostSettings.ShouldContain("\"TablePort\": 10002");
+        appHostSettings.ShouldContain("\"DataVolumeName\": \"ceoagent-azurite-data\"");
     }
 
     [Test]

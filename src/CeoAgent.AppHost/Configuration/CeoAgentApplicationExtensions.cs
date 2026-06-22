@@ -1,6 +1,4 @@
 using System.Globalization;
-using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.Configuration;
 
 namespace CeoAgent.AppHost.Configuration;
 
@@ -9,6 +7,7 @@ internal static class CeoAgentApplicationExtensions
     private const string LocalPostgresDefaultPassword = "postgres";
     private const string PostgresPasswordParameterName = "postgres-password";
     private const string OpenAIApiKeyParameterName = "openai-api-key";
+    private const string GeminiApiKeyParameterName = "gemini-api-key";
 
     public static void AddCeoAgentApplication(this IDistributedApplicationBuilder builder, AppHostOptions options)
     {
@@ -18,6 +17,7 @@ internal static class CeoAgentApplicationExtensions
             LocalPostgresDefaultPassword,
             secret: true);
         var openAIApiKey = builder.AddParameter(OpenAIApiKeyParameterName, secret: true);
+        var geminiApiKey = builder.AddParameter(GeminiApiKeyParameterName, secret: true);
         var keyVault = builder.ExecutionContext.IsPublishMode
             ? builder.AddAzureKeyVault("keyvault")
             : null;
@@ -27,7 +27,8 @@ internal static class CeoAgentApplicationExtensions
             .RunAsEmulator(emulator => emulator
                 .WithBlobPort(options.Azurite.BlobPort)
                 .WithQueuePort(options.Azurite.QueuePort)
-                .WithTablePort(options.Azurite.TablePort));
+                .WithTablePort(options.Azurite.TablePort)
+                .WithDataVolume(options.Azurite.DataVolumeName!));
 
         var queues = storage.AddQueues(options.Resources.Queues!);
         var blobs = storage.AddBlobs(options.Resources.Blobs!);
@@ -35,19 +36,19 @@ internal static class CeoAgentApplicationExtensions
         IResourceBuilder<OllamaModelResource>? ollamaModel = null;
         if (!builder.ExecutionContext.IsPublishMode)
         {
-            var ollama = builder.AddOllama(options.Ollama.ResourceName!)
-                .WithImageTag(options.Ollama.ImageTag!)
-                .WithDataVolume(options.Ollama.DataVolumeName!);
-            ollama.WithOpenWebUI(webui =>
-            {
-                webui.WithDataVolume("ceoagent-openwebui-data")
-                    .WithUrlForEndpoint("http", url =>
-                    {
-                        url.DisplayText = "Open WebUI Chat";
-                        url.Url = "/";
-                    });
-            });
-            ollamaModel = ollama.AddModel(options.Ollama.ModelResourceName!, options.Ollama.ModelName!);
+            //var ollama = builder.AddOllama(options.Ollama.ResourceName!)
+            //    .WithImageTag(options.Ollama.ImageTag!)
+            //    .WithDataVolume(options.Ollama.DataVolumeName!);
+            //ollama.WithOpenWebUI(webui =>
+            //{
+            //    webui.WithDataVolume("ceoagent-openwebui-data")
+            //        .WithUrlForEndpoint("http", url =>
+            //        {
+            //            url.DisplayText = "Open WebUI Chat";
+            //            url.Url = "/";
+            //        });
+            //});
+            //ollamaModel = ollama.AddModel(options.Ollama.ModelResourceName!, options.Ollama.ModelName!);
         }
 
         var apiService = builder.AddProject<Projects.CeoAgent_ApiService>("api")
@@ -93,11 +94,14 @@ internal static class CeoAgentApplicationExtensions
             var publishKeyVault = keyVault ?? throw new InvalidOperationException("Key Vault is required for publish mode.");
             publishKeyVault.AddSecret(options.Postgres.PasswordSecretName!, postgresPassword);
             publishKeyVault.AddSecret("OpenAIApiKey", openAIApiKey);
+            publishKeyVault.AddSecret("GeminiApiKey", geminiApiKey);
             AddPostgresConnectionEnvironment(apiService, publishKeyVault, options.Postgres);
             AddPostgresConnectionEnvironment(worker, publishKeyVault, options.Postgres);
             worker
                 .WithEnvironment("Secrets__llm__openai__api-key", publishKeyVault.GetSecret("OpenAIApiKey"))
-                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key");
+                .WithEnvironment("Secrets__llm__gemini__api-key", publishKeyVault.GetSecret("GeminiApiKey"))
+                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key")
+                .WithEnvironment("LlmProviders__Gemini__ApiKeyReference", "kv://llm/gemini/api-key");
             apiService.WaitFor(postgresDatabase);
             worker.WaitFor(postgresDatabase);
         }
@@ -110,7 +114,9 @@ internal static class CeoAgentApplicationExtensions
                 .WithReference(postgresDatabase)
                 .WaitFor(postgresDatabase)
                 .WithEnvironment("Secrets__llm__openai__api-key", openAIApiKey)
-                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key");
+                .WithEnvironment("Secrets__llm__gemini__api-key", geminiApiKey)
+                .WithEnvironment("LlmProviders__OpenAI__ApiKeyReference", "kv://llm/openai/api-key")
+                .WithEnvironment("LlmProviders__Gemini__ApiKeyReference", "kv://llm/gemini/api-key");
 
             if (ollamaModel is not null)
             {
