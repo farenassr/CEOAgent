@@ -70,6 +70,8 @@ internal sealed class AzuriteOptions
     public int QueuePort { get; set; }
 
     public int TablePort { get; set; }
+
+    public string? DataVolumeName { get; set; }
 }
 
 internal sealed class OllamaOptions
@@ -144,6 +146,7 @@ internal static class AppHostOptionsExtensions
         yield return RequirePositive(options.Azurite.BlobPort, "Azurite:BlobPort");
         yield return RequirePositive(options.Azurite.QueuePort, "Azurite:QueuePort");
         yield return RequirePositive(options.Azurite.TablePort, "Azurite:TablePort");
+        yield return Require(options.Azurite.DataVolumeName, "Azurite:DataVolumeName");
         yield return Require(options.Ollama.ResourceName, "Ollama:ResourceName");
         yield return Require(options.Ollama.ImageTag, "Ollama:ImageTag");
         yield return Require(options.Ollama.ModelResourceName, "Ollama:ModelResourceName");

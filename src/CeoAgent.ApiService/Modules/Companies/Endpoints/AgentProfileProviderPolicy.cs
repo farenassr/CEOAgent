@@ -7,11 +7,24 @@ namespace CeoAgent.ApiService.Modules.Companies.Endpoints;
 internal static class AgentProfileProviderPolicy
 {
     public const string LocalOllamaModelName = "hf.co/unsloth/gemma-4-E2B-it-GGUF:Q4_K_M";
+    public const string DefaultGeminiModelName = "gemini-3.5-flash";
 
     public static void Validate(AgentProfileRequest request, IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(environment);
+
+        if (request.LlmProvider == LlmProvider.Gemini)
+        {
+            if (!IsSupportedGeminiModel(request.ModelName))
+            {
+                throw new BusinessRuleException(
+                    "gemini_model_unsupported",
+                    "Gemini profiles must use a model name that starts with 'gemini-'.");
+            }
+
+            return;
+        }
 
         if (request.LlmProvider != LlmProvider.Ollama)
         {
@@ -38,5 +51,10 @@ internal static class AgentProfileProviderPolicy
         return environment.IsDevelopment()
             || environment.IsEnvironment("Local")
             || environment.IsEnvironment("Testing");
+    }
+
+    private static bool IsSupportedGeminiModel(string modelName)
+    {
+        return modelName.StartsWith("gemini-", StringComparison.Ordinal);
     }
 }

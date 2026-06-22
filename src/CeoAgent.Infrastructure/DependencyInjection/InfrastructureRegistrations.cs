@@ -16,6 +16,7 @@ using CeoAgent.Infrastructure.Implementation.AITools.Payments;
 using CeoAgent.Infrastructure.Implementation.AITools.GoogleCalendar.Integration;
 using CeoAgent.Infrastructure.Implementation.Messaging;
 using CeoAgent.Infrastructure.Implementation.Messaging.WhatsApp;
+using CeoAgent.Infrastructure.Implementation.Gemini;
 using CeoAgent.Infrastructure.Implementation.OpenAI;
 using CeoAgent.Infrastructure.Implementation.Messaging.Payments;
 using CeoAgent.Infrastructure.Implementation.Messaging.Storage;
@@ -91,10 +92,13 @@ public static class InfrastructureRegistrations
         services.AddMemoryCache();
         services.AddOptions<OpenAIAgentRuntimeOptions>()
             .BindConfiguration(OpenAIAgentRuntimeOptions.SectionName);
+        services.AddOptions<GeminiAgentRuntimeOptions>()
+            .BindConfiguration(GeminiAgentRuntimeOptions.SectionName);
         services.AddOptions<AgentRuntimeOptions>()
             .BindConfiguration(AgentRuntimeOptions.SectionName);
         services.AddSingleton<ISecretValueProvider, SecretValueProvider>();
         services.AddOpenAIImplementation();
+        services.AddGeminiImplementation();
         if (configuration.GetConnectionString(OllamaAgentRuntime.ConnectionName) is { Length: > 0 })
         {
             services.AddScoped<IAgentRuntimeProvider, OllamaAgentRuntime>();

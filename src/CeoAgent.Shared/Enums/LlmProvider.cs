@@ -10,4 +10,7 @@ public enum LlmProvider
 
     [JsonStringEnumMemberName("ollama")]
     Ollama = 2,
+
+    [JsonStringEnumMemberName("gemini")]
+    Gemini = 3,
 }

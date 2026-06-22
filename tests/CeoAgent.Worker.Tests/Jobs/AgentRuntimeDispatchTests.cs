@@ -14,15 +14,17 @@ public sealed class AgentRuntimeDispatchTests
     {
         var openAi = new FakeAgentRuntimeProvider(LlmProvider.OpenAI);
         var ollama = new FakeAgentRuntimeProvider(LlmProvider.Ollama, "local response");
+        var gemini = new FakeAgentRuntimeProvider(LlmProvider.Gemini, "gemini response");
         var runtime = new ProviderDispatchingAgentRuntime(
-            [openAi, ollama],
+            [openAi, ollama, gemini],
             new TestHostEnvironment("Testing"));
 
-        var result = await runtime.RunTurnAsync(CreateRequest(LlmProvider.Ollama), CancellationToken.None);
+        var result = await runtime.RunTurnAsync(CreateRequest(LlmProvider.Gemini), CancellationToken.None);
 
-        result.AssistantText.ShouldBe("local response");
+        result.AssistantText.ShouldBe("gemini response");
         openAi.RunCount.ShouldBe(0);
-        ollama.RunCount.ShouldBe(1);
+        ollama.RunCount.ShouldBe(0);
+        gemini.RunCount.ShouldBe(1);
     }
 
     [Test]
@@ -32,11 +34,27 @@ public sealed class AgentRuntimeDispatchTests
             [
                 new FakeAgentRuntimeProvider(LlmProvider.OpenAI, canEstimateCost: true),
                 new FakeAgentRuntimeProvider(LlmProvider.Ollama, canEstimateCost: false),
+                new FakeAgentRuntimeProvider(LlmProvider.Gemini, canEstimateCost: false),
             ],
             new TestHostEnvironment("Testing"));
 
         runtime.CanEstimateCost(LlmProvider.OpenAI, "gpt-4.1-mini").ShouldBeTrue();
         runtime.CanEstimateCost(LlmProvider.Ollama, "hf.co/unsloth/gemma-4-E2B-it-GGUF:Q4_K_M").ShouldBeFalse();
+        runtime.CanEstimateCost(LlmProvider.Gemini, "gemini-3.5-flash").ShouldBeFalse();
+    }
+
+    [Test]
+    public async Task RunTurnAsync_WhenGeminiRunsInProduction_DispatchesToProvider()
+    {
+        var gemini = new FakeAgentRuntimeProvider(LlmProvider.Gemini, "gemini response");
+        var runtime = new ProviderDispatchingAgentRuntime(
+            [gemini],
+            new TestHostEnvironment("Production"));
+
+        var result = await runtime.RunTurnAsync(CreateRequest(LlmProvider.Gemini), CancellationToken.None);
+
+        result.AssistantText.ShouldBe("gemini response");
+        gemini.RunCount.ShouldBe(1);
     }
 
     [Test]
@@ -72,7 +90,12 @@ public sealed class AgentRuntimeDispatchTests
             Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             provider,
-            provider == LlmProvider.Ollama ? "hf.co/unsloth/gemma-4-E2B-it-GGUF:Q4_K_M" : "gpt-4.1-mini",
+            provider switch
+            {
+                LlmProvider.Ollama => "hf.co/unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
+                LlmProvider.Gemini => "gemini-3.5-flash",
+                _ => "gpt-4.1-mini",
+            },
             "You are a helpful assistant.",
             "Hola");
     }

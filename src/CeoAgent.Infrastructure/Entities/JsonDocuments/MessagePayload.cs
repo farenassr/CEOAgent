@@ -36,4 +36,9 @@ public sealed class MessagePayload
     /// Private blob name used for backend-owned media references.
     /// </summary>
     public string? BlobName { get; set; }
+
+    /// <summary>
+    /// Full blob URI returned by storage for backend-owned media references.
+    /// </summary>
+    public string? BlobUri { get; set; }
 }

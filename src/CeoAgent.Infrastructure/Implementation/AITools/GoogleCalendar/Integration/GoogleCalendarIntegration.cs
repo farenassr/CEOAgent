@@ -227,7 +227,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
 
             if (!string.IsNullOrWhiteSpace(request.Summary))
             {
-                existing.Summary = request.Summary.Trim();
+                existing.Summary = BuildPendingPaymentSummary(request.Summary);
             }
 
             if (!string.IsNullOrWhiteSpace(request.CustomerName))
@@ -322,7 +322,7 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         return new Event
         {
             Id = BuildDeterministicEventId(request.IdempotencyKey),
-            Summary = request.Summary,
+            Summary = BuildPendingPaymentSummary(request.Summary),
             Description = BuildDescription(
                 request.CustomerName ?? ParseCustomerName(request.Description),
                 request.CustomerPhoneNumber ?? request.CustomerExternalId,
@@ -597,6 +597,14 @@ public sealed class GoogleCalendarIntegration(IGoogleCalendarServiceFactory<Cale
         }
 
         return string.Join('\n', lines);
+    }
+
+    private static string BuildPendingPaymentSummary(string summary)
+    {
+        var trimmed = summary.Trim();
+        return trimmed.StartsWith(PaymentPendingDescriptionMarker, StringComparison.Ordinal)
+            ? trimmed
+            : $"{PaymentPendingDescriptionMarker} {trimmed}";
     }
 
     private static string ReservationId(Event calendarEvent)

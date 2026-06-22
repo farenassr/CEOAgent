@@ -203,7 +203,7 @@ public sealed class GoogleCalendarSdkTests
 
         var created = handler.JsonBodies.Last();
         created.RootElement.GetProperty("id").GetString().ShouldStartWith("ceoagent");
-        created.RootElement.GetProperty("summary").GetString().ShouldBe("Reservation for 2");
+        created.RootElement.GetProperty("summary").GetString().ShouldBe("[PAGO_PENDIENTE] Reservation for 2");
         created.RootElement.GetProperty("description").GetString().ShouldBe("[PAGO_PENDIENTE]\nWindow table");
         DateTimeOffset.Parse(created.RootElement.GetProperty("start").GetProperty("dateTime").GetString()!, CultureInfo.InvariantCulture)
             .ShouldBe(new DateTimeOffset(2026, 5, 28, 16, 0, 0, TimeSpan.FromHours(-5)));
@@ -601,13 +601,18 @@ public sealed class GoogleCalendarSdkTests
                 "event-123",
                 new DateTimeOffset(2026, 6, 20, 18, 0, 0, TimeSpan.FromHours(-5)),
                 new DateTimeOffset(2026, 6, 20, 19, 30, 0, TimeSpan.FromHours(-5)),
-                Summary: null,
+                Summary: "Reservation for 3",
                 CustomerName: null),
             CancellationToken.None);
 
         result.Succeeded.ShouldBeTrue();
         result.Reservation!.EventId.ShouldBe("event-123");
         handler.Requests.Count(request => request.Method == HttpMethod.Put).ShouldBe(1);
+        handler.JsonBodies.Last()
+            .RootElement
+            .GetProperty("summary")
+            .GetString()
+            .ShouldBe("[PAGO_PENDIENTE] Reservation for 3");
     }
 
     [Test]

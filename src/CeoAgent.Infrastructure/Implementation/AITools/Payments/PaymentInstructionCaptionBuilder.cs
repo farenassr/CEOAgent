@@ -1,5 +1,5 @@
 using CeoAgent.Infrastructure.Entities;
-using System.Globalization;
+using CeoAgent.Shared.Helper;
 
 namespace CeoAgent.Infrastructure.Implementation.AITools.Payments;
 
@@ -8,9 +8,8 @@ public static class PaymentInstructionCaptionBuilder
     public static string Build(CompanyPaymentAccount account, ToolExecution reservationExecution)
     {
         var reservationRequest = reservationExecution.Request?.CreateCalendarEvent;
-        var reservationResult = reservationExecution.Result?.CreateCalendarEvent;
-        var start = reservationRequest?.Start.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture) ?? "no disponible";
-        var end = reservationRequest?.End.ToString("yyyy-MM-dd HH:mm zzz", CultureInfo.InvariantCulture) ?? "no disponible";
+        var start = ReservationPaymentFormattingHelper.FormatReservationDate(reservationRequest?.Start);
+        var amount = ReservationPaymentFormattingHelper.FormatPaymentAmount(account.ReservationPaymentAmount);
         var summary = string.IsNullOrWhiteSpace(reservationRequest?.Summary)
             ? "Reserva"
             : reservationRequest.Summary.Trim();
@@ -18,21 +17,21 @@ public static class PaymentInstructionCaptionBuilder
             ? "Cliente"
             : reservationRequest.CustomerName.Trim();
 
-        return string.Join(
-            Environment.NewLine,
-            "La reserva fue creada.",
-            $"Reserva: {summary}",
-            $"Cliente: {customerName}",
-            $"Inicio: {start}",
-            $"Fin: {end}",
-            $"Codigo de reserva: {reservationResult?.EventId ?? "no disponible"}",
-            "Datos de pago:",
-            $"Banco: {account.Bank.Name}",
-            $"Tipo de cuenta: {account.AccountType}",
-            $"Numero de cuenta: {account.AccountNumber}",
-            $"Monto: {account.ReservationPaymentAmount.ToString("0.##", CultureInfo.InvariantCulture)} {account.Currency}",
-            "QR: escanea el codigo QR adjunto para pagar.",
-            "El dinero de la reserva es consumible durante tu visita.",
-            "La reserva queda finalmente confirmada cuando recibamos el pago.");
+        return $@"✅ *¡Tu reserva ha sido creada!*
+_{summary}_
+
+*📌 DETALLES DE LA RESERVA*
+👤 *Cliente:* {customerName}
+📅 *Hora de la reserva:* {start}
+
+*💳 DATOS DE PAGO*
+💰 *{amount} {account.Currency}*
+🏦 *Banco:* {account.Bank.Name} ({account.AccountType}) Número de cuenta: `{account.AccountNumber}`
+
+📸 *QR:* Escanea el código adjunto para pagar.
+
+---
+💡 _El dinero de la reserva es consumible durante tu visita._
+⚠️ _La reserva queda finalmente confirmada al recibir el pago._";
     }
 }

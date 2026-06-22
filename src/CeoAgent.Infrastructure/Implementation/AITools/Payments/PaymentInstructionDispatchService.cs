@@ -55,6 +55,7 @@ public sealed partial class PaymentInstructionDispatchService(
             ProviderType = "image",
             BlobContainer = account.QrBlobContainer,
             BlobName = account.QrBlobName,
+            BlobUri = account.QrBlobUri,
         };
 
         if (existing is null)
